@@ -1,0 +1,10 @@
+---
+import { StorefrontPrototype } from "@/components/prototype/storefront/StorefrontPrototype";
+import PrototypeStorefrontLayout from "@/layouts/PrototypeStorefrontLayout.astro";
+
+const initialVariant = Astro.url.searchParams.get("variant") ?? "A";
+---
+
+<PrototypeStorefrontLayout title="ХЭВ · Storefront prototype">
+  <StorefrontPrototype initialVariant={initialVariant} client:load />
+</PrototypeStorefrontLayout>
