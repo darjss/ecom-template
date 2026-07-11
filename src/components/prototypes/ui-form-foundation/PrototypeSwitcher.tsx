@@ -40,21 +40,22 @@ export const PrototypeSwitcher = (props: {
 
   const current = () => variants.find((variant) => variant.id === props.current());
   return (
-    <div class="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.5rem)] left-1/2 z-40 flex -translate-x-1/2 items-center rounded-full bg-neutral-950 p-1 text-neutral-50 shadow-lg shadow-neutral-950/20">
+    <div class="flex items-center rounded-full bg-neutral-950 p-1 text-neutral-50 shadow-md shadow-neutral-950/15">
       <button
         type="button"
-        class="grid size-10 place-items-center rounded-full outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-50"
+        class="grid size-11 place-items-center rounded-full outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-50"
         aria-label="Өмнөх хувилбар"
         onClick={() => cycle(-1)}
       >
         <ArrowLeft class="size-4" />
       </button>
-      <span class="min-w-40 px-3 text-center text-xs font-medium tabular-nums">
-        {current()?.id} · {current()?.label}
+      <span class="min-w-8 px-2 text-center text-xs font-medium tabular-nums sm:min-w-40 sm:px-3">
+        {current()?.id}
+        <span class="hidden sm:inline"> · {current()?.label}</span>
       </span>
       <button
         type="button"
-        class="grid size-10 place-items-center rounded-full outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-50"
+        class="grid size-11 place-items-center rounded-full outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-50"
         aria-label="Дараагийн хувилбар"
         onClick={() => cycle(1)}
       >

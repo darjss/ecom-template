@@ -36,7 +36,7 @@ type RadioGroupItemProps<T extends ValidComponent = "div"> = PolymorphicProps<
   Pick<ComponentProps<T>, "class" | "children">;
 
 const RadioGroupItem = <T extends ValidComponent = "div">(props: RadioGroupItemProps<T>) => {
-  const [local, others] = splitProps(props as RadioGroupItemProps, ["class", "id"]);
+  const [local, others] = splitProps(props as RadioGroupItemProps, ["class", "id", "aria-label"]);
   return (
     <Item
       data-slot="radio-group-item"
@@ -46,7 +46,12 @@ const RadioGroupItem = <T extends ValidComponent = "div">(props: RadioGroupItemP
       )}
       {...others}
     >
-      <ItemInput data-slot="radio-group-item-input" class="peer sr-only" id={local.id} />
+      <ItemInput
+        data-slot="radio-group-item-input"
+        class="peer sr-only"
+        id={local.id}
+        aria-label={local["aria-label"]}
+      />
       <ItemIndicator data-slot="radio-group-indicator" class="z-radio-group-indicator">
         <Circle class="z-radio-group-indicator-icon" />
       </ItemIndicator>

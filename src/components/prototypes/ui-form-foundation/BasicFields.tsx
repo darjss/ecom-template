@@ -32,6 +32,7 @@ export const BasicFields = (props: { controller: ProductEditorController }) => {
                 id="product-name"
                 name={field().name}
                 value={field().state.value}
+                class="min-h-11"
                 aria-invalid={Boolean(error())}
                 aria-describedby="product-name-help product-name-error"
                 onBlur={field().handleBlur}
@@ -70,7 +71,7 @@ export const BasicFields = (props: { controller: ProductEditorController }) => {
                   inputmode="numeric"
                   min="1000"
                   step="1000"
-                  class="pr-10 font-medium tabular-nums"
+                  class="min-h-11 pr-10 font-medium tabular-nums"
                   value={Number.isNaN(field().state.value) ? "" : field().state.value}
                   aria-invalid={Boolean(error())}
                   aria-describedby="product-price-help product-price-error"
@@ -119,13 +120,15 @@ export const BasicFields = (props: { controller: ProductEditorController }) => {
                   field().handleChange(value);
                 }}
                 itemComponent={(itemProps) => (
-                  <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>
+                  <SelectItem item={itemProps.item} class="min-h-11">
+                    {itemProps.item.rawValue}
+                  </SelectItem>
                 )}
               >
                 <SelectTrigger
                   id="product-category"
                   name={field().name}
-                  class="w-full"
+                  class="min-h-11 w-full"
                   aria-invalid={Boolean(error())}
                   aria-describedby="product-category-help product-category-error"
                   onBlur={field().handleBlur}

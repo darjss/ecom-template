@@ -58,15 +58,7 @@ export const createMerchantForm = <TValues extends Record<string, unknown>>(
   const form = createForm(() => ({
     defaultValues: config.initialRecord.values,
     validators: { onSubmit: config.schema },
-    onSubmitInvalid: async ({ formApi }) => {
-      const fieldId = config.fieldIds.find(
-        (id) => (formApi.getFieldMeta(id)?.errors.length ?? 0) > 0,
-      );
-      if (!fieldId) return;
-      await config.onInvalidField?.(fieldId);
-      await afterPaint();
-      document.querySelector<HTMLElement>(`[name="${CSS.escape(fieldId)}"]`)?.focus();
-    },
+    onSubmitInvalid: () => void focusFirstInvalid(),
     onSubmit: async ({ value }) => {
       setSaveStatus({ kind: "idle" });
       try {
@@ -88,6 +80,22 @@ export const createMerchantForm = <TValues extends Record<string, unknown>>(
       }
     },
   }));
+
+  const focusFirstInvalid = async () => {
+    const fieldId = config.fieldIds.find((id) => (form.getFieldMeta(id)?.errors.length ?? 0) > 0);
+    if (!fieldId) return;
+    await config.onInvalidField?.(fieldId);
+    await afterPaint();
+    const controls = document.querySelectorAll<HTMLElement>(`[name="${CSS.escape(fieldId)}"]`);
+    Array.from(controls)
+      .find((control) => control.getClientRects().length > 0)
+      ?.focus();
+  };
+
+  const submit = async () => {
+    await form.handleSubmit();
+    if (!form.state.isValid) await focusFirstInvalid();
+  };
 
   const values = form.useSelector((state) => state.values);
   const hasChanges = createMemo(() =>
@@ -165,6 +173,7 @@ export const createMerchantForm = <TValues extends Record<string, unknown>>(
 
   return {
     form,
+    submit,
     values,
     baseRecord,
     hasChanges,

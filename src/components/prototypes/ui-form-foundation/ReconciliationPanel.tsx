@@ -45,7 +45,10 @@ export const ReconciliationPanel = (props: { controller: ProductEditorController
                   aria-label={`${conflict.descriptor.label} утга сонгох`}
                   class="grid gap-3 sm:grid-cols-2"
                 >
-                  <div class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 items-start gap-3 rounded-xl border p-4">
+                  <label
+                    for={`${id}-server`}
+                    class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border p-4"
+                  >
                     <RadioGroupItem
                       id={`${id}-server`}
                       value="server"
@@ -58,8 +61,11 @@ export const ReconciliationPanel = (props: { controller: ProductEditorController
                       </span>
                       <span class="break-words text-sm leading-5">{conflict.serverValue}</span>
                     </span>
-                  </div>
-                  <div class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 items-start gap-3 rounded-xl border p-4">
+                  </label>
+                  <label
+                    for={`${id}-draft`}
+                    class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border p-4"
+                  >
                     <RadioGroupItem
                       id={`${id}-draft`}
                       value="draft"
@@ -72,7 +78,7 @@ export const ReconciliationPanel = (props: { controller: ProductEditorController
                       </span>
                       <span class="break-words text-sm leading-5">{conflict.draftValue}</span>
                     </span>
-                  </div>
+                  </label>
                 </RadioGroup>
               </fieldset>
             );

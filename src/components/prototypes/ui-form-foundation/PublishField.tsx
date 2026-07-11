@@ -12,6 +12,7 @@ export const PublishField = (props: { controller: ProductEditorController }) => 
             id="product-published"
             name={field().name}
             checked={field().state.value}
+            class="size-5 after:-inset-3"
             onChange={(checked) => {
               merchant.noteEdit();
               field().handleChange(checked);

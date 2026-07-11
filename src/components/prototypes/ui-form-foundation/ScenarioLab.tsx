@@ -30,6 +30,7 @@ export const ScenarioLab = (props: { controller: ProductEditorController }) => {
             type="button"
             size="sm"
             variant="outline"
+            class="min-h-11"
             onClick={props.controller.scenario.simulateExternalChange}
           >
             Simulate staff edit
@@ -38,6 +39,7 @@ export const ScenarioLab = (props: { controller: ProductEditorController }) => {
             type="button"
             size="sm"
             variant="outline"
+            class="min-h-11"
             onClick={props.controller.scenario.failNextSave}
           >
             Fail next server save
@@ -46,6 +48,7 @@ export const ScenarioLab = (props: { controller: ProductEditorController }) => {
             type="button"
             size="sm"
             variant="outline"
+            class="min-h-11"
             onClick={props.controller.merchant.seedIncompatibleDraft}
           >
             Load old-version draft
@@ -54,11 +57,12 @@ export const ScenarioLab = (props: { controller: ProductEditorController }) => {
             type="button"
             size="sm"
             variant="outline"
+            class="min-h-11"
             onClick={props.controller.merchant.seedInvalidDraft}
           >
             Load malformed draft
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={reset}>
+          <Button type="button" size="sm" variant="ghost" class="min-h-11" onClick={reset}>
             <RotateCcw class="size-4" /> Reset lab
           </Button>
         </div>

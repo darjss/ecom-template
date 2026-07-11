@@ -32,6 +32,7 @@ export const createMerchantDraftController = <TValues>(config: DraftControllerCo
   const [status, setStatus] = createSignal<DraftStatus>({ kind: "idle" });
   const [ready, setReady] = createSignal(false);
   let timer: number | undefined;
+  let suppressFlush = false;
 
   const envelope = (): DraftEnvelope<TValues> => ({
     identity: config.identity,
@@ -43,7 +44,9 @@ export const createMerchantDraftController = <TValues>(config: DraftControllerCo
   });
 
   const flush = () => {
-    if (!ready() || loaded() || !config.hasChanges() || !config.canWrite()) return;
+    if (suppressFlush || !ready() || loaded() || !config.hasChanges() || !config.canWrite()) {
+      return;
+    }
     const result = saveDraft(window.localStorage, envelope());
     setStatus(
       result.ok
@@ -59,6 +62,8 @@ export const createMerchantDraftController = <TValues>(config: DraftControllerCo
   };
 
   const seedAndReload = (schemaVersion: string, draftValues: unknown) => {
+    suppressFlush = true;
+    if (timer !== undefined) window.clearTimeout(timer);
     const seeded = {
       ...envelope(),
       schemaVersion,

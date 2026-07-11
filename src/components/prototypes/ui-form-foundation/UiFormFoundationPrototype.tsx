@@ -44,7 +44,7 @@ export const UiFormFoundationPrototype = () => {
         </div>
       </header>
 
-      <main class="mx-auto max-w-5xl px-4 pt-6 pb-40 sm:px-6 sm:pt-8" id="prototype-main">
+      <main class="mx-auto max-w-5xl px-4 pt-6 pb-52 sm:px-6 sm:pt-8" id="prototype-main">
         <div class="mb-6 grid gap-2">
           <p class="text-muted-foreground text-sm font-medium">Бүтээгдэхүүн · Ноорог</p>
           <div class="flex flex-wrap items-end justify-between gap-3">
@@ -70,7 +70,7 @@ export const UiFormFoundationPrototype = () => {
               onSubmit={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                void controller.merchant.form.handleSubmit();
+                void controller.merchant.submit();
               }}
             >
               <Switch>
@@ -84,13 +84,21 @@ export const UiFormFoundationPrototype = () => {
                   <VariantC controller={controller} />
                 </Match>
               </Switch>
-              <ActionBar controller={controller} />
+              <ActionBar
+                controller={controller}
+                currentVariant={variant}
+                onVariantChange={changeVariant}
+              />
             </form>
           </Show>
         </div>
       </main>
 
-      <PrototypeSwitcher current={variant} onChange={changeVariant} />
+      <Show when={controller.merchant.recovery() || controller.merchant.reconciliation()}>
+        <div class="fixed inset-x-0 bottom-0 z-30 flex justify-center border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <PrototypeSwitcher current={variant} onChange={changeVariant} />
+        </div>
+      </Show>
     </div>
   );
 };

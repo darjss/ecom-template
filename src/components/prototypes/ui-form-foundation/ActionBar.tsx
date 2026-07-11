@@ -4,8 +4,13 @@ import LoaderCircle from "lucide-solid/icons/loader-circle";
 import { Match, Switch } from "solid-js";
 import { Button } from "@/components/ui/button";
 import type { ProductEditorController } from "./product-controller";
+import { PrototypeSwitcher, type PrototypeVariant } from "./PrototypeSwitcher";
 
-export const ActionBar = (props: { controller: ProductEditorController }) => {
+export const ActionBar = (props: {
+  controller: ProductEditorController;
+  currentVariant: () => PrototypeVariant;
+  onVariantChange: (variant: PrototypeVariant) => void;
+}) => {
   const merchant = props.controller.merchant;
   const saveError = () => {
     const status = merchant.saveStatus();
@@ -21,9 +26,9 @@ export const ActionBar = (props: { controller: ProductEditorController }) => {
   };
   return (
     <div class="fixed inset-x-0 bottom-0 z-30 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:sticky md:px-6">
-      <div class="mx-auto flex max-w-4xl items-center justify-between gap-4">
-        <div class="min-w-0 text-sm">
-          <Switch fallback={<span class="text-muted-foreground">Өөрчлөлт байхгүй</span>}>
+      <div class="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-x-4">
+        <div class="col-span-2 row-start-2 min-w-0 text-sm md:col-span-1 md:col-start-1 md:row-start-1">
+          <Switch>
             <Match when={saveError()}>
               {(status) => (
                 <div
@@ -67,19 +72,32 @@ export const ActionBar = (props: { controller: ProductEditorController }) => {
           </span>
         </div>
 
+        <div class="col-start-1 row-start-1 justify-self-start md:col-start-2 md:justify-self-center">
+          <PrototypeSwitcher current={props.currentVariant} onChange={props.onVariantChange} />
+        </div>
+
         <merchant.form.Subscribe
           selector={(state) => state.isSubmitting}
           children={(isSubmitting) => (
             <Button
               type="submit"
-              class="min-h-11 min-w-32 shrink-0"
+              class="col-start-2 row-start-1 min-h-11 min-w-24 shrink-0 justify-self-end md:col-start-3 md:min-w-32"
               disabled={!merchant.hasChanges() || isSubmitting()}
             >
-              {isSubmitting()
-                ? "Хадгалж байна"
-                : merchant.saveStatus().kind === "error"
-                  ? "Дахин хадгалах"
-                  : "Бүтээгдэхүүн хадгалах"}
+              <span class="sm:hidden">
+                {isSubmitting()
+                  ? "Хүлээнэ үү"
+                  : merchant.saveStatus().kind === "error"
+                    ? "Дахин"
+                    : "Хадгалах"}
+              </span>
+              <span class="hidden sm:inline">
+                {isSubmitting()
+                  ? "Хадгалж байна"
+                  : merchant.saveStatus().kind === "error"
+                    ? "Дахин хадгалах"
+                    : "Бүтээгдэхүүн хадгалах"}
+              </span>
             </Button>
           )}
         />
