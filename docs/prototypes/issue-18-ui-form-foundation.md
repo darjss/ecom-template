@@ -65,7 +65,7 @@ Checkbox, select, textarea, and radio-group were added through the configured Za
 - `pnpm typecheck`: pass
 - `pnpm exec vp lint .`: pass
 - scoped prototype lint: pass
-- scoped JSX accessibility lint: pass with no findings
+- scoped JSX accessibility lint: pass with two custom-component label association warnings; live accessibility-tree proof confirmed both Kobalte radios are named, keyboard operable, and clickable through their visible labels
 - scoped formatting check: pass
 - `pnpm build`: pass
 - development curl for variants A/B/C: HTTP 200
@@ -77,17 +77,47 @@ The exact `pnpm lint` package script has a pre-existing baseline defect: `vp lin
 
 ## Browser evidence
 
-Pending. Required matrix:
+Agent-browser exercised all three variants at 390×844 and 1440×900.
 
-- A/B/C at 390×844 and 1440×900
-- normal edit/save
-- reload recovery
-- incompatible-version discard
-- stale three-way reconciliation
-- validation navigation and focus
-- optimistic revision rejection
-- keyboard operation, visible focus, 200% zoom/reflow, touch targets, unobscured content, and console errors
-- at least one critique-and-fix pass
+- A, B, and C had no horizontal document overflow at either viewport.
+- Variant B changed from horizontal mobile section navigation to a desktop side rail.
+- Variant C exposed Editor/Preview tabs on mobile and mounted both panes in a desktop split view.
+- One live edit survived A → B → C switching, including URL replacement and unresolved conflict choices.
+- Invalid submit in B activated the hidden owning section and focused its textarea.
+- Invalid submit from C Preview activated Editor and focused the described invalid textarea.
+- Field labels, help IDs, error IDs, `aria-invalid`, named conflict radios, keyboard order, visible focus rings, and 44 px touch targets were inspected live.
+- A 720 CSS-pixel viewport was used as the 200% reflow proxy for a 1440-wide desktop; it switched to the mobile topology without horizontal overflow.
+- The 750 ms draft write produced the approved envelope in localStorage. Reload showed saved time and the explicit Continue/Discard gate. Continue restored values; Discard removed storage.
+- Successful authoritative save advanced the revision, cleared localStorage, reset dirty state, disabled save, and announced inline success.
+- The stale scenario advanced server revision, auto-merged a server-only price change, required an explicit named radio choice for the true name conflict, retained the choice across variant switching, and resumed with the selected name plus merged price.
+- The old-version scenario exposed only explicit discard and never hydrated incompatible values.
+- The operational-failure scenario focused a persistent actionable error and retained the draft.
+- A fresh browser session completed with no runtime errors or failed network requests.
+
+Representative evidence:
+
+- `issue-18-evidence/screenshots/final-mobile-a.png`
+- `issue-18-evidence/screenshots/final-mobile-b.png`
+- `issue-18-evidence/screenshots/final-mobile-c-editor.png`
+- `issue-18-evidence/screenshots/final-mobile-c-preview.png`
+- `issue-18-evidence/screenshots/final-desktop-A.png`
+- `issue-18-evidence/screenshots/final-desktop-B-annotated.png`
+- `issue-18-evidence/screenshots/final-desktop-C.png`
+- `issue-18-evidence/screenshots/mobile-c-invalid-focus.png`
+- `issue-18-evidence/screenshots/mobile-recovery-gate.png`
+- `issue-18-evidence/screenshots/final-mobile-conflict-choice.png`
+- `issue-18-evidence/screenshots/final-reflow-720.png`
+
+## Critique and fix pass
+
+| Before                                                                           | After                                                                                      | Why                                                                                   |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| 36 px text, number, and select controls                                          | 44 px minimum controls and select options                                                  | Mobile controls must be reliably thumb reachable                                      |
+| 32 px scenario controls and 40 px variant arrows                                 | 44 px minimum targets                                                                      | Prototype controls must meet the same interaction floor as the interface under review |
+| Separate floating switcher blocked the category control                          | Switcher moved into the fixed action dock, with a compact mobile label                     | Evaluation chrome must not intercept merchant input                                   |
+| Invalid focus selected the first matching hidden development-toolbar control     | Focus selects the first rendered matching field after async navigation                     | B and C now satisfy first-invalid focus in live use                                   |
+| Old-version scenario was overwritten by page-hide flushing                       | Scenario seeding suppresses the pending flush before reload                                | Incompatible-version proof is now reproducible                                        |
+| Conflict radios had no accessible names and only the small control was clickable | Generated input receives the accessible name and the visible option is a full label target | Conflict choices now work with screen readers, keyboard, pointer, and touch           |
 
 ## Limitations
 
@@ -99,4 +129,10 @@ Pending. Required matrix:
 
 ## Verdict
 
-Pending browser review.
+The shared foundation contract is validated. All three compositions run over one form, draft, reconciliation, and accessibility model without leaking the fictional storefront theme into Merchant Admin.
+
+Recommended layout policy, pending orchestrator approval:
+
+- Use B as the default product-editor Admin topology because it scales operational sections across mobile and desktop without a long continuous scan.
+- Use A for short forms where all fields fit one coherent task.
+- Offer C only when live storefront context materially improves the edit; keep its preview composition app-owned and its commerce controls shared.
