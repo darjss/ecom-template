@@ -12,3 +12,10 @@ Throwaway evidence for “Prototype Portless multi-store and worktree developmen
 - Implementation workers start and inspect their own app processes, but only one designated proof worker may hold the browser lease. Browser proof starts after servers report ready and ends by closing its named browser session.
 
 The page writes one value to real local D1, KV, and R2 bindings and sets a host-only secure cookie. It renders the observed request origin and corresponding Better Auth Google callback URL.
+
+## Accepted auth contract
+
+- Better Auth resolves its base URL from the validated request host. Each generated app allows only its production hosts, `<merchant>.shop.localhost:1355`, and `*.<merchant>.shop.localhost:1355`; unknown hosts fail rather than falling back.
+- Cross-subdomain cookies stay disabled. Better Auth and application cookies remain host-only, so merchants and worktrees cannot read one another's sessions.
+- Google OAuth is enabled by default only for the canonical checkout URL, whose exact `https://<merchant>.shop.localhost:1355/api/auth/callback/google` callback is registered with Google.
+- Linked worktrees use non-Google authentication by default. Testing Google from a worktree requires deliberately enabling its credentials and temporarily registering that worktree's exact rendered callback URL. No wildcard callback or shared OAuth-proxy service is part of v1.
