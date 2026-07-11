@@ -18,7 +18,8 @@
     "db:migrate:local": "wrangler d1 migrations apply saas-starter-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply saas-starter-db --remote",
     "seed": "tsx scripts/seed.ts",
-    "polar:setup": "tsx scripts/polar-setup.ts"
+    "polar:setup": "tsx scripts/polar-setup.ts",
+    "prototype:prospect-workflow": "tsx prototypes/prospect-workflow/cli.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.1",
