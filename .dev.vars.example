@@ -1,0 +1,6 @@
+BETTER_AUTH_SECRET=dev-only-secret-change-me
+POLAR_ACCESS_TOKEN=polar-sandbox-token-placeholder
+POLAR_WEBHOOK_SECRET=polar-webhook-secret-placeholder
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+POLAR_PRODUCT_ID_PRO=

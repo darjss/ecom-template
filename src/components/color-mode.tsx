@@ -1,0 +1,59 @@
+import {
+  type Accessor,
+  createContext,
+  createSignal,
+  type ParentProps,
+  untrack,
+  useContext,
+} from "solid-js";
+
+export const ZAIDAN_COLOR_MODE_COOKIE_KEY = "zaidan-color-mode";
+
+export type ColorMode = "light" | "dark";
+
+export type ColorModeContextValue = {
+  colorMode: Accessor<ColorMode>;
+  toggleColorMode: () => void;
+  setColorMode: (mode: ColorMode) => void;
+};
+
+export const ColorModeContext = createContext<ColorModeContextValue>();
+
+export function ColorModeProvider(
+  props: ParentProps<{
+    initialColorMode: ColorMode;
+  }>,
+) {
+  const [colorMode, setColorMode] = createSignal<ColorMode>(props.initialColorMode);
+
+  const toggleColorMode = () => {
+    setColorMode((prev) => (prev === "dark" ? "light" : "dark"));
+
+    const html = document.documentElement;
+    html.classList.remove("light", "dark");
+    html.classList.add(untrack(colorMode));
+
+    document.cookie = `${ZAIDAN_COLOR_MODE_COOKIE_KEY}=${untrack(colorMode)}; path=/; max-age=31536000; SameSite=Lax`;
+  };
+
+  return (
+    <ColorModeContext.Provider value={{ colorMode, toggleColorMode, setColorMode }}>
+      {props.children}
+    </ColorModeContext.Provider>
+  );
+}
+
+export function useColorMode(): ColorModeContextValue {
+  const context = useContext(ColorModeContext);
+  if (context === undefined) {
+    throw new Error("useColorMode must be used within a ColorModeProvider");
+  }
+  return context;
+}
+
+export const getClientColorMode = () =>
+  document.cookie
+    .split("; ")
+    .find((cookie) => cookie.startsWith(`${ZAIDAN_COLOR_MODE_COOKIE_KEY}=`))
+    ?.split("=")[1] ??
+  (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");

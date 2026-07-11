@@ -1,0 +1,18 @@
+---
+import Features from "@/components/marketing/Features.astro";
+import Footer from "@/components/marketing/Footer.astro";
+import HowItWorks from "@/components/marketing/HowItWorks.astro";
+import PricingTeaser from "@/components/marketing/PricingTeaser.astro";
+import { Hero } from "@/components/marketing/Hero";
+import Layout from "@/layouts/Layout.astro";
+---
+
+<Layout title="SaaS Starter — ship faster on Cloudflare">
+  <main>
+    <Hero client:load />
+    <Features />
+    <HowItWorks />
+    <PricingTeaser />
+  </main>
+  <Footer />
+</Layout>

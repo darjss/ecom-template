@@ -1,0 +1,28 @@
+# Agent conventions
+
+Astro 7 SSR on Cloudflare Workers. SolidJS islands (never React). Tailwind v4 — theme lives in `src/styles/global.css` + `src/styles/base.css` (Zaidan vega; don't hand-edit base.css).
+
+## Layout
+
+- `src/pages` — Astro routes; `/app/[...path].astro` hosts the Solid SPA (`src/components/app`), `/api/[...slug].ts` hosts Elysia (`src/server/api`)
+- `src/server` — API (`api/`), db (`db/`), auth (`lib/auth.ts`), billing seam (`billing/`)
+- `src/lib` — client-shared code: Eden client (`api.ts`), auth client, plans, cache map, form helper, queries
+- `src/middleware` — edge cache + session guard
+
+## Rules
+
+- Strict TS, no `any`, no type assertions, named exports only, no classes except the error hierarchy (`AppError`, `ApiError`)
+- No inline comments except the TODO seams already present
+- Files stay small and single-purpose; ~150 lines needs a reason
+- API: one Elysia plugin per concern, TypeBox `t` validation, throw `AppError` subclasses; keep `aot: false`
+- Client data: solid-query through the shared `queryClient`; mutations invalidate queries — never poke the cache
+- Forms: hand-rolled + valibot via `createForm` (no tanstack form)
+- Icons: `lucide-solid/icons/<name>` deep imports only — the barrel import breaks SSR in workerd
+- UI components: `pnpm dlx shadcn@latest add @zaidan/<name>` into `src/components/ui`
+- DB: cuid2 ids + createdAt/updatedAt via `src/server/db/columns.ts`; explicit indexes; after schema changes run `pnpm db:generate && pnpm db:migrate:local`
+- Auth schema changes (new plugins): edit `scripts/auth-schema.config.ts` to match `src/server/lib/auth.ts`, run `pnpm auth:generate`
+- Env vars: add to `src/env.ts` (valibot), `.dev.vars.example`, and `wrangler.jsonc` vars if public; rerun `wrangler types`
+
+## Verify
+
+`pnpm typecheck && pnpm lint && pnpm build`, then `pnpm dev` and curl `/api/health`.
