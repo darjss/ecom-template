@@ -4,25 +4,30 @@ import type { ReconciliationDescriptor, RecordSnapshot } from "./model";
 
 export const categoryOptions = ["Ноолууран хувцас", "Гадуур хувцас", "Аксессуар"];
 
+export const nameSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(2, "Бүтээгдэхүүний нэрийг оруулна уу."),
+  v.maxLength(80, "Нэр 80 тэмдэгтээс богино байх шаардлагатай."),
+);
+export const priceSchema = v.pipe(
+  v.number("Үнийг бүхэл тоогоор оруулна уу."),
+  v.integer("Үнэ бүхэл төгрөгөөр байх шаардлагатай."),
+  v.minValue(1_000, "Үнэ хамгийн багадаа 1,000 ₮ байна."),
+);
+export const categorySchema = v.picklist(categoryOptions, "Ангилал сонгоно уу.");
+export const descriptionSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(10, "Тайлбар хамгийн багадаа 10 тэмдэгт байна."),
+  v.maxLength(180, "Тайлбар 180 тэмдэгтээс богино байх шаардлагатай."),
+);
+
 export const productSchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.trim(),
-    v.minLength(2, "Бүтээгдэхүүний нэрийг оруулна уу."),
-    v.maxLength(80, "Нэр 80 тэмдэгтээс богино байх шаардлагатай."),
-  ),
-  price: v.pipe(
-    v.number("Үнийг бүхэл тоогоор оруулна уу."),
-    v.integer("Үнэ бүхэл төгрөгөөр байх шаардлагатай."),
-    v.minValue(1_000, "Үнэ хамгийн багадаа 1,000 ₮ байна."),
-  ),
-  category: v.picklist(categoryOptions, "Ангилал сонгоно уу."),
-  description: v.pipe(
-    v.string(),
-    v.trim(),
-    v.minLength(10, "Тайлбар хамгийн багадаа 10 тэмдэгт байна."),
-    v.maxLength(180, "Тайлбар 180 тэмдэгтээс богино байх шаардлагатай."),
-  ),
+  name: nameSchema,
+  price: priceSchema,
+  category: categorySchema,
+  description: descriptionSchema,
   published: v.boolean(),
 });
 

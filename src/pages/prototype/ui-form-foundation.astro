@@ -1,0 +1,28 @@
+---
+import { UiFormFoundationPrototype } from "@/components/prototypes/ui-form-foundation/UiFormFoundationPrototype";
+import "@/styles/global.css";
+
+if (!import.meta.env.DEV) {
+  return new Response("Not found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+---
+
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="Disposable browser prototype for the shared merchant form foundation."
+    />
+    <title>UI form foundation prototype</title>
+  </head>
+  <body>
+    <UiFormFoundationPrototype client:only="solid-js" />
+  </body>
+</html>

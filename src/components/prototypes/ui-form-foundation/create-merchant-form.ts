@@ -12,16 +12,15 @@ import {
   type SaveOutcome,
 } from "./model";
 
-type MerchantFormConfig<TValues> = {
+type MerchantFormConfig<TValues extends Record<string, unknown>> = {
   identity: DraftIdentity;
   schemaVersion: string;
   schema: v.GenericSchema<TValues, TValues>;
   initialRecord: RecordSnapshot<TValues>;
   descriptors: ReconciliationDescriptor<TValues>[];
-  save: (request: {
-    values: TValues;
-    expectedRevision: number;
-  }) => Promise<SaveOutcome<TValues>>;
+  fieldIds: (keyof TValues & string)[];
+  onInvalidField?: (id: keyof TValues & string) => void | Promise<void>;
+  save: (request: { values: TValues; expectedRevision: number }) => Promise<SaveOutcome<TValues>>;
 };
 
 export type SaveStatus =
@@ -40,20 +39,34 @@ const focusElement = (selector: string) => {
   window.queueMicrotask(() => document.querySelector<HTMLElement>(selector)?.focus());
 };
 
+const afterPaint = () =>
+  new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
 const messageFromError = (error: unknown) =>
   error instanceof Error ? error.message : "Бүтээгдэхүүнийг хадгалж чадсангүй.";
 
-export const createMerchantForm = <TValues>(config: MerchantFormConfig<TValues>) => {
+export const createMerchantForm = <TValues extends Record<string, unknown>>(
+  config: MerchantFormConfig<TValues>,
+) => {
   const [baseRecord, setBaseRecord] = createSignal(config.initialRecord);
-  const [reconciliation, setReconciliation] =
-    createSignal<ReconciliationState<TValues> | null>(null);
+  const [reconciliation, setReconciliation] = createSignal<ReconciliationState<TValues> | null>(
+    null,
+  );
   const [choices, setChoices] = createSignal<Record<string, "server" | "draft">>({});
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>({ kind: "idle" });
 
   const form = createForm(() => ({
     defaultValues: config.initialRecord.values,
     validators: { onSubmit: config.schema },
-    onSubmitInvalid: () => focusElement('[aria-invalid="true"]'),
+    onSubmitInvalid: async ({ formApi }) => {
+      const fieldId = config.fieldIds.find(
+        (id) => (formApi.getFieldMeta(id)?.errors.length ?? 0) > 0,
+      );
+      if (!fieldId) return;
+      await config.onInvalidField?.(fieldId);
+      await afterPaint();
+      document.querySelector<HTMLElement>(`[name="${CSS.escape(fieldId)}"]`)?.focus();
+    },
     onSubmit: async ({ value }) => {
       setSaveStatus({ kind: "idle" });
       try {
@@ -125,11 +138,7 @@ export const createMerchantForm = <TValues>(config: MerchantFormConfig<TValues>)
       draft.setLoaded(null);
       return;
     }
-    beginReconciliation(
-      current.envelope.baseValues,
-      current.envelope.draftValues,
-      baseRecord(),
-    );
+    beginReconciliation(current.envelope.baseValues, current.envelope.draftValues, baseRecord());
   };
 
   const resolveConflict = (id: string, choice: "server" | "draft") => {

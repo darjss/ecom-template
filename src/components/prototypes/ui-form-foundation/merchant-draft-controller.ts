@@ -27,9 +27,7 @@ type DraftControllerConfig<TValues> = {
   canWrite: Accessor<boolean>;
 };
 
-export const createMerchantDraftController = <TValues>(
-  config: DraftControllerConfig<TValues>,
-) => {
+export const createMerchantDraftController = <TValues>(config: DraftControllerConfig<TValues>) => {
   const [loaded, setLoaded] = createSignal<DraftLoad<TValues> | null>(null);
   const [status, setStatus] = createSignal<DraftStatus>({ kind: "idle" });
   const [ready, setReady] = createSignal(false);
