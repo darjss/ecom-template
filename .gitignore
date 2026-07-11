@@ -6,3 +6,4 @@ dist/
 .env
 *.log
 worker-configuration.d.ts
+CONTEXT.md
