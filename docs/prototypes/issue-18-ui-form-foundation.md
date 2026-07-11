@@ -131,8 +131,8 @@ Representative evidence:
 
 The shared foundation contract is validated. All three compositions run over one form, draft, reconciliation, and accessibility model without leaking the fictional storefront theme into Merchant Admin.
 
-Recommended layout policy, pending orchestrator approval:
+Approved layout policy:
 
 - Use B as the default product-editor Admin topology because it scales operational sections across mobile and desktop without a long continuous scan.
-- Use A for short forms where all fields fit one coherent task.
-- Offer C only when live storefront context materially improves the edit; keep its preview composition app-owned and its commerce controls shared.
+- Use A for short coherent forms where section navigation adds friction.
+- Offer C only when live storefront context materially improves the merchant’s decision; keep its preview composition app-owned and its commerce controls shared.
