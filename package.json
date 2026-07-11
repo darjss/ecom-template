@@ -34,6 +34,7 @@
     "@solidjs/router": "^0.16.1",
     "@t3-oss/env-core": "^0.13.11",
     "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/solid-form": "^1.33.1",
     "@tanstack/solid-query": "^5.101.2",
     "astro": "^7.0.6",
     "better-auth": "^1.6.23",
