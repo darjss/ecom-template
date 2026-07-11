@@ -1,0 +1,8 @@
+{
+  "name": "@prototype/workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prototype": "pnpm install --offline && pnpm --filter @prototype/rozie-store prototype"
+  }
+}

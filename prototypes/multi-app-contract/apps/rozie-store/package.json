@@ -1,0 +1,12 @@
+{
+  "name": "@prototype/rozie-store",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prototype": "node src/cli.mjs"
+  },
+  "dependencies": {
+    "@prototype/commerce-kernel": "workspace:*"
+  }
+}
