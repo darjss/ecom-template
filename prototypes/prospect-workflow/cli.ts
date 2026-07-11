@@ -43,7 +43,9 @@ const render = (state: WorkflowState): void => {
   console.log(`${bold}status${reset}              ${state.status}`);
   console.log(`${bold}current step${reset}        ${current?.name ?? "Complete"}`);
   console.log(`${bold}mode${reset}                ${current?.type === "gate" ? "HITL review" : "AFK agent"}`);
+  const budgetState = state.minutesUsed >= state.targetMinutes ? "target reached — reduce scope or stop" : "within target";
   console.log(`${bold}active time${reset}         ${state.minutesUsed}m / ${state.targetMinutes}m target / ${state.hardStopMinutes}m hard stop`);
+  console.log(`${bold}budget state${reset}        ${budgetState}`);
   console.log(`${bold}blocker${reset}             ${state.blocker ?? "none"}`);
   console.log(`${bold}artifacts${reset}           ${state.artifacts.join(", ") || "none"}`);
   console.log(`${bold}approved gates${reset}      ${state.approvals.join(", ") || "none"}`);

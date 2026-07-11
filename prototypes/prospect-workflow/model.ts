@@ -76,4 +76,5 @@ export type Step =
       name: string;
       gate: GateId;
       reviseFrom: number;
+      status?: ProspectStatus;
     };

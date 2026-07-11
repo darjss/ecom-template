@@ -10,7 +10,11 @@ pnpm prototype:prospect-workflow
 
 Drive the happy path with `n` for an agent step and `a` for a review. Try `f`/`r` around a step, `x` at a review, `p` after deployment, and `m sent` before and after all reviews.
 
-## Recommended operating contract
+## Accepted verdict
+
+The prototype is accepted as the specification handoff contract. All seven human review gates remain separate and mandatory: catalog, brand interpretation, storefront, synthetic demo order plus Telegram behavior, video, recipient, and final Mongolian DM copy. The agent never substitutes for the founder at a gate.
+
+## Accepted operating contract
 
 The agent skills are orchestration interfaces over checked-in tooling, not stores of prospect data:
 
@@ -23,7 +27,7 @@ The agent skills are orchestration interfaces over checked-in tooling, not store
 | `/prospect-record <slug> <status>` | Human-reported event | Tracker row and journal | Never sends a message |
 | `/prospect-expire <slug>` | Active demo | Revocation/deletion proof and tracker row | Human-visible cleanup result |
 
-`/prospect-research` invokes `agent-browser` only. It opens the approved profile URL, captures at most the latest 8–12 product references, and records only visible title, description, price, size/color options, media URL, post URL, capture time, and screenshot path. Ambiguous values stay `null` with a reason. It never bypasses login/access controls or infers availability, claims, variants, or prices.
+`/prospect-research` invokes `agent-browser` only after the orchestrator grants that run a browser lease. It opens the approved profile URL, captures at most the latest 8–12 product references, and records only visible title, description, price, size/color options, media URL, post URL, capture time, and screenshot path. Ambiguous values stay `null` with a reason. It never bypasses login/access controls or infers availability, claims, variants, or prices.
 
 A real `agent-browser` probe of `https://www.instagram.com/roziestore/` on 2026-07-11 resolved the public profile title but exposed only Instagram's login/sign-up wall, not product posts. The accepted failure path must therefore stop collection and ask the founder for an approved accessible source or merchant-supplied export; it must not bypass the wall or claim that catalog evidence was captured.
 
@@ -60,6 +64,17 @@ Seven approvals bind to exact artifact hashes: catalog, brand interpretation, st
 
 `researched` means catalog and brand evidence are approved. `demo-ready` means an isolated deployment exists but is not sendable. `reviewed` means all seven gates passed. Only the founder manually sends; `/prospect-record rozie-store sent` records that external act. Reply/call/deposit/won/rejected/follow-up are human-reported tracker events. Expiry revokes the demo and removes it from Telegram routing.
 
+The tracker transition graph is explicit:
+
+- `candidate → researched → demo-ready → reviewed → sent`
+- `sent → replied | follow-up | rejected | expired`
+- `replied → call | follow-up | rejected | expired`
+- `follow-up → replied | call | rejected | expired`
+- `call → deposit | follow-up | rejected | expired`
+- `deposit → won | rejected`
+- `candidate`, `researched`, `demo-ready`, or `reviewed` may become `rejected`; `demo-ready` or `reviewed` may become `expired`
+- `won`, `rejected`, and `expired` are terminal in this workflow
+
 ## Demo and Telegram boundaries
 
 The generated merchant app owns its custom Astro storefront, Store Profile, seed, and deployment identity. It imports the shared kernel; no commerce code is copied. The demo is noindex, absent from sitemaps, expires 10 days after sending, uses fictional prefilled customer and bank data, accepts no real payments, and warns against entering personal information.
@@ -74,6 +89,18 @@ Budget active agent time at 75 minutes per prospect: 12 capture, 5 brand interpr
 
 Every operation journals its input digest and outputs after each successful step. Resume skips outputs whose digest and proof still match. Changed approved inputs invalidate downstream outputs; failures retain partial resources and restart at the first incomplete operation. There is no destructive automatic rollback. Expiry and explicit cleanup are idempotent, journaled operations.
 
+## Prototype evidence
+
+The terminal prototype exercised the accepted contract without external side effects:
+
+- The complete path required all seven approvals, reached `reviewed`, and allowed a manually recorded `sent` event at 67 active minutes.
+- Recording `sent` before all approvals was denied.
+- An injected agent/tool failure retained completed journal entries; resume continued at the first incomplete step.
+- Rejecting a review blocked progress and returned to that gate's producer for revision.
+- Attempting to route a Production Store through Telegram was denied.
+- Rejecting or expiring a prospect revoked its demo allowlist entry and opaque action reference.
+- The real Rozie profile probe established the login-wall failure case; it did not produce or pretend to produce catalog evidence.
+
 ## Handoff to `/to-spec`
 
-If accepted, `/to-spec` should encode these skill interfaces, schemas, state meanings, approval hashes/invalidation, the 75/90-minute policy, resume journal, app/shared-kernel boundary, noindex synthetic demo rules, and GramIO allowlist/action-reference invariants. This prototype itself must remain on its throwaway branch and must not be merged.
+`/to-spec` should encode these accepted skill interfaces, schemas, state meanings and transition graph, seven approval hashes/invalidation rules, the 75/90-minute policy, resume journal, browser-lease boundary, app/shared-kernel boundary, noindex synthetic demo rules, and GramIO allowlist/action-reference invariants. This prototype itself must remain on its throwaway branch and must not be merged.
