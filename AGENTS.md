@@ -16,7 +16,7 @@ Astro 7 SSR on Cloudflare Workers. SolidJS islands (never React). Tailwind v4 �
 - Files stay small and single-purpose; ~150 lines needs a reason
 - API: one Elysia plugin per concern, TypeBox `t` validation, throw `AppError` subclasses; keep `aot: false`
 - Client data: solid-query through the shared `queryClient`; mutations invalidate queries — never poke the cache
-- Forms: hand-rolled + valibot via `createForm` (no tanstack form)
+- Forms: TanStack Form + Valibot; keep credential forms out of local draft persistence
 - Icons: `lucide-solid/icons/<name>` deep imports only — the barrel import breaks SSR in workerd
 - UI components: `pnpm dlx shadcn@latest add @zaidan/<name>` into `src/components/ui`
 - DB: cuid2 ids + createdAt/updatedAt via `src/server/db/columns.ts`; explicit indexes; after schema changes run `pnpm db:generate && pnpm db:migrate:local`
