@@ -6,5 +6,6 @@ dist/
 .env
 *.log
 worker-configuration.d.ts
+/.private/
 /CONTEXT.md
 /FOUNDER-BRIEF.md
