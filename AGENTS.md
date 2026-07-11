@@ -23,6 +23,20 @@ Astro 7 SSR on Cloudflare Workers. SolidJS islands (never React). Tailwind v4 â€
 - Auth schema changes (new plugins): edit `scripts/auth-schema.config.ts` to match `src/server/lib/auth.ts`, run `pnpm auth:generate`
 - Env vars: add to `src/env.ts` (valibot), `.dev.vars.example`, and `wrangler.jsonc` vars if public; rerun `wrangler types`
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The canonical triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. See `docs/agents/domain.md`.
+
 ## Verify
 
 `pnpm typecheck && pnpm lint && pnpm build`, then `pnpm dev` and curl `/api/health`.
