@@ -5,12 +5,8 @@ import { themeStyle, urnuuTheme } from "./storefront-theme";
 const price = (value: number) => `${new Intl.NumberFormat("mn-MN").format(value)} ₮`;
 
 const CardiganFigure = () => (
-  <svg
-    viewBox="0 0 320 360"
-    role="img"
-    aria-label="Ноолууран кардиганы дүрслэл"
-    class="h-full w-full"
-  >
+  <svg viewBox="0 0 320 360" aria-labelledby="cardigan-figure-title" class="h-full w-full">
+    <title id="cardigan-figure-title">Ноолууран кардиганы дүрслэл</title>
     <path
       d="M92 66 48 104l28 64 28-15v138h112V153l28 15 28-64-44-38-39-20c-9 18-20 27-29 27s-20-9-29-27L92 66Z"
       fill="oklch(0.76 0.055 63)"

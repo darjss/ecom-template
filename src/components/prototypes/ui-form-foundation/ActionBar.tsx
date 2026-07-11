@@ -20,7 +20,7 @@ export const ActionBar = (props: { controller: ProductEditorController }) => {
     return status.kind === "error" ? status : null;
   };
   return (
-    <div class="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:absolute md:px-6">
+    <div class="fixed inset-x-0 bottom-0 z-30 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:sticky md:px-6">
       <div class="mx-auto flex max-w-4xl items-center justify-between gap-4">
         <div class="min-w-0 text-sm">
           <Switch fallback={<span class="text-muted-foreground">Өөрчлөлт байхгүй</span>}>
@@ -39,9 +39,9 @@ export const ActionBar = (props: { controller: ProductEditorController }) => {
             </Match>
             <Match when={saved()}>
               {(status) => (
-                <span role="status" class="text-emerald-700 flex items-center gap-2 font-medium">
+                <output class="text-emerald-700 flex items-center gap-2 font-medium">
                   <Check class="size-4" /> Бүтээгдэхүүн хадгалагдлаа · v{status().revision}
-                </span>
+                </output>
               )}
             </Match>
             <Match when={draftError()}>

@@ -45,24 +45,34 @@ export const ReconciliationPanel = (props: { controller: ProductEditorController
                   aria-label={`${conflict.descriptor.label} утга сонгох`}
                   class="grid gap-3 sm:grid-cols-2"
                 >
-                  <label class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border p-4">
-                    <RadioGroupItem id={`${id}-server`} value="server" class="mt-0.5" />
+                  <div class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 items-start gap-3 rounded-xl border p-4">
+                    <RadioGroupItem
+                      id={`${id}-server`}
+                      value="server"
+                      aria-label={`Серверийн утга: ${conflict.serverValue}`}
+                      class="mt-0.5 size-5 after:-inset-3"
+                    />
                     <span class="grid min-w-0 gap-1">
                       <span class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                         Серверийн утга
                       </span>
                       <span class="break-words text-sm leading-5">{conflict.serverValue}</span>
                     </span>
-                  </label>
-                  <label class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border p-4">
-                    <RadioGroupItem id={`${id}-draft`} value="draft" class="mt-0.5" />
+                  </div>
+                  <div class="has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-muted flex min-h-20 items-start gap-3 rounded-xl border p-4">
+                    <RadioGroupItem
+                      id={`${id}-draft`}
+                      value="draft"
+                      aria-label={`Миний ноорог: ${conflict.draftValue}`}
+                      class="mt-0.5 size-5 after:-inset-3"
+                    />
                     <span class="grid min-w-0 gap-1">
                       <span class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                         Миний ноорог
                       </span>
                       <span class="break-words text-sm leading-5">{conflict.draftValue}</span>
                     </span>
-                  </label>
+                  </div>
                 </RadioGroup>
               </fieldset>
             );
