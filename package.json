@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:stores": "vp run --filter '@prototype-shop/*' --parallel dev",
+    "dev:proxy": "portless proxy start --port 1355 --https",
+    "dev:stores": "portless proxy start --port 1355 --https && vp run --filter '@prototype-shop/*' --parallel dev",
     "postinstall": "wrangler types",
     "dev": "astro dev",
     "build": "astro build",
