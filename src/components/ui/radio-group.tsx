@@ -7,7 +7,7 @@ import {
   RadioGroup as RadioGroupRoot,
   type RadioGroupRootProps,
 } from "@kobalte/core/radio-group";
-import { Circle } from "lucide-solid";
+import Circle from "lucide-solid/icons/circle";
 import { type ComponentProps, splitProps, type ValidComponent } from "solid-js";
 
 import { cn } from "@/lib/utils";
