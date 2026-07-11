@@ -1,0 +1,11 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  "name": "prototype-nomad-shop",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "prototype-db", "database_id": "local" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "local" }],
+  "r2_buckets": [{ "binding": "R2", "bucket_name": "prototype-bucket" }],
+  "vars": { "APP_SLUG": "nomad" }
+}

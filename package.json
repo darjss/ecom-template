@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:stores": "vp run --filter '@prototype-shop/*' --parallel dev",
     "postinstall": "wrangler types",
     "dev": "astro dev",
     "build": "astro build",
@@ -56,9 +57,11 @@
     "@types/node": "^24.0.0",
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "^0.31.10",
+    "portless": "0.15.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vite-plus": "^0.1.24",
     "wrangler": "^4.107.0"
-  }
+  },
+  "packageManager": "pnpm@11.11.0"
 }

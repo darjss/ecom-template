@@ -1,0 +1,55 @@
+---
+import { env } from "cloudflare:workers";
+
+export const prerender = false;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const value = String(form.get("value") ?? "");
+  await env.DB.exec("CREATE TABLE IF NOT EXISTS proof (id INTEGER PRIMARY KEY, value TEXT NOT NULL)");
+  await env.DB.prepare("INSERT OR REPLACE INTO proof (id, value) VALUES (1, ?)").bind(value).run();
+  await env.KV.put("proof", value);
+  await env.R2.put("proof.txt", value);
+  Astro.cookies.set("prototype_session", `${env.APP_SLUG}:${value}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: true,
+    path: "/",
+  });
+  return Astro.redirect("/");
+}
+
+await env.DB.exec("CREATE TABLE IF NOT EXISTS proof (id INTEGER PRIMARY KEY, value TEXT NOT NULL)");
+const row = await env.DB.prepare("SELECT value FROM proof WHERE id = 1").first<{ value: string }>();
+const object = await env.R2.get("proof.txt");
+const state = {
+  d1: row?.value ?? null,
+  kv: await env.KV.get("proof"),
+  r2: object ? await object.text() : null,
+};
+const origin = Astro.url.origin;
+const callback = `${origin}/api/auth/callback/google`;
+const cookie = Astro.cookies.get("prototype_session")?.value ?? null;
+---
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Portless isolation proof</title></head>
+  <body>
+    <main>
+      <h1>{env.APP_SLUG} shop</h1>
+      <dl>
+        <dt>Origin</dt><dd id="origin">{origin}</dd>
+        <dt>Google callback</dt><dd id="callback">{callback}</dd>
+        <dt>Cookie</dt><dd id="cookie">{cookie ?? "empty"}</dd>
+        <dt>D1</dt><dd id="d1">{state.d1 ?? "empty"}</dd>
+        <dt>KV</dt><dd id="kv">{state.kv ?? "empty"}</dd>
+        <dt>R2</dt><dd id="r2">{state.r2 ?? "empty"}</dd>
+      </dl>
+      <form method="post">
+        <label>State value <input name="value" required /></label>
+        <button type="submit">Write isolated state</button>
+      </form>
+      <pre id="proof">{JSON.stringify({ app: env.APP_SLUG, origin, callback, cookie, state }, null, 2)}</pre>
+    </main>
+  </body>
+</html>

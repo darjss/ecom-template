@@ -1,3 +1,5 @@
+packages:
+  - prototypes/portless-worktree/apps/*
 allowBuilds:
   "@prisma/client": false
   better-sqlite3: true
