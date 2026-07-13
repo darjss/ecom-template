@@ -1,6 +1,6 @@
 # Fictional reference-store catalog and media research
 
-**Status:** research draft for [Research the fictional reference-store catalog and media dataset](https://github.com/darjss/ecom-template/issues/29), retrieved 2026-07-14. It proposes inputs for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28); it is not the accepted fixture contract and contains no downloaded media.
+**Status:** revised research recommendation for [Research the fictional reference-store catalog and media dataset](https://github.com/darjss/ecom-template/issues/29), retrieved 2026-07-14 and updated after founder feedback. It proposes inputs for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28); it is not the accepted fixture contract and contains no downloaded or generated media.
 
 ## Source boundary
 
@@ -9,9 +9,7 @@
 - The founder-approved commerce contract requires integer-MNT prices; at least one Variant per Product; immutable published SKUs and option combinations; Bundles made from fixed Variant quantities with derived inventory; non-commercial text/select/checkbox Personalization; and store-scoped Categories, Collections, Tags, Discounts, inventory, Orders, Payments, and Fulfillments. The accepted [commerce model](https://github.com/darjss/ecom-template/blob/ce2a500/docs/wayfinder/commerce-domain-model.md) and [canonical language](https://github.com/darjss/ecom-template/blob/ce2a500/CONTEXT.md) are normative.
 - The accepted [Store Profile, CMS, Theme, and Media contract](https://github.com/darjss/ecom-template/blob/d6b78a9/docs/wayfinder/store-profile-cms-media-contract.md) requires deterministic repository-owned fixtures, generated WebP media, immutable R2 objects, contextual alt text on usages, no provenance rows in D1, no seeded operational history, and normal commerce commands for scenarios.
 - The accepted local [search contract](./search-contract-research.md) defines normalization, exact compact SKU lookup, native/strict/basic transliteration stages, live availability hydration, publication filtering, and the required synthetic proof boundary.
-- The National Statistics Office's June 2026 Ulaanbaatar selected-commodity averages were rice 4,984 MNT/kg, packaged domestic first-grade flour 2,512 MNT/kg, domestic carton milk 5,059 MNT/litre, imported vegetable oil 12,193 MNT/litre, laundry powder 8,612 MNT/800 g, dishwashing liquid 6,859 MNT/500 ml, and sugar 5,125 MNT/kg. These are survey averages, not merchant quotes or prescribed fixture prices. Source: NSO, [Average price of main selected commodities](https://data.1212.mn/pxweb/en/NSO/NSO__Economy,%20environment__Consumer%20Price%20Index/DT_NSO_0600_019V1.px/), API selection `Ulaanbaatar city / 2026-06`, retrieved 2026-07-14.
-- Blender states that its GPL applies to Blender, not artwork created with it, and that generated artwork remains the creator's property. This does not grant rights to third-party models, textures, fonts, or logos put into a scene. Source: Blender Foundation, [Blender License](https://www.blender.org/about/license/), retrieved 2026-07-14.
-- Poly Haven states that all of its assets are CC0. CC0 attempts to waive copyright and related rights, but its legal code does not waive trademark or patent rights and supplies no warranties. Sources: Poly Haven, [License](https://polyhaven.com/license), and Creative Commons, [CC0 1.0 legal code](https://creativecommons.org/publicdomain/zero/1.0/legalcode.en), retrieved 2026-07-14.
+- Image generation is allowed. OpenAI's business terms say the customer owns generated Output as between the customer and OpenAI, to the extent permitted by law; the API supports direct WebP output. Sources: OpenAI, [Services Agreement §4](https://openai.com/policies/services-agreement/) and [Image generation API](https://developers.openai.com/api/docs/guides/image-generation), retrieved 2026-07-14.
 - `.invalid` is permanently reserved for names intended to be visibly invalid. Source: IETF, [RFC 2606 §2](https://www.rfc-editor.org/rfc/rfc2606#section-2), retrieved 2026-07-14.
 
 Everything below is a **design recommendation**, not an external fact.
@@ -92,7 +90,7 @@ Bundle definitions are fixed at first publication:
 - B01 demand: `1 × P05/WF29-WASH-800 + 1 × P06/WF29-DISH-500`.
 - B02 demand: `2 × P01/WF29-RICE-1K + 1 × P02/WF29-FLOUR-1K + 1 × P04/WF29-OIL-1L`.
 
-The recommended food and cleaning prices are deliberately rounded fixture decisions close to, but not copied from, the NSO anchors. Tote, notebook, Bundle, delivery, Discount, stock, and weight values are purely synthetic recommendations.
+All prices, delivery fees, Discounts, stock, and weights are simple synthetic estimates. They only need to feel plausible in the prototype.
 
 ## Search and normalization canaries
 
@@ -128,31 +126,23 @@ Initial seed contains catalog/CMS/configuration and legitimate initial Inventory
 
 For the personalization Order, use `cover_name = "ЖИШИГ 29"`, `ribbon_color = "Тэнгэрийн хөх"`, and `without_price_tag = true`; also prove missing required select and a 25-character text are rejected.
 
-## Proposed media source/license manifest
+## Media recommendation
 
-No external asset is needed. The reference-store prototype should create and review the following source recipes and outputs; paths are recommendations, not files created by this research.
+Use a good image-generation model to create consistent fictional product photography. OpenAI GPT Image is a straightforward default, but the prototype can use another model if its output is better.
 
-| Asset IDs / outputs | Repository source recipe | Source URL | Author | License | Retrieval | Permitted repository use |
-| --- | --- | --- | --- | --- | --- | --- |
-| `logo` → 1024×1024 WebP; `favicon` → 128×128 PNG | Original geometric `48`/shelf source in `fixtures/reference-store/media/source/brand-mark.svg`; no font outlines or borrowed marks; SVG remains build source and is not uploaded | None; repository-original | Recorded fixture-media contributor | `CC0-1.0`, affirmed in a fixture-specific notice at creation | n/a; creation date recorded | Commit and modify source; upload declared outputs to fixture R2; use and redistribute in screenshots, docs, and generated Stores |
-| `hero` → 2400×1350 WebP; `og-fallback` → 1200×630 WebP | Deterministic Blender scene of abstract apartment shelving, bags, and unbranded packages; fixed camera/material/light seeds | None; repository-original | Recorded fixture-media contributor | `CC0-1.0` | n/a; creation date recorded | Same |
-| `p01`–`p06`, `p08`, `p09` → 1600×1200 WebP | One Blender Python generator using only primitive geometry, procedural materials, original label shapes, and recipe JSON; no text, external mesh, texture, HDRI, or bundled demo file | None; repository-original | Recorded fixture-media contributor | `CC0-1.0` | n/a; creation date recorded | Same |
-| `p07-sand`, `p07-sky` → 1600×1200 WebP | Original cloth-like geometry generated in the same script; color recipes match Variant swatches | None; repository-original | Recorded fixture-media contributor | `CC0-1.0` | n/a; creation date recorded | Same |
-| `b01`, `b02` → 1600×1200 WebP | New composition renders from the same repository-owned component scenes, not collaged merchant packshots | None; repository-original | Recorded fixture-media contributor | `CC0-1.0` | n/a; creation date recorded | Same |
-| Blender rendering tool | Blender release pinned by the reference-store prototype | https://www.blender.org/about/license/ | Blender contributors | GPL for the tool; not the original output | 2026-07-14 | Use the tool to generate fixture outputs; do not import or redistribute bundled third-party demo assets |
+For each approved image, keep one small manifest row:
 
-Pin Blender major/minor version, render engine, color-management settings, seeds, recipe hash, output dimensions, and output SHA-256 in the eventual manifest. Render lossless masters locally, export committed WebP, and upload unchanged bytes under immutable keys. Alt text stays on each Catalog/CMS usage, for example `Элсний шар өнгийн том даавуун цүнх` or `Угаалгын нунтаг, аяга таваг угаагч шингэн бүхий цэвэрлэгээний хослол`; it is not Media Asset metadata.
+| Field | Value |
+| --- | --- |
+| Asset | Stable Product, Variant, Bundle, Hero, logo, or fallback key |
+| Source | Generated, original photography, or exact licensed-photo URL |
+| Rights | Provider terms or specific photo license |
+| Provenance | Model, prompt, generation date, and final file hash |
+| Use | May be committed, uploaded to fixture R2, and shown in the reference Store |
 
-If original procedural work proves insufficient, Poly Haven is the only researched fallback: select one specific CC0 surface or HDRI, pin its per-asset URL, displayed author, downloaded-file hash, CC0 version, retrieval date, and transformation recipe. Do not rely only on the library-wide license page. The direct recommendation remains **zero external inputs**.
+Generate clean studio photos with one consistent art direction. Do not use real merchant images as references. Avoid people, existing brands, logos, barcodes, readable packaging text, and recognizable trade dress. Review the final images for obvious generation errors and brand leakage, then commit only the selected WebPs.
 
-### Rejected source notes
-
-- **Any prospect or merchant catalog, including Rozie Store:** reject without inspection or adaptation. Product names, assortment, copy, prices, photography, logo, layout, and identity must not be used as a reference dataset.
-- **Marketplaces, image search results, social posts, manufacturer packshots, and recognizable branded packaging:** reject because the fixture cannot establish a clean repository-use grant and would import real identity.
-- **Unsplash/Pexels-style stock photography:** reject for the baseline even where a platform grants broad use; it is unnecessary, not repository-original, and may introduce people, property, or brand review. Unsplash uses its own license rather than CC0. Source: Unsplash, [License](https://unsplash.com/license), retrieved 2026-07-14.
-- **Poly Haven assets:** legally viable as the documented CC0 fallback, but reject from the baseline to keep the fixture reproducible without downloads and to avoid provenance work that procedural scenes do not need.
-- **Blender splash scenes, demo `.blend` files, BlenderKit, add-ons that inject assets, downloaded fonts, HDRIs, meshes, or textures:** reject. Blender's output rule does not cleanse rights in third-party scene inputs.
-- **Generative-image services or model outputs:** reject unless the reference-store prototype separately proves the service terms, model/output rights, prompts, and absence of copied marks or identifiable people. No such source is needed here.
+Original photography and clearly licensed photos are also fine. Record the photographer or exact asset URL and license. Marketplace images, social posts, manufacturer packshots, and prospect photos remain excluded.
 
 ## Strict fictional-identity rules
 
@@ -164,11 +154,11 @@ If original procedural work proves insufficient, Poly Haven is the only research
 6. Payment records use `WF29-QPAY-*`, `WF29-TRANSFER-*`, `WF29-COD-*`, and non-numeric `TEST-MNT-WF29` references. Real account numbers, QR payloads, provider customer IDs, card-like numbers, and production credentials are forbidden. Provider sandbox/test bindings remain secrets and must fail closed when absent.
 7. Orders, Customers, Payments, Refunds, inventory evidence, and tracking links are created only by scenario commands. Names, notes, reasons, idempotency keys, and external references all retain the `WF29` marker; bearer secrets never appear in snapshots.
 8. Do not assign GTINs, real company registration numbers, postal codes, bank names, certification marks, health claims, origin claims beyond generic fixture copy, or third-party trademarks.
-9. Media contains no people, signatures, handwriting, real streets/interiors, logos, barcodes, QR codes, text generated from an external font, or recognizable product trade dress.
-10. The reference-store prototype should add a manifest lint/inspection step that rejects unapproved remote URLs and scans text/SKUs/references for missing `WF29`/fictional markers. This is fixture validation, not a shared-kernel exception.
+9. Media contains no people, signatures, handwriting, real streets/interiors, third-party logos, barcodes, QR codes, certification marks, readable model-generated packaging text, or recognizable product trade dress.
+10. The reference-store prototype should add a manifest inspection step that rejects unapproved remote/reference URLs, missing generation records, and text/SKUs/references without `WF29`/fictional markers. This is fixture validation, not a shared-kernel exception.
 
 ## Direct recommendation for the reference-store prototype
 
-Search-check and human-approve **Өрнүүн 48** as a fictional candidate before freezing it; if any merchant, company, or mark collision appears, replace the display identity while preserving the `WF29` namespace. Prototype this exact 9-Product/2-Bundle matrix first. Browser-review the Homepage, search/autocomplete, Category/Collection pages, P05 size selection, P07 size/color and live stock, P08 all three Personalization controls, both Bundle pages, Cart/Checkout, pickup/delivery, and the relevant Admin catalog/inventory views at desktop and mobile widths. Use the procedural Blender direction and no external media.
+Search-check and human-approve **Өрнүүн 48** as a fictional candidate before freezing it; if any merchant, company, or mark collision appears, replace the display identity while preserving the `WF29` namespace. Prototype this exact 9-Product/2-Bundle matrix first. Browser-review the Homepage, search/autocomplete, Category/Collection pages, P05 size selection, P07 size/color and live stock, P08 all three Personalization controls, both Bundle pages, Cart/Checkout, pickup/delivery, and the relevant Admin catalog/inventory views at desktop and mobile widths. Use reviewed image-generated product photography; do not use Blender or real merchant imagery.
 
 [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28) may change the name, visual direction, copy, or prices after human review, but it should preserve the coverage properties and stable semantic keys: Default Variant, complete size/color combinations, inherited and overridden prices, Unicode compact SKU, available/low/out Variants, available/out derived Bundles, all Personalization types, manual groupings, both Discount modes, native/strict/basic search, cached presentation with live availability, and every operational journey above. The prototype ticket's resolution—not this draft—should freeze the reviewed canonical values and media hashes.
