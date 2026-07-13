@@ -89,10 +89,10 @@ Public HTML uses the starting policy:
 
 ```http
 Cache-Control: public, max-age=0, must-revalidate
-Cloudflare-CDN-Cache-Control: public, max-age=31536000
+Cloudflare-CDN-Cache-Control: public, max-age=1209600
 ```
 
-The browser rechecks at the edge while Cloudflare may retain HTML for one year. The Cloudflare-specific header is consumed at the edge. Publication, rather than TTL expiry, is the normal freshness mechanism. Cloudflare may still evict cold entries.
+The browser rechecks at the edge while Cloudflare may retain HTML for two weeks. The Cloudflare-specific header is consumed at the edge. Publication, rather than TTL expiry, is the normal freshness mechanism. Cloudflare may still evict cold entries.
 
 Public JSON endpoints may independently use Workers Cache when a real consumer needs them, such as search, catalog pagination, or client-side collection filtering. They are not introduced solely as an internal SSR data source. HTML and related public JSON carry the same semantic cache tags where one publication affects both, allowing one purge to invalidate both representations.
 
