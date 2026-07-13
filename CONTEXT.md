@@ -147,7 +147,7 @@ _Avoid_: Account, User
 An Order placed without a Customer identity; its contact details remain an immutable snapshot.
 
 **Guest Tracking Link**:
-A revocable capability that grants narrow read access to one Guest Order without creating or authenticating a Customer.
+A time-limited capability that grants narrow read access to one Guest Order without creating or authenticating a Customer.
 
 **Staff Member**:
 A store-scoped authenticated operator acting under an assigned role.
