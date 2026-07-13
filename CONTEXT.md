@@ -10,6 +10,12 @@ A small independent merchant Store that typically processes 10–20 Orders per d
 **Complexity Budget**:
 The deliberate preference for the smallest reliable design that protects essential commerce truth at Target Store scale. Spend complexity on Store isolation, authorization, validation, atomic commercial and inventory changes, retry safety, recovery, and concise evidence for consequential actions; avoid speculative scale, enterprise compliance, distributed coordination, and unused extension points.
 
+**Reference Store**:
+A completely fictional, repository-owned Store used as the shared baseline for development, documentation, demonstrations, provisioning drills, and synthetic canaries. It never borrows a real merchant's identity or operational data.
+
+**Canary Scenario**:
+A repeatable synthetic commerce journey that exercises ordinary domain behavior and records expected evidence without becoming seeded operational history.
+
 ## Catalog
 
 **Catalog Item**:
