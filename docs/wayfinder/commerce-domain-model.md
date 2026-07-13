@@ -56,9 +56,11 @@ Products and Bundles use one publication lifecycle:
 
 ```text
 Draft --publish--> Published --archive--> Archived
+                     ^                    |
+                     +-----reactivate-----+
 ```
 
-Draft items are freely editable but not purchasable. Publishing requires every catalog invariant to hold. A Published item may be revised in place, but a change cannot invalidate its active Variant combinations or published Bundle dependencies; price and copy changes affect only future checkout. Archived is terminal in v1, prevents new purchases, and preserves every historical reference and snapshot. Option Groups and Option Values are Product-owned definitions rather than independently publishable. They are freely editable while Product is Draft. After first publication, Group ownership, Value identity, and machine key become immutable once referenced by a Published/Active Variant; customer-visible labels and ordering may change revisionally. Values may become Archived only after dependent Variants are replaced or archived and Bundle dependencies resolved. A Variant is Active or Archived within its Product; at least one Variant must remain Active while the Product is Published, and a Variant used by a Published Bundle cannot be archived first.
+Draft items are freely editable but not purchasable. Publishing requires every catalog invariant to hold. A Published item may be revised in place, but a change cannot invalidate its active Variant combinations or published Bundle dependencies; price and copy changes affect only future checkout. Archived prevents new purchases and preserves every historical reference and snapshot. An archived Product or Bundle may reactivate under the same immutable identity when its publication invariants still hold; its original SKUs remain bound to their original identities and are never reassigned. Option Groups and Option Values are Product-owned definitions rather than independently publishable. They are freely editable while Product is Draft. After first publication, Group ownership, Value identity, and machine key become immutable once referenced by a Published/Active Variant; customer-visible labels and ordering may change revisionally. Values may become Archived only after dependent Variants are replaced or archived and Bundle dependencies resolved. A Variant is Active or Archived within its Product and may reactivate only under its original identity, SKU, Product ownership, and Option Value combination when its invariants hold. At least one Variant must remain Active while the Product is Published, and a Variant used by a Published Bundle cannot be archived first.
 
 ## Cart, checkout, and commercial truth
 
@@ -188,7 +190,7 @@ Delivery Options are either free Pickup at an active public Location or Delivery
 
 The application layer exposes intention-revealing commands; persistence and adapters remain behind it. The minimum command vocabulary is:
 
-- Catalog: `CreateProduct`, `ChangeProduct`, `PublishProduct`, `ArchiveProduct`, `CreateBundle`, `ChangeBundle`, `PublishBundle`, `ArchiveBundle`.
+- Catalog: `CreateProduct`, `ChangeProduct`, `PublishProduct`, `ArchiveProduct`, `ReactivateProduct`, `CreateBundle`, `ChangeBundle`, `PublishBundle`, `ArchiveBundle`, `ReactivateBundle`, `ReactivateVariant`.
 - Pricing: `CreateDiscountRule`, `ChangeDiscountRule`, `ActivateDiscountRule`, `DeactivateDiscountRule`.
 - Ordering: `PlaceOrder`, `CancelOrder`, `CompleteOrder`. Authorized staff may cancel any eligible Order; an authenticated store-scoped Customer may cancel their own eligible Order. Guest Tracking Links remain read-only, so Guest customers contact the merchant or wait for QPay expiry. Detailed role and session enforcement belongs to the auth boundary.
 - Payment: `BeginPayment`, `RecordPaymentEvidence`, `ConfirmPayment`, `RejectPayment`, `ExpirePayment`, `RecordRefund`.
