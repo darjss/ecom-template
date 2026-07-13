@@ -6,7 +6,7 @@ This is the approved pre-schema contract for the shared commerce kernel. Persist
 
 **Decision status:** Approved by the orchestrator.
 
-Every commerce identity, command, idempotency key, event, and reference is scoped to exactly one independently deployed Store, and all references resolve within it. Customer and Staff Member identities never link or merge across Stores, even when phone numbers match. Each Store's commerce persistence is authoritative; no global commerce identity or cross-store aggregate exists in v1. The merchant app may choose presentation, but only the shared kernel may mutate price, inventory, checkout, Payment, Order, cancellation, refund, or Fulfillment truth.
+Every commerce identity, command, idempotency key, event, and reference is scoped to exactly one independently deployed Store, and all references resolve within it. Customer and Staff Member identities never link or merge across Stores, even when phone numbers match. Each Store's D1 SQL database is authoritative; no global commerce identity or cross-store aggregate exists in v1. The shared kernel uses SQL directly through the repository-owned data layer rather than maintaining a storage-neutral commerce abstraction. The merchant app may choose presentation, but only the shared kernel may mutate price, inventory, checkout, Payment, Order, cancellation, refund, or Fulfillment truth.
 
 The kernel owns these aggregate boundaries:
 
@@ -22,7 +22,7 @@ The kernel owns these aggregate boundaries:
 | Fulfillment | Pickup or Delivery snapshot and Fulfillment state | Payment truth |
 | Customer | verified store-scoped phone identity and links to Orders | mutable copies of historical order contact details |
 
-Separate aggregates may change in one atomic transaction when an invariant spans them. Aggregate boundaries describe ownership and concurrency, not a requirement for separate network calls.
+Separate aggregates may change in one D1 SQL transaction when an invariant spans them. Aggregate boundaries describe ownership and concurrency, not a requirement for separate network calls.
 
 ## Shared value rules
 
@@ -50,7 +50,7 @@ A Product or Bundle owns ordered text, single-select, and checkbox Personalizati
 
 Product and Bundle are both Catalog Items for grouping. Categories form an optional acyclic parent/child navigation taxonomy; Collections are manually curated ordered Catalog Item groups; Tags are flat merchant labels without inherent storefront navigation. Membership is many-to-many. Dynamic rule-based Collections are excluded in v1.
 
-Categories, Collections, and Tags move `Draft → Active → Archived`. Only Active groupings affect navigation, merchandising, search facets, or new Discount eligibility. Memberships remain on archival. Archival is rejected while an active child Category or Active Discount Rule depends on the grouping; staff must explicitly reparent or deactivate the rule first. Archived grouping identities are terminal in v1.
+Categories, Collections, and Tags move `Draft → Active ↔ Archived`. Only Active groupings affect navigation, merchandising, search facets, or new Discount eligibility. Memberships remain on archival. Archival is rejected while an active child Category or Active Discount Rule depends on the grouping; staff must explicitly reparent or deactivate the rule first. An archived grouping may reactivate under the same identity when its invariants still hold.
 
 Products and Bundles use one publication lifecycle:
 
@@ -173,7 +173,7 @@ Active --accept/confirm--> Consumed
 
 **Stock, ledger, and concurrency status:** Approved by the orchestrator.
 
-A Variant maps to exactly one Stock Item in the store's single shared inventory pool. Available Quantity is current on-hand quantity minus all Active reservation demand and can never be negative. Bundle availability is derived from component Variant availability and required quantities; no Bundle stock is persisted. The minimum reservation model is one Inventory Reservation per Order, normalized Variant demand, and Stock Item on-hand and reserved balances. Placing an Order conditionally updates every demanded Stock Item in one atomic transaction so either all demand is reserved or none is. Order, Payment, discount, and inventory changes share one transaction boundary. Warehouses, stock batches, partial reservations, waitlists, and automatic rebalancing are excluded in v1.
+A Variant maps to exactly one Stock Item in the store's single shared inventory pool. Available Quantity is current on-hand quantity minus all Active reservation demand and can never be negative. Bundle availability is derived from component Variant availability and required quantities; no Bundle stock is persisted. The minimum reservation model is one D1-backed Inventory Reservation per Order, normalized Variant demand, and Stock Item on-hand and reserved balances. Placing an Order conditionally updates every demanded Stock Item in one D1 SQL transaction so either all demand is reserved or none is. Order, Payment, discount, and inventory changes share one transaction boundary; inventory reservations do not use Durable Objects. Warehouses, stock batches, partial reservations, waitlists, and automatic rebalancing are excluded in v1.
 
 Each Stock Item has one ordered immutable Inventory Ledger. Every typed Inventory Entry carries on-hand and reserved deltas, resulting balances, reason, actor or system source, causal Order and reservation where applicable, and command correlation. Adjustment changes on-hand; Reservation increases reserved; Release or Expiry decreases reserved; Consumption decreases both on-hand and reserved; Restoration compensates on-hand. Efficient current balances are persisted but must reconcile exactly to the ledger. An adjustment that would make on-hand lower than Active reserved demand is rejected with the blocking reservations; authorized staff must explicitly resolve or cancel affected Orders before recording the corrected count. Reservations are never auto-released, Available Quantity never becomes negative, and code never edits a balance without evidence. Consuming a Bundle reservation writes component-level entries. Cancellation after consumption uses explicit compensating entries and never deletes history.
 
@@ -242,7 +242,7 @@ They may not define domain states, accept an amount mismatch, authorize staff, m
 This model intentionally leaves these implementation decisions to the already-charted tickets:
 
 - reliability, idempotency persistence, callback/poll races, outbox, retries, and recovery;
-- D1 tables, constraints, indexes, TypeID prefixes, and transaction mechanics; the physical deployment uses one separate D1 database per Store and shared repository-owned schema/backend packages, without Durable Objects for inventory reservations;
+- exact D1 tables, constraints, indexes, TypeID prefixes, and transaction mechanics within the shared repository-owned schema/backend packages;
 - Elysia/Eden route and module interfaces, validation envelopes, and authorization plumbing;
 - auth/session mechanics and detailed role permissions.
 
