@@ -124,18 +124,13 @@ Primary inspiration:
 
 ## Media references and banner rendering
 
-A CMS record references a logical Media Asset by identity, not a mutable `latest` URL. Every accepted upload creates a new immutable Media Asset and immutable R2 object keys containing stable asset identity and a content digest. Responsive derivatives also use immutable keys and long-lived immutable caching.
+V1 media deliberately has no processing pipeline. An authenticated, size-limited Admin upload accepts a declared JPEG, PNG, or WebP and stores its bytes unchanged under a random immutable R2 object key. A minimal D1 Media Asset contains identity, object key, declared content type, alt text, and creation time. It has no content digest, provenance record, generated derivative rows, or creator audit metadata.
 
-Replacing a Banner image follows this flow:
+A CMS record references Media Asset identity rather than a mutable `latest` object. Replacing a Banner image uploads a new object, atomically changes the Banner's `mediaAssetId` with its other published fields, and purges affected HTML and public-data tags. Existing objects are never overwritten.
 
-1. Accept and normalize a new upload into a new Media Asset and its derivatives.
-2. Atomically update the Banner's `mediaAssetId` with its other published fields.
-3. Purge the Banner's affected HTML and public-data tags.
-4. Rendered HTML now contains the new immutable derivative URLs.
+The Store serves images from private R2 through a bounded media route using Cloudflare's on-demand image resizing and edge caching. Responsive `srcset` URLs request allowed widths and automatic output format without persisting derivative records. SSR fetches only CMS and Media Asset metadata; it never fetches image bytes. Storefront layout supplies stable image aspect and dimensions, meaningful alt text, responsive `srcset` and `sizes`, and appropriate loading priority.
 
-Old URLs can remain cached because current HTML no longer references them. Orphan reconciliation may remove unreferenced objects later under the media lifecycle contract; replacement never overwrites an existing R2 key.
-
-On an HTML cache miss, SSR fetches Banner fields and Media Asset metadata in a direct D1 query. It does not fetch image bytes. The browser selects and fetches an appropriate immutable derivative through the Store's Cloudflare-cached media origin. Rendered images include intrinsic dimensions, meaningful alt text, responsive `srcset` and `sizes`, and appropriate loading priority to prevent layout shift and wasted transfer.
+Raw-file normalization, EXIF correction or stripping, color normalization, content hashing, pre-generated derivatives, and automated orphan reconciliation are excluded. Unreferenced old R2 objects may remain in v1 and be deleted manually. Prospect evidence provenance remains in the private prospect artifact and is not copied into Production D1.
 
 ## Primary platform evidence
 
