@@ -9,6 +9,13 @@ Astro 7 SSR on Cloudflare Workers. SolidJS islands (never React). Tailwind v4 �
 - `src/lib` — client-shared code: Eden client (`api.ts`), auth client, plans, cache map, form helper, queries
 - `src/middleware` — edge cache + session guard
 
+## Product scale and complexity budget
+
+- Target small independent Stores: typically 10–20 Orders per day, designed comfortably for roughly 50 Orders per day and merchant audiences up to roughly 50,000 followers. These are sizing assumptions, not artificial hard limits.
+- Prefer the smallest reliable design for this scale. Do not chase hypothetical scale, generic platform flexibility, regulatory ceremony, distributed coordination, or enterprise operations without current evidence.
+- Preserve basic safety and a strong code foundation: Store isolation, authorization, validation, atomic commercial and inventory truth, idempotency where retries occur, recoverable operations, and compact evidence for consequential actions.
+- Add an abstraction or seam only when it hides real complexity or supports an accepted variation. Avoid speculative services, adapters, event systems, configuration layers, and extension points.
+
 ## Rules
 
 - Strict TS, no `any`, no type assertions, named exports only, no classes except the error hierarchy (`AppError`, `ApiError`)
