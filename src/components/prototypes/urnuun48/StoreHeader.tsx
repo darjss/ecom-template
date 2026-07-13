@@ -14,24 +14,48 @@ interface StoreHeaderProps {
 
 export const StoreHeader = (props: StoreHeaderProps) => (
   <>
-    <div class="u48-demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</div>
+    <div class="u48-demo-notice">
+      Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.
+    </div>
     <header class="u48-header">
       <button class="u48-icon-button u48-mobile-menu" type="button" aria-label="Цэс нээх">
         <Menu aria-hidden="true" />
       </button>
-      <button class="u48-wordmark" type="button" onClick={() => window.location.assign("?view=home")}>
-        <span>Өрнүүн</span><b>48</b>
+      <button
+        class="u48-wordmark"
+        type="button"
+        onClick={() => window.location.assign("?view=home")}
+      >
+        <span>Өрнүүн</span>
+        <b>48</b>
       </button>
-      <form class="u48-search" onSubmit={(event) => { event.preventDefault(); props.onSearch(); }}>
+      <form
+        class="u48-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          props.onSearch();
+        }}
+      >
         <Search aria-hidden="true" />
-        <label class="sr-only" for="u48-search-input">Бүтээгдэхүүн хайх</label>
-        <input id="u48-search-input" value={props.query()} onInput={(event) => props.onQuery(event.currentTarget.value)} placeholder="Будаа, угаалгын нунтаг, WF29…" />
+        <label class="sr-only" for="u48-search-input">
+          Бүтээгдэхүүн хайх
+        </label>
+        <input
+          id="u48-search-input"
+          value={props.query()}
+          onInput={(event) => props.onQuery(event.currentTarget.value)}
+          placeholder="Будаа, угаалгын нунтаг, WF29…"
+        />
         <button type="submit">Хайх</button>
       </form>
       <div class="u48-header-actions">
-        <button class="u48-icon-button" type="button" aria-label="Хэрэглэгчийн хэсэг"><UserRound aria-hidden="true" /></button>
+        <button class="u48-icon-button" type="button" aria-label="Хэрэглэгчийн хэсэг">
+          <UserRound aria-hidden="true" />
+        </button>
         <button class="u48-cart-button" type="button" onClick={props.onCart}>
-          <ShoppingBag aria-hidden="true" /><span>Сагс</span><b>{props.cartCount()}</b>
+          <ShoppingBag aria-hidden="true" />
+          <span>Сагс</span>
+          <b>{props.cartCount()}</b>
         </button>
       </div>
     </header>

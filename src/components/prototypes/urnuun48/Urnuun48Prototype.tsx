@@ -14,7 +14,8 @@ import type { ReferenceProduct } from "./data";
 type PrototypeView = "home" | "search" | "product" | "checkout" | "canaries";
 
 const parseView = (value: string | null): PrototypeView => {
-  if (value === "search" || value === "product" || value === "checkout" || value === "canaries") return value;
+  if (value === "search" || value === "product" || value === "checkout" || value === "canaries")
+    return value;
   return "home";
 };
 
@@ -23,7 +24,10 @@ interface Urnuun48PrototypeProps {
 }
 
 export const Urnuun48Prototype = (props: Urnuun48PrototypeProps) => {
-  const params = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+  const params =
+    typeof window === "undefined"
+      ? new URLSearchParams()
+      : new URLSearchParams(window.location.search);
   const [view, setView] = createSignal<PrototypeView>(parseView(params.get("view")));
   const [productId, setProductId] = createSignal(params.get("product") ?? "P07");
   const [query, setQuery] = createSignal(params.get("q") ?? "");
@@ -36,7 +40,10 @@ export const Urnuun48Prototype = (props: Urnuun48PrototypeProps) => {
     setView(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const openProduct = (id: string) => { setProductId(id); navigate("product", { product: id }); };
+  const openProduct = (id: string) => {
+    setProductId(id);
+    navigate("product", { product: id });
+  };
   const add = (product?: ReferenceProduct) => {
     setCartCount((count) => count + 1);
     setToast(`${product?.shortName ?? "Сонголт"} сагсанд нэмэгдлээ`);
@@ -46,17 +53,64 @@ export const Urnuun48Prototype = (props: Urnuun48PrototypeProps) => {
 
   return (
     <div class="u48-shell">
-      <a class="u48-skip" href="#main-content">Үндсэн хэсэг рүү очих</a>
-      <StoreHeader cartCount={cartCount} query={query} onQuery={setQuery} onSearch={search} onCart={() => navigate("checkout")} />
+      <a class="u48-skip" href="#main-content">
+        Үндсэн хэсэг рүү очих
+      </a>
+      <StoreHeader
+        cartCount={cartCount}
+        query={query}
+        onQuery={setQuery}
+        onSearch={search}
+        onCart={() => navigate("checkout")}
+      />
       <Switch>
-        <Match when={view() === "home"}><HomeView onOpen={openProduct} onAdd={add} /></Match>
-        <Match when={view() === "search"}><SearchView query={query()} onOpen={openProduct} onAdd={add} /></Match>
-        <Match when={view() === "product"}><ProductView productId={productId()} onAdd={() => add()} /></Match>
-        <Match when={view() === "checkout"}><CheckoutView /></Match>
-        <Match when={view() === "canaries"}><CanaryView /></Match>
+        <Match when={view() === "home"}>
+          <HomeView onOpen={openProduct} onAdd={add} />
+        </Match>
+        <Match when={view() === "search"}>
+          <SearchView query={query()} onOpen={openProduct} onAdd={add} />
+        </Match>
+        <Match when={view() === "product"}>
+          <ProductView productId={productId()} onAdd={() => add()} />
+        </Match>
+        <Match when={view() === "checkout"}>
+          <CheckoutView />
+        </Match>
+        <Match when={view() === "canaries"}>
+          <CanaryView />
+        </Match>
       </Switch>
-      <Show when={props.showPrototypeNav}><nav class="u48-prototype-nav" aria-label="Прототип харагдац"><button class={view() === "home" ? "is-active" : ""} onClick={() => navigate("home")}><House />Нүүр</button><button class={view() === "search" ? "is-active" : ""} onClick={search}><Search />Хайлт</button><button class={view() === "checkout" ? "is-active" : ""} onClick={() => navigate("checkout")}><ShoppingBag />Checkout</button><button class={view() === "canaries" ? "is-active" : ""} onClick={() => navigate("canaries")}><ClipboardCheck />Canaries</button></nav></Show>
-      <Show when={toast()}><div class="u48-toast" role="status">{toast()}</div></Show>
+      <Show when={props.showPrototypeNav}>
+        <nav class="u48-prototype-nav" aria-label="Прототип харагдац">
+          <button class={view() === "home" ? "is-active" : ""} onClick={() => navigate("home")}>
+            <House />
+            Нүүр
+          </button>
+          <button class={view() === "search" ? "is-active" : ""} onClick={search}>
+            <Search />
+            Хайлт
+          </button>
+          <button
+            class={view() === "checkout" ? "is-active" : ""}
+            onClick={() => navigate("checkout")}
+          >
+            <ShoppingBag />
+            Checkout
+          </button>
+          <button
+            class={view() === "canaries" ? "is-active" : ""}
+            onClick={() => navigate("canaries")}
+          >
+            <ClipboardCheck />
+            Canaries
+          </button>
+        </nav>
+      </Show>
+      <Show when={toast()}>
+        <div class="u48-toast" role="status">
+          {toast()}
+        </div>
+      </Show>
     </div>
   );
 };

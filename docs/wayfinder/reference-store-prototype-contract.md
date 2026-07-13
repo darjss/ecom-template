@@ -12,21 +12,21 @@ Visual direction probes: [A, B, and C comparison](https://html.darjs.dev/urnuun4
 
 ## Store Profile
 
-| Field | Canonical value |
-| --- | --- |
-| `storeKey` | `wf29-urnuun48` |
-| Display name | `Өрнүүн 48` |
-| Legal display | `Өрнүүн 48 — зохиомол жишиг өгөгдөл, бүртгэлгүй` |
-| Tagline | `Өдөр бүрийн хэрэгцээг цэгцтэй` |
-| Summary | `Гал тогоо, гэр ахуй, жижиг бэлгийн хэрэгцээг нэг дороос сонгох зохиомол жишиг дэлгүүр.` |
-| Email | `sainuu@urnuun48.invalid` |
-| Phone, social, map | omitted |
-| Pickup Location | `Өрнүүн 48 — жишиг цэг` |
-| Pickup address | `Улаанбаатар хот, Зохиомол дүүрэг, Канар гудамж 29 (бодит хаяг биш)` |
-| Hours | `Даваа–Ням 09:00–21:00 (жишиг)` |
-| Delivery | Ulaanbaatar flat fee 6,000 MNT; free from 120,000 MNT post-discount merchandise subtotal |
-| Notice | `Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.` |
-| Fixture purpose | `reference-canary` |
+| Field              | Canonical value                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `storeKey`         | `wf29-urnuun48`                                                                          |
+| Display name       | `Өрнүүн 48`                                                                              |
+| Legal display      | `Өрнүүн 48 — зохиомол жишиг өгөгдөл, бүртгэлгүй`                                         |
+| Tagline            | `Өдөр бүрийн хэрэгцээг цэгцтэй`                                                          |
+| Summary            | `Гал тогоо, гэр ахуй, жижиг бэлгийн хэрэгцээг нэг дороос сонгох зохиомол жишиг дэлгүүр.` |
+| Email              | `sainuu@urnuun48.invalid`                                                                |
+| Phone, social, map | omitted                                                                                  |
+| Pickup Location    | `Өрнүүн 48 — жишиг цэг`                                                                  |
+| Pickup address     | `Улаанбаатар хот, Зохиомол дүүрэг, Канар гудамж 29 (бодит хаяг биш)`                     |
+| Hours              | `Даваа–Ням 09:00–21:00 (жишиг)`                                                          |
+| Delivery           | Ulaanbaatar flat fee 6,000 MNT; free from 120,000 MNT post-discount merchandise subtotal |
+| Notice             | `Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.`                         |
+| Fixture purpose    | `reference-canary`                                                                       |
 
 `wf29`, `WF29-`, and `wf29.*` are reserved fixture namespaces and must be rejected from merchant imports.
 
