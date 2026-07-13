@@ -49,6 +49,8 @@ Draft and publication aggregates include:
 
 V1 has no schedules, multi-step approval workflow, retained CMS version history, or site-wide release. Publication is a D1 promotion plus cache invalidation, never a Worker deployment.
 
+Draft preview exists only inside authenticated Merchant Admin and uses the actual app-owned storefront renderer. The server Draft is its base and current unsaved form values overlay locally for immediate feedback. Preview responses are `private, no-store` and `noindex`; v1 has no public preview URL, share token, or separate preview deployment. Prospect Demos remain a separate workflow rather than CMS Draft previews.
+
 The CMS contract has no asynchronous cache-invalidation status or retry outbox. The publication request awaits its purge attempt. A purge failure is surfaced and logged as an operational error after the Published revision is already durable; TTL expiry remains the fallback.
 
 ## Bounded CMS content
