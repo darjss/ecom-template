@@ -59,6 +59,10 @@ D1 owns separate Primary Navigation and Footer Navigation aggregates. Primary Na
 
 Navigation publication rejects missing, inactive, or cyclic destinations. Content referenced by active navigation must be removed from that navigation before archival. Storefront code owns responsive and visual presentation while the shared contract owns navigation structure, destination resolution, and link safety.
 
+V1 SEO is zero-configuration. Merchant Admin exposes no dedicated SEO fields or controls. Storefront code derives site titles and descriptions from Store identity and summary; page metadata from current Product, Bundle, Category, Collection, Location, Policy, and Homepage content; and social images from the page's primary Media Asset, the Homepage Hero, or a repository-owned branded fallback. It generates canonical URLs from the Production Store domain, safe title composition, Open Graph metadata, sitemap entries for active public content, and product, organization, breadcrumb, and location structured data where applicable.
+
+Merchant content cannot supply arbitrary meta elements, canonical URLs, robots directives, JSON-LD, or scripts. Cached structured data omits live availability rather than publishing stale stock. Cart, Checkout, Customer, tracking-token, Payment, Order, and Admin surfaces are excluded from indexing. Prospect Demos are hardcoded `noindex, nofollow` regardless of D1 content.
+
 ## Storefront rendering and caching
 
 Anonymous storefront content is rendered by Astro SSR. On a Workers Cache miss, the server reads current CMS and non-stock Catalog data directly from D1, renders complete HTML, and returns a cacheable response. SSR does not call the Store's own public HTTP API and does not put a duplicate CMS representation in KV.
