@@ -1,7 +1,7 @@
 type Mode = "strict" | "basic" | "tiered";
 type Source = "sku_exact" | "native" | "strict_transliteration" | "basic_fallback";
 type Product = { name: string; sku: string; source?: Source; confidence?: string };
-type SearchResponse = { products: Product[]; timing_ms: { total: number; sql: number }; source: Source; confidence: string; ambiguity: string };
+type SearchResponse = { products: Product[]; timing_ms: { total: number; sql: number; binding_calls: number }; source: Source; confidence: string; ambiguity: string };
 type Case = { label: string; query: string; expectedNames: string[]; expectedSource?: Source; expectedEmpty?: boolean };
 
 const args = Bun.argv.slice(2);
@@ -51,16 +51,17 @@ for (const mode of ["strict", "basic", "tiered"] as const) {
       assertions++;
       const namesPass = item.expectedEmpty ? names.length === 0 : sameNames(names, item.expectedNames);
       const sourcePass = !item.expectedSource || result.data.source === item.expectedSource;
-      const pass = namesPass && sourcePass;
+      const bindingPass = result.data.timing_ms.binding_calls === 1;
+      const pass = namesPass && sourcePass && bindingPass;
       if (pass) passed++; else failed++;
-      console.log(JSON.stringify({ label: item.label, query, expected_names: item.expectedNames, expected_source: item.expectedSource, returned: names, source: result.data.source, confidence: result.data.confidence, ambiguity: result.data.ambiguity, pass, network_ms: result.networkMs, worker_ms: result.data.timing_ms.total, d1_sql_ms: result.data.timing_ms.sql }));
+      console.log(JSON.stringify({ label: item.label, query, expected_names: item.expectedNames, expected_source: item.expectedSource, returned: names, source: result.data.source, confidence: result.data.confidence, ambiguity: result.data.ambiguity, binding_calls: result.data.timing_ms.binding_calls, pass, network_ms: result.networkMs, worker_ms: result.data.timing_ms.total, d1_sql_ms: result.data.timing_ms.sql }));
     } else {
-      console.log(JSON.stringify({ label: item.label, query: item.query, returned: names, source: result.data.source, confidence: result.data.confidence, ambiguity: result.data.ambiguity, network_ms: result.networkMs, worker_ms: result.data.timing_ms.total, d1_sql_ms: result.data.timing_ms.sql }));
+      console.log(JSON.stringify({ label: item.label, query: item.query, returned: names, source: result.data.source, confidence: result.data.confidence, ambiguity: result.data.ambiguity, binding_calls: result.data.timing_ms.binding_calls, network_ms: result.networkMs, worker_ms: result.data.timing_ms.total, d1_sql_ms: result.data.timing_ms.sql }));
     }
     if (names.length > 1) collisions++;
   }
 }
-const warm: number[] = []; const warmWorker: number[] = []; const warmD1: number[] = [];
+const warm: number[] = []; const warmWorker: number[] = []; const warmD1: number[] = []; const warmBindings: number[] = [];
 const first = await run("odor", "tiered");
-for (let index = 0; index < 60; index++) { const result = await run(index % 2 === 0 ? "odor" : "nooson tsamts", "tiered"); warm.push(result.networkMs); warmWorker.push(result.data.timing_ms.total); warmD1.push(result.data.timing_ms.sql); }
-console.log(JSON.stringify({ summary: { tiered_cases: assertions, passed, failed, collisions }, latency_ms: { first_network: first.networkMs, warm_network_p50: percentile(warm, 0.5), warm_network_p95: percentile(warm, 0.95), warm_worker_p50: percentile(warmWorker, 0.5), warm_worker_p95: percentile(warmWorker, 0.95), warm_d1_sql_p50: percentile(warmD1, 0.5), warm_d1_sql_p95: percentile(warmD1, 0.95) }, note: "network_ms is observed from this machine in Mongolia; worker_ms is inside the Worker; d1_sql_ms is the measured D1 query segment" }));
+for (let index = 0; index < 60; index++) { const result = await run(index % 2 === 0 ? "odor" : "nooson tsamts", "tiered"); warm.push(result.networkMs); warmWorker.push(result.data.timing_ms.total); warmD1.push(result.data.timing_ms.sql); warmBindings.push(result.data.timing_ms.binding_calls); }
+console.log(JSON.stringify({ summary: { tiered_cases: assertions, passed, failed, collisions }, latency_ms: { first_network: first.networkMs, warm_network_p50: percentile(warm, 0.5), warm_network_p95: percentile(warm, 0.95), warm_worker_p50: percentile(warmWorker, 0.5), warm_worker_p95: percentile(warmWorker, 0.95), warm_d1_sql_p50: percentile(warmD1, 0.5), warm_d1_sql_p95: percentile(warmD1, 0.95), warm_binding_calls_p50: percentile(warmBindings, 0.5), warm_binding_calls_p95: percentile(warmBindings, 0.95) }, note: "network_ms is observed from this machine in Mongolia; worker_ms is inside the Worker; d1_sql_ms is the measured D1 query segment" }));
