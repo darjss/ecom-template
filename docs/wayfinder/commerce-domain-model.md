@@ -75,7 +75,7 @@ Checkout performs one authoritative placement operation:
 3. Expand every line into normalized Inventory Demand.
 4. Recalculate subtotal, Discount Adjustments, delivery fee, and grand total in MNT.
 5. Require the commercial facts displayed to the customer and reject with structured current facts when item, Variant, or Bundle eligibility, selected options, discount outcome, Delivery availability or fee, unit amounts, or grand total changed—even if cheaper. Revalidate stock independently. Harmless copy, image, or other non-commercial metadata changes do not block placement; the Order snapshots current authoritative presentation facts.
-6. Atomically create the Placed Order and immutable Commercial Snapshots, reserve all Inventory Demand, create its initial Payment when money is due, create its Fulfillment, and emit Domain and Audit Events. If grand total is zero, create no Payment and immediately consume the reservation in the same transaction.
+6. Atomically create the Placed Order and immutable Commercial Snapshots, reserve all Inventory Demand, create its initial Payment when money is due, create its Fulfillment, and record required consequential evidence. If grand total is zero, create no Payment and immediately consume the reservation in the same transaction.
 
 A Draft Order may exist while the server assembles and validates a placement, but it has no external commercial commitment and owns no reservation. The externally durable result of successful checkout is a Placed Order. Retrying the same checkout command must return that result rather than create another Order; the reliability contract defines idempotency storage.
 
@@ -164,7 +164,7 @@ Active --accept/confirm--> Consumed
 ```
 
 - Checkout creates Active only if all Stock Items can be claimed atomically. A zero-total Order creates and immediately consumes the complete reservation in the `PlaceOrder` transaction because no payment uncertainty remains; normal Cancellation and redemption-compensation rules still apply when no Payment was Confirmed.
-- QPay confirmation consumes the reservation. Manual transfer consumes it when owner/manager confirms payment. `AcceptCodOrder` atomically consumes it and emits Domain and Audit Events but neither confirms Payment nor advances Fulfillment; Payment remains Awaiting Confirmation until cash collection and Fulfillment remains Unfulfilled until `StartFulfillment`. Reservation Consumed is authoritative COD acceptance evidence rather than another Order or Payment state.
+- QPay confirmation consumes the reservation. Manual transfer consumes it when owner/manager confirms payment. `AcceptCodOrder` atomically consumes it and records inventory and operator evidence but neither confirms Payment nor advances Fulfillment; Payment remains Awaiting Confirmation until cash collection and Fulfillment remains Unfulfilled until `StartFulfillment`. Reservation Consumed is authoritative COD acceptance evidence rather than another Order or Payment state.
 - Consumed decreases on-hand quantity and removes reserved quantity exactly once. Released and Expired remove reserved quantity without changing on-hand quantity.
 - Scheduled expiry supplies expected Revisions and never overwrites concurrent valid confirmation or staff action; the winning transition commits atomically.
 - A reservation transition may drive a permitted Order or Fulfillment consequence through the kernel, never through a provider adapter.
@@ -201,7 +201,7 @@ The application layer exposes intention-revealing commands; persistence and adap
 
 Owner/manager-only financial authority is a precondition for manual confirmation, rejection, and Refund recording. Full role-to-command authorization is decided by the identity boundary ticket.
 
-Commands either commit every owned state change, Inventory Entry, Financial Entry, Discount Redemption Entry, Domain Event, and Audit Event together or commit none. Expected Revision protects mutable aggregates. Idempotency protects command retries and provider evidence; it does not replace optimistic concurrency.
+Commands either commit every owned state change and its required inventory, financial, redemption, provider, and operator evidence together or commit none. Expected Revision protects mutable aggregates. Idempotency protects command retries and provider evidence; it does not replace optimistic concurrency.
 
 ## Cancellation and refund rules
 
@@ -223,11 +223,11 @@ An authenticated Customer owns the Order they place, while submitted recipient n
 
 Exactly one Customer identity may exist per normalized verified phone within a Store. The verified phone is immutable in normal v1 workflows. Verifying another phone establishes or accesses its own Customer and never moves or merges Order history automatically; legitimate phone-change or conflict recovery requires explicit audited owner/manager handling with no cross-Store effects. SMS OTP is used only to establish or access a Customer login for a normalized phone in this Store; guest checkout and Payment never require OTP. Orders placed while authenticated belong to that Customer. `LinkGuestOrders` attaches all prior Guest Orders whose snapshotted checkout phone exactly matches the newly verified phone because no authenticated owner existed at placement. Until then, each Guest Order is accessible only through its temporary order-specific Guest Tracking Link. The linking operation is audited, idempotent, and never rewrites contact snapshots. Already linked Orders remain linked, and a conflicting Customer link requires explicit owner/manager recovery rather than automatic reassignment. Staff cannot assert phone ownership, and identity or history never links across Stores.
 
-## Events, audit, and adapters
+## Evidence, audit, and adapters
 
 **Decision status:** Approved by the orchestrator.
 
-Every accepted consequential transition emits a Domain Event with Store and entity identity, prior and resulting state, resulting Revision, command correlation, and server time. Audit Events additionally preserve actor identity and type, authorization-relevant role, reason, source channel, and minimized safe before/after facts suitable for merchant review. Financial, inventory, authorization, manual-override, and consequential-rejection evidence is append-only; corrections use new events. Bearer secrets and unnecessary direct PII never enter either event stream.
+Current aggregate state is commerce truth; the kernel is not event sourced and does not emit generic events for every edit. It records append-only evidence for consequential financial, inventory, authorization, Fulfillment, Cancellation, manual-override, and provider actions. Each record contains only the applicable Store and entity identity, actor or provider source, reason, command correlation, server time, and minimized safe facts needed to explain the action. Domain Events are emitted only for concrete downstream reactions defined by an interface contract. Corrections append compensating evidence rather than rewriting history. Bearer secrets and unnecessary direct PII never enter evidence or audit records.
 
 Payment, courier, tax, and messaging adapters are statically registered translators. They may:
 
