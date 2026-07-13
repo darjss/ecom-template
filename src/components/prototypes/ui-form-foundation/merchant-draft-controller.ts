@@ -25,6 +25,7 @@ type DraftControllerConfig<TValues> = {
   baseRecord: Accessor<RecordSnapshot<TValues>>;
   hasChanges: Accessor<boolean>;
   canWrite: Accessor<boolean>;
+  restore: (values: TValues) => void;
 };
 
 export const createMerchantDraftController = <TValues>(config: DraftControllerConfig<TValues>) => {
@@ -83,6 +84,12 @@ export const createMerchantDraftController = <TValues>(config: DraftControllerCo
     );
     if (result.kind === "storage-error") {
       setStatus({ kind: "error", message: result.message });
+    } else if (
+      result.kind === "ready" &&
+      result.envelope.baseRevision === config.baseRecord().revision
+    ) {
+      config.restore(result.envelope.draftValues);
+      setStatus({ kind: "saved", savedAt: result.envelope.savedAt });
     } else if (result.kind !== "missing") {
       setLoaded(result);
     }

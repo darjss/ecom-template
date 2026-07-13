@@ -109,6 +109,7 @@ export const createMerchantForm = <TValues extends Record<string, unknown>>(
     baseRecord,
     hasChanges,
     canWrite: () => reconciliation() === null,
+    restore: (restoredValues) => form.reset(restoredValues, { keepDefaultValues: true }),
   });
 
   const beginReconciliation = (

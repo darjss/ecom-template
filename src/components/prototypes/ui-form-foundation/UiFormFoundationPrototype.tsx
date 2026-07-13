@@ -11,7 +11,7 @@ import { createProductEditorController } from "./product-controller";
 
 const initialVariant = (): PrototypeVariant => {
   const value = new URL(window.location.href).searchParams.get("variant")?.toUpperCase();
-  return value === "B" || value === "C" ? value : "A";
+  return value === "A" || value === "B" ? value : "C";
 };
 
 export const UiFormFoundationPrototype = () => {
