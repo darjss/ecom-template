@@ -2,7 +2,7 @@ type Mode = "strict" | "basic" | "tiered";
 type Source = "sku_exact" | "native" | "strict_transliteration" | "basic_fallback";
 type Product = { name: string; sku: string; source?: Source; confidence?: string };
 type SearchResponse = { products: Product[]; timing_ms: { total: number; sql: number; binding_calls: number }; source: Source; confidence: string; ambiguity: string };
-type Case = { label: string; query: string; expectedNames: string[]; expectedSource?: Source; expectedEmpty?: boolean };
+type Case = { label: string; query: string; expectedNames: string[]; expectedSource?: Source; expectedEmpty?: boolean; expectedBindings?: number };
 
 const args = Bun.argv.slice(2);
 const urlArg = args.find((arg) => arg.startsWith("--url="))?.slice(6) ?? args[0];
@@ -24,7 +24,15 @@ const cases: Case[] = [
   { label: "SKU exact", query: "HVӨ001", expectedNames: ["Ноосон цамц"], expectedSource: "sku_exact" },
   { label: "SKU punctuation", query: "hv-ц-002", expectedNames: ["Өдөр тутмын цүнх"], expectedSource: "sku_exact" },
   { label: "prefix", query: "ноо", expectedNames: ["Ноосон цамц", "Ноосон-цамц"], expectedSource: "native" },
-  { label: "no match", query: "квантын дуран", expectedNames: [], expectedEmpty: true }
+  { label: "brand-only", query: "Талын Од", expectedNames: ["Ноосон цамц"], expectedSource: "native" },
+  { label: "category-only", query: "Хувцас", expectedNames: ["Ноосон цамц"], expectedSource: "native" },
+  { label: "no match", query: "квантын дуран", expectedNames: [], expectedEmpty: true, expectedBindings: 2 },
+  { label: "Cyrillic missing character", query: "ноосн", expectedNames: ["Ноосон цамц"], expectedSource: "fuzzy_fallback", expectedBindings: 2 },
+  { label: "Latin missing character", query: "noosn", expectedNames: ["Ноосон цамц"], expectedSource: "fuzzy_fallback", expectedBindings: 2 },
+  { label: "brand substitution", query: "талин", expectedNames: ["Ноосон цамц"], expectedSource: "fuzzy_fallback", expectedBindings: 2 },
+  { label: "category substitution", query: "хувчас", expectedNames: ["Ноосон цамц"], expectedSource: "fuzzy_fallback", expectedBindings: 2 },
+  { label: "transposition", query: "noosno", expectedNames: ["Ноосон цамц"], expectedSource: "fuzzy_fallback", expectedBindings: 2 },
+  { label: "two-edit negative", query: "ноосм", expectedNames: [], expectedEmpty: true, expectedBindings: 2 }
 ];
 const parse = (value: unknown): SearchResponse => {
   if (!value || typeof value !== "object") throw new Error("unexpected response");
@@ -51,7 +59,8 @@ for (const mode of ["strict", "basic", "tiered"] as const) {
       assertions++;
       const namesPass = item.expectedEmpty ? names.length === 0 : sameNames(names, item.expectedNames);
       const sourcePass = !item.expectedSource || result.data.source === item.expectedSource;
-      const bindingPass = result.data.timing_ms.binding_calls === 1;
+      const expectedBindings = item.expectedBindings ?? 1;
+      const bindingPass = result.data.timing_ms.binding_calls === expectedBindings;
       const pass = namesPass && sourcePass && bindingPass;
       if (pass) passed++; else failed++;
       console.log(JSON.stringify({ label: item.label, query, expected_names: item.expectedNames, expected_source: item.expectedSource, returned: names, source: result.data.source, confidence: result.data.confidence, ambiguity: result.data.ambiguity, binding_calls: result.data.timing_ms.binding_calls, pass, network_ms: result.networkMs, worker_ms: result.data.timing_ms.total, d1_sql_ms: result.data.timing_ms.sql }));
@@ -62,6 +71,8 @@ for (const mode of ["strict", "basic", "tiered"] as const) {
   }
 }
 const warm: number[] = []; const warmWorker: number[] = []; const warmD1: number[] = []; const warmBindings: number[] = [];
+const fuzzyWarm: number[] = []; const fuzzyWorker: number[] = []; const fuzzyD1: number[] = []; const fuzzyBindings: number[] = [];
 const first = await run("odor", "tiered");
 for (let index = 0; index < 60; index++) { const result = await run(index % 2 === 0 ? "odor" : "nooson tsamts", "tiered"); warm.push(result.networkMs); warmWorker.push(result.data.timing_ms.total); warmD1.push(result.data.timing_ms.sql); warmBindings.push(result.data.timing_ms.binding_calls); }
-console.log(JSON.stringify({ summary: { tiered_cases: assertions, passed, failed, collisions }, latency_ms: { first_network: first.networkMs, warm_network_p50: percentile(warm, 0.5), warm_network_p95: percentile(warm, 0.95), warm_worker_p50: percentile(warmWorker, 0.5), warm_worker_p95: percentile(warmWorker, 0.95), warm_d1_sql_p50: percentile(warmD1, 0.5), warm_d1_sql_p95: percentile(warmD1, 0.95), warm_binding_calls_p50: percentile(warmBindings, 0.5), warm_binding_calls_p95: percentile(warmBindings, 0.95) }, note: "network_ms is observed from this machine in Mongolia; worker_ms is inside the Worker; d1_sql_ms is the measured D1 query segment" }));
+for (let index = 0; index < 20; index++) { const result = await run(index % 2 === 0 ? "noosn" : "хувчас", "tiered"); fuzzyWarm.push(result.networkMs); fuzzyWorker.push(result.data.timing_ms.total); fuzzyD1.push(result.data.timing_ms.sql); fuzzyBindings.push(result.data.timing_ms.binding_calls); }
+console.log(JSON.stringify({ summary: { tiered_cases: assertions, passed, failed, collisions }, latency_ms: { first_network: first.networkMs, warm_network_p50: percentile(warm, 0.5), warm_network_p95: percentile(warm, 0.95), warm_worker_p50: percentile(warmWorker, 0.5), warm_worker_p95: percentile(warmWorker, 0.95), warm_d1_sql_p50: percentile(warmD1, 0.5), warm_d1_sql_p95: percentile(warmD1, 0.95), warm_binding_calls_p50: percentile(warmBindings, 0.5), warm_binding_calls_p95: percentile(warmBindings, 0.95) }, fuzzy_latency_ms: { warm_network_p50: percentile(fuzzyWarm, 0.5), warm_network_p95: percentile(fuzzyWarm, 0.95), warm_worker_p50: percentile(fuzzyWorker, 0.5), warm_worker_p95: percentile(fuzzyWorker, 0.95), warm_d1_sql_p50: percentile(fuzzyD1, 0.5), warm_d1_sql_p95: percentile(fuzzyD1, 0.95), warm_binding_calls_p50: percentile(fuzzyBindings, 0.5), warm_binding_calls_p95: percentile(fuzzyBindings, 0.95) }, note: "network_ms is observed from this machine in Mongolia; worker_ms is inside the Worker; d1_sql_ms is the measured D1 query segment" }));

@@ -1,4 +1,4 @@
-type Product = { name: string; sku: string; category: string; price_mnt: number; source?: string; confidence?: string };
+type Product = { name: string; sku: string; brand: string; category: string; price_mnt: number; available: number; source?: string; confidence?: string; matched_field?: string };
 type ProductResponse = { products: Product[] };
 type SearchResponse = { products: Product[]; source: string; confidence: string; ambiguity: string; timing_ms: { total: number; sql: number; binding_calls: number } };
 
@@ -16,7 +16,7 @@ const parseJson = async <T>(response: Response): Promise<T> => {
 if (listMode) {
   const response = await parseJson<ProductResponse>(await fetch(`${url}/products?limit=18`));
   console.log(`PROTOTYPE catalog: ${url}`);
-  for (const product of response.products) console.log(`${product.name} | ${product.sku} | ${product.category} | ${product.price_mnt.toLocaleString("en-US")} MNT`);
+  for (const product of response.products) console.log(`${product.name} | ${product.sku} | ${product.brand} | ${product.category} | ${product.price_mnt.toLocaleString("en-US")} MNT | ${product.available ? "available" : "unavailable"}`);
   console.log("\nTry: өдөр | odor | udur | usnii boolt | nooson tsamts");
   console.log("Usage: bun prototypes/search-transliteration/scripts/try-search.ts [--url URL] <query>");
 } else {
@@ -29,5 +29,5 @@ if (listMode) {
   console.log(`Source: ${response.source} | confidence: ${response.confidence} | ambiguity: ${response.ambiguity}`);
   console.log(`Timing: network ${networkMs}ms | Worker ${response.timing_ms.total}ms | D1 ${response.timing_ms.sql}ms | bindings ${response.timing_ms.binding_calls}`);
   if (response.products.length === 0) console.log("No products matched.");
-  for (const product of response.products) console.log(`- ${product.name} | ${product.sku} | ${product.source ?? response.source} | ${product.confidence ?? response.confidence}`);
+  for (const product of response.products) console.log(`- ${product.name} | ${product.sku} | ${product.brand} | ${product.category} | ${product.matched_field ?? "unknown"} | ${product.source ?? response.source} | ${product.confidence ?? response.confidence} | ${product.available ? "available" : "unavailable"}`);
 }

@@ -1,87 +1,117 @@
-# Issue #19 transliteration prototype verdict — pass 3
+# Issue #19 transliteration prototype verdict — pass 5
 
-## Accepted semantic baseline
+## Recommendation
 
-No aliases. Exact SKU/native first; strict automatic transliteration second; bounded basic fallback last. Basic ambiguity exposes multiple candidates instead of selecting a winner. Strict/basic legacy modes remain available for comparison.
+Founder-approved resilience is viable as a bounded prototype, with one important production deferral: keep fuzzy fallback visibly low-confidence and expose candidates; do not make it a silent typo correction. Normal tiered search remains under the 500ms warm target. Fuzzy fallback does not meet that target on this prototype and should remain an explicitly slower recovery path until production-scale evidence exists.
 
-## Performance change
+## Search document and metadata
 
-Tiered mode now evaluates all four candidate stages in one parameterized D1 binding call and one SQL statement:
+The same remote D1 was migrated/reseeded with 40 synthetic products carrying:
 
-- CTE `candidates` uses `UNION ALL` for exact SKU, native, strict, and basic rows.
-- A `selected` CTE chooses `MIN(stage)`; only the highest-confidence non-empty stage is returned, while all rows in that stage remain available.
-- Exact SKU is stage -1 and remains unique through the indexed unique canonical SKU path.
-- Native/strict/basic stage expressions are generated as quoted, parameter-bound FTS values. User text never becomes SQL or FTS syntax.
-- Basic alternatives remain capped by the existing per-token 8-variant limit.
-- No aliases, fuzzy matching, semantic expansion, AI, Vectorize, Durable Objects, or new Cloudflare resource were added.
+- five synthetic brands (`Талын Од`, `Хөх Тэнгэр`, `Алтан Өргөө`, `Цагаан Сар`, `Нүүдэл`)
+- existing categories/tags
+- synthetic descriptions
+- synthetic `available` boolean and merchandising position
 
-This was chosen over parallel D1 calls because D1 is single-threaded; one statement is the minimum binding-call shape and lets the database evaluate the candidate branches in one request.
+A resilient ordinary/contentful FTS5 document indexes title, brand, category, tags, and description representations. Weights favor title, then brand, category/tags, and description. Product fields are returned with `matched_field` (`sku`, `title`, `brand`, `category/tags`, or `description`) so brand/category hits explain themselves. Category has an ordinary indexed `products.category` seam and `/products?category=...` filter; this does not imply a production Brand aggregate/admin/page model.
+
+Availability is only an equal-relevance tie-break (`available DESC`, then merchandising position, then stable ID). The prototype exposes only `available` presentation, never stock quantities. Production availability remains authoritative live inventory/bundle truth, not FTS truth.
+
+## Tiered and fuzzy behavior
+
+Normal tiered stage order is unchanged: exact SKU/native, strict transliteration, bounded basic fallback. It remains one parameterized SQL statement and one D1 binding call. Only when all stages return no useful result does fuzzy fallback run.
+
+Fuzzy policy:
+
+- normalized query tokens must all be at least 4 characters
+- Damerau-Levenshtein edit distance 1: missing, extra, substituted, and transposed character cases
+- only title, brand, and category search terms participate
+- no SKU, description, IDs, prices, or displayed-query rewriting
+- candidate term query is bounded to 500 rows; result count is capped at 20
+- fuzzy adds one ordinary D1 candidate-binding call, so fuzzy requests report `binding_calls=2`; normal requests report 1
+- fuzzy results are `source=fuzzy_fallback`, `confidence=low`, and expose multiple candidates when present
+- if fuzzy finds no candidate, the response stays empty/basic-fallback rather than claiming fuzzy success
+
+The fuzzy support table contains only synthetic title/brand/category terms and representations. User input remains bound data; it is never interpolated into SQL or FTS syntax.
 
 ## Live deployment
 
 - Worker: `wf19-search-transliteration-worker`
 - URL: https://wf19-search-transliteration-worker.darjs.workers.dev
-- Deployment version: `7989d346-ad60-4512-a7d9-73391504819b`
-- Same D1: `wf19-search-transliteration-d1`, ID `d300867e-ddaf-4e0d-84c8-960ca32158a0`
-- Health returned HTTP 200 and `strict-mn-v2-tiered-basic-v2`.
-- Resources intentionally remain deployed.
+- Deployment version: `463d44e8-f377-42b5-8887-3209bd402f3e`
+- D1: `wf19-search-transliteration-d1`, ID `d300867e-ddaf-4e0d-84c8-960ca32158a0`
+- Health version: `strict-mn-v2-tiered-basic-v2`
+- D1 seed: 40 products; 2,019 rows written; database size 389,120 bytes
 
-## Proof
+## Proof results
 
-Exact command:
+Full prior and extended harness command:
 
 ```sh
 bun run prototypes/search-transliteration/scripts/harness.ts -- --url=https://wf19-search-transliteration-worker.darjs.workers.dev
 ```
 
-The real harness ran strict/basic comparison samples and 15 tiered cases covering `odor`, `udur`, `usnii boolt`, `nooson tsamts`, mixed script, ө/о, ү/у, ё/е, digraphs, exact/punctuated SKUs, prefix, and no-match. Result: **15/15 tiered assertions passed, 0 failed, 24 multi-result cases across all modes**.
+Result: **23/23 tiered assertions passed, 0 failed, 34 multi-result/collision cases across strict/basic/tiered output**. This includes all prior 15 tiered assertions plus brand/category and six typo/negative cases. Exact SKU remained unique and prior ambiguity policy remained unchanged.
 
-Tiered behavior remained unchanged:
+Extended cases observed:
 
-- `odor` and `udur`: basic fallback, low confidence, both `Өдөр тутмын цүнх` and `Ердийн даашинз`, `expose_multiple`.
-- `usnii boolt`: basic fallback, one `Үсний боолт`.
-- `nooson tsamts` and mixed `ноосон tsamts`: strict transliteration, two punctuation-equivalent products.
-- `өдөр`, `үс`, `ус`, and `ноо`: native high-confidence path.
-- `ес`: empty; no silent ё/е merge.
-- `khuvtsas` and `tsagaan`: strict digraph paths.
-- `HVӨ001` and `hv-ц-002`: exact SKU source, one product each.
-- `квантын дуран`: empty.
+- native brand-only `Талын Од`: brand reason, high confidence, 8 brand products
+- native category-only `Хувцас`: category/tags reason, high confidence, 8 products
+- Cyrillic missing character `ноосн`: fuzzy fallback, two title candidates
+- Latin missing character `noosn`: fuzzy fallback, two title candidates
+- brand substitution `талин`: fuzzy fallback, eight brand candidates
+- category substitution `хувчас`: fuzzy fallback, eight category candidates
+- transposition `noosno`: fuzzy fallback, two title candidates
+- two-edit negative `ноосм`: empty; no false fuzzy match
+- short negative `одр`: empty because the 4-character minimum rejects fuzzy generation
+- `өдөр`: title match ranks above the unavailable category/tag match, showing relevance before availability tie-break
+- exact SKU samples remain one product with `source=sku_exact`
 
-Every tiered case reported `binding_calls=1`. Exact SKU remained unique: both SKU cases returned exactly one product and `source=sku_exact`; the punctuated SKU did not broaden into lexical candidates. Ambiguous basic fallback remained two candidates with `ambiguity=expose_multiple`.
-
-Legacy comparison remained intentionally visible: strict `odor` still demonstrates the old FTS `ö/o` collision, and legacy SKU punctuation remains broad; neither affects tiered selection.
+Fuzzy fallback negative/no-match probes use two bindings (normal one-statement stage plus bounded fuzzy candidate lookup), while ordinary no-match stays empty and does not report a fuzzy result.
 
 ## Latency from Mongolia
 
-The harness ran 60 alternating warm tiered requests (`odor` / `nooson tsamts`) from this machine in Mongolia:
+The harness ran 60 alternating warm normal tiered requests (`odor` / `nooson tsamts`) and 20 alternating warm fuzzy requests (`noosn` / `хувчас`) from this machine in Mongolia.
 
-- First network: `290.70ms`
-- Warm network p50/p95: `289.32ms` / `298.81ms`
-- Worker total p50/p95: `280ms` / `289ms`
-- Aggregate D1 SQL p50/p95: `280ms` / `289ms`
-- Binding calls p50/p95: `1` / `1`
+Normal tiered:
 
-The previous fallback baseline was approximately 1.1s with three sequential tiered D1 searches. The one-statement path is approximately 0.84s faster in the previous mixed fallback sample and now stays below the **<=500ms warm target**: target met for this 40-product prototype. This is network-observed from the current machine and not a production-scale guarantee.
+- first network: `296.10ms`
+- network p50/p95: `294.25ms` / `302.74ms`
+- Worker total p50/p95: `281ms` / `289ms`
+- aggregate D1 p50/p95: `281ms` / `289ms`
+- binding calls p50/p95: `1` / `1`
+- <=500ms warm target: **met**
 
-## Checks
+Fuzzy fallback:
 
-- Remote migration/seed from the existing D1 completed before proof.
-- `wrangler deploy --dry-run` completed: 29.94 KiB upload, 7.42 KiB gzip.
-- Narrow TypeScript check passed with `--strict --skipLibCheck`: `TypeScript: No errors found`.
-- Actual deployment, `/health` curl, native/strict/basic samples, and real 60-request harness completed.
-- No unit/integration tests were added, per repository policy.
+- network p50/p95: `865.94ms` / `1234.47ms`
+- Worker total p50/p95: `846ms` / `1219ms`
+- aggregate D1 p50/p95: `846ms` / `1219ms`
+- binding calls p50/p95: `2` / `2`
+- <=500ms warm target: **not met**
 
-## Final founder-review convenience
+Fuzzy timing is explicitly separate because it includes the normal one-statement miss plus the bounded term-candidate D1 call. The 500ms target remains met for normal search only.
 
-Added prototype-only `GET /products?limit=20` with integer limit validation (`1..20`), deterministic `id ASC` ordering, synthetic `name`, `sku`, `category`, and `price_mnt` fields only, and `private, no-store`. `limit=21` returned HTTP 400 with `max:20`.
+## Simple founder CLI
 
-Added the dependency-light CLI `bun prototypes/search-transliteration/scripts/try-search.ts`. No arguments or `--list` fetches 18 deployed products and suggests `өдөр`, `odor`, `udur`, `usnii boolt`, and `nooson tsamts`; positional queries call tiered mode and print source, confidence, ambiguity, network, Worker, D1, and binding-call timing. The live prototype URL is the explicit default; `--url` is optional.
+```sh
+bun prototypes/search-transliteration/scripts/try-search.ts
+bun prototypes/search-transliteration/scripts/try-search.ts 'noosn'
+bun prototypes/search-transliteration/scripts/try-search.ts 'талын од'
+bun prototypes/search-transliteration/scripts/try-search.ts 'хувцас'
+```
 
-Live convenience proof returned HTTP 200 and sample products `Ноосон цамц`, `Өдөр тутмын цүнх`, `Үсний боолт`. CLI proof succeeded for `usnii boolt` (one low-confidence basic result), `odor` (two candidates with `expose_multiple`), and `өдөр` (native high-confidence results).
+The CLI prints matched names/SKUs, brand, category, matched field/reason, availability presentation, source, confidence, ambiguity, network, Worker, D1, and binding-call timing. The list mode fetches deployed products and does not hardcode catalog data.
 
-## Remaining risks and recommendation
+## Checks and deferred production questions
 
-The semantic recommendation is unchanged and now has a viable latency shape: retain tiered mode with explicit low-confidence ambiguity exposure. Remaining risks are FTS ranking quality at larger catalogs, basic transliteration collision rate on real merchant text, the single-statement SQL plan at scale, and the 40-product-only benchmark. Before production, run representative catalog collision/latency sampling and verify query plans; do not silently promote basic candidates.
+- Remote migration `0004_search_resilience.sql`, remote seed, deployment, health curl, category/product curl, full harness, and extended CLI matrix completed.
+- `wrangler types` completed.
+- Narrow strict TypeScript with `--skipLibCheck`: `TypeScript: No errors found`.
+- `wrangler deploy --dry-run` completed: 36.85 KiB upload, 8.88 KiB gzip.
+- No unit/integration tests added.
+
+Before production, defer decisions on: authoritative inventory/bundle freshness and availability semantics; whether fuzzy should be enabled for every catalog; collision/false-positive budgets from real catalog data; candidate-table/query-plan behavior at scale; and whether brand/category fields need a real domain aggregate. Do not expose prototype synthetic availability as commercial truth.
 
 Cleanup only after explicit instruction:
 
