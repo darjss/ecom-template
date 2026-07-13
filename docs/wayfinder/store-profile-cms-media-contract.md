@@ -45,6 +45,16 @@ A Revision conflict rejects the write for explicit reconciliation. A successful 
 
 The CMS contract has no asynchronous cache-invalidation status or retry outbox. The publication request awaits its purge attempt. A purge failure is surfaced and logged as an operational error after the content is already durable; TTL expiry remains the fallback.
 
+## Bounded CMS content
+
+The Homepage is one aggregate containing an ordered composition of bounded shared section types rather than a free-form page builder or one fixed record. V1 section types are Hero, Featured Collection, Product Rail, Promotion Grid, Image With Text, Rich Text, Locations, and Trust Highlights. Each section has stable identity, type, typed validated content, position, enabled state, Revision, and explicit Media Asset and Catalog references.
+
+The shared CMS contract and Merchant Admin own each section's persisted fields. Merchant storefront code owns its visual composition and may render canonical sections distinctively, but it cannot introduce per-store persisted section schemas or commerce behavior. Adding a section type requires a shared-kernel change and deployment. Publishing the Homepage atomically replaces its complete ordered composition.
+
+A separate singleton Announcement Bar presents one short active Mongolian message above the header across the entire storefront. It supports an optional internal link and one of `neutral`, `promotion`, or `important` emphasis. It has no image, arbitrary HTML, animation, or schedule. It remains separate from the media-rich Homepage Hero.
+
+Reusable Ordering Notices may appear on Product pages, Cart, and Checkout according to explicit placement values. A Product may also have one optional product-specific Purchase Notice. Both are explanatory content only: they cannot alter or override price, live availability, inventory, personalization requirements, discount eligibility, Delivery Option quotes, Payment availability, policy acceptance, or any other shared-kernel truth. Structured commerce results always win. V1 notices do not introduce required checkboxes or arbitrary conditional logic.
+
 ## Storefront rendering and caching
 
 Anonymous storefront content is rendered by Astro SSR. On a Workers Cache miss, the server reads current CMS and non-stock Catalog data directly from D1, renders complete HTML, and returns a cacheable response. SSR does not call the Store's own public HTTP API and does not put a duplicate CMS representation in KV.
