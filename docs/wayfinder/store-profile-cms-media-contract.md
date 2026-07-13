@@ -104,6 +104,8 @@ The design takes inspiration from tweakcn's paired semantic tokens, presets, liv
 
 The initial token contract covers the Zaidan-compatible semantic surface and foreground pairs, including background, card, popover, primary, secondary, muted, accent, destructive, border, input, and focus ring, plus heading and body typography, base radius, and bounded shadow treatment. Global spacing is not merchant-editable because it can break app-owned storefront composition. Repository-owned starter presets and the fictional reference Store Theme are browser-reviewed rather than importing tweakcn's preset catalog wholesale.
 
+A Store publishes one intentional Theme mode with an explicit `light` or `dark` appearance used for native browser color-scheme behavior. Some presets may be light and others dark, and applying a preset may change that appearance. The customer storefront has no mode toggle, duplicate light/dark token documents, or automatic operating-system switching. Merchant Admin's independent appearance preference does not affect the Storefront Theme.
+
 Unsaved Theme edits apply CSS custom properties only to the scoped storefront preview. Publishing validates and atomically replaces the complete Theme document under an expected Revision, then globally purges the `store-theme` tag attached to every public storefront HTML response. On the next cache miss, Astro reads the Theme with page data, compiles roughly one kilobyte of CSS custom properties, and inlines them in the rendered HTML. Tailwind utilities and component CSS remain statically compiled. A normal Theme value change therefore requires publication and cache invalidation, not deployment.
 
 The asset split is:
