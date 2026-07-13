@@ -1,16 +1,15 @@
-# Store Profile, CMS, theme, and media contract
+# Store Profile, CMS, Theme, and Media contract
 
-This document records founder-approved decisions for Wayfinder ticket #20. It is intentionally incomplete until the remaining theme, CMS schema, SEO, navigation, media lifecycle, initialization, and reference-fixture decisions are resolved.
+This document records the founder-approved decisions for Wayfinder ticket #20.
 
 ## Ownership boundary
 
 A Store is one independently deployed merchant application. Its repository-owned Store Profile is a small typed build-time contract. It owns:
 
-- immutable store and application identity;
+- immutable generated-app key and package identity;
 - Mongolian locale and MNT currency invariants;
 - supported shared-kernel capabilities;
 - statically registered provider choices;
-- non-secret operational limits and defaults;
 - app-owned storefront entrypoints, Theme schema defaults, and the approved font catalog.
 
 D1 owns merchant-editable public truth:
@@ -35,7 +34,7 @@ A Store Profile cannot redefine schema, commerce behavior, API semantics, author
 
 Each CMS aggregate has one current Published revision used by the public storefront and at most one server-persisted Draft revision. Unsaved edits remain browser-local under the approved versioned local-draft and reconciliation contract, layered over the current server Draft or Published base. Preview renders local or server-Draft values against the real app-owned storefront.
 
-`Save Draft` atomically persists one complete private aggregate under its expected Draft and base Published Revisions. It does not affect public reads or purge caches. `Publish` atomically promotes the complete Draft to a new Published Revision, clears that Draft, and triggers targeted global cache purging. A Revision conflict rejects the operation for explicit reconciliation.
+`Save Draft` atomically persists one complete private aggregate under its expected Revisions. It does not affect public reads or purge caches. `Publish` atomically promotes the complete Draft to a new Published Revision, clears that Draft, and triggers targeted global cache purging. A Revision conflict rejects the operation for explicit reconciliation.
 
 Draft and publication aggregates include:
 
@@ -44,6 +43,7 @@ Draft and publication aggregates include:
 - one navigation menu;
 - one policy page;
 - Storefront Identity and contact settings;
+- one Location;
 - one Announcement Bar;
 - one Ordering Notice.
 
@@ -51,13 +51,13 @@ V1 has no schedules, multi-step approval workflow, retained CMS version history,
 
 Draft preview exists only inside authenticated Merchant Admin and uses the actual app-owned storefront renderer. The server Draft is its base and current unsaved form values overlay locally for immediate feedback. Preview responses are `private, no-store` and `noindex`; v1 has no public preview URL, share token, or separate preview deployment. Prospect Demos remain a separate workflow rather than CMS Draft previews.
 
-The CMS contract has no asynchronous cache-invalidation status or retry outbox. The publication request awaits its purge attempt. A purge failure is surfaced and logged as an operational error after the Published revision is already durable; TTL expiry remains the fallback.
+`Publish` returns success only after both the D1 promotion and cache purge call complete. If purging fails after promotion, the response reports that exact partial outcome and logs it; v1 adds no retry subsystem.
 
 ## Bounded CMS content
 
-The Homepage is one aggregate containing an ordered composition of bounded shared section types rather than a free-form page builder or one fixed record. V1 section types are Hero, Featured Collection, Product Rail, Promotion Grid, Image With Text, Rich Text, Locations, and Trust Highlights. Each section has stable identity, type, typed validated content, position, enabled state, Revision, and explicit Media Asset and Catalog references.
+The Homepage is one aggregate containing an ordered composition of bounded shared section types rather than a free-form page builder or one fixed record. V1 section types are Hero, Featured Collection, Product Rail, Promotion Grid, Image With Text, Rich Text, Locations, and Trust Highlights. Each section has stable identity, type, typed validated content, position, enabled state, and explicit Media Asset and Catalog references.
 
-The shared CMS contract and Merchant Admin own each section's persisted fields. Merchant storefront code owns its visual composition and may render canonical sections distinctively, but it cannot introduce per-store persisted section schemas or commerce behavior. Adding a section type requires a shared-kernel change and deployment. Publishing the Homepage atomically replaces its complete ordered composition.
+The shared CMS contract and Merchant Admin own each section's persisted fields. Merchant storefront code owns its visual composition and may render canonical sections distinctively, but it cannot introduce per-store persisted section schemas or commerce behavior. Adding a section type requires a shared CMS package change and deployment. Publishing the Homepage atomically replaces its complete ordered composition.
 
 A separate singleton Announcement Bar presents one short active Mongolian message above the header across the entire storefront. It supports an optional internal link and one of `neutral`, `promotion`, or `important` emphasis. It has no image, arbitrary HTML, animation, or schedule. It remains separate from the media-rich Homepage Hero.
 
@@ -69,7 +69,7 @@ Navigation publication rejects missing, inactive, or cyclic destinations. Conten
 
 The remaining CMS surface is explicit. Storefront Identity is one singleton containing display name, optional legal name, tagline, short summary, logo and favicon Media Asset references, public phone and email, and typed approved social links. A Location contains name, public address, optional phone, opening-hours text, optional validated map or directions URL, active state, and Pickup-enabled state. Commerce owns whether a Location is currently a valid Pickup destination; CMS fields supply its public presentation.
 
-Policies use fixed Terms, Privacy, Delivery, Returns and Refunds, and Payment kinds. Merchants can edit their content but cannot create arbitrary policy routes or kinds. Trust Highlights remain a bounded optional Homepage section with icon, title, and short supporting text and cannot assert system-generated guarantees. V1 has no generic Pages table.
+Policies use fixed Terms, Privacy, Delivery, Returns and Refunds, and Payment kinds. Merchants can edit their content but cannot create arbitrary policy routes or kinds. Trust Highlights remain a bounded optional Homepage section with icon, title, and short supporting text. V1 has no generic Pages table.
 
 Policies and Rich Text Homepage sections store constrained Markdown. The shared renderer allows paragraphs, `h2` and `h3` headings, bold, italic, ordered and unordered lists, blockquotes, and validated links. It rejects raw HTML, scripts, styles, Markdown images, iframes, tables, and arbitrary components. Images remain explicit Media Asset fields. Announcements, titles, summaries, and Trust Highlights remain plain text. Merchant Admin supplies a simple formatting toolbar and live storefront preview over the same shared renderer.
 
@@ -88,10 +88,11 @@ Workers Cache sits in front of Worker execution. A warm HTML hit executes neithe
 Public HTML uses the starting policy:
 
 ```http
-Cache-Control: public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400
+Cache-Control: public, max-age=0, must-revalidate
+Cloudflare-CDN-Cache-Control: public, max-age=31536000
 ```
 
-The browser rechecks at the edge while the shared cache may retain HTML for one year. Publication, rather than TTL expiry, is the normal freshness mechanism. Cloudflare may still evict cold entries.
+The browser rechecks at the edge while Cloudflare may retain HTML for one year. The Cloudflare-specific header is consumed at the edge. Publication, rather than TTL expiry, is the normal freshness mechanism. Cloudflare may still evict cold entries.
 
 Public JSON endpoints may independently use Workers Cache when a real consumer needs them, such as search, catalog pagination, or client-side collection filtering. They are not introduced solely as an internal SSR data source. HTML and related public JSON carry the same semantic cache tags where one publication affects both, allowing one purge to invalidate both representations.
 
@@ -103,7 +104,7 @@ Representative tags include:
 - `category:<id>` and `collection:<id>` for grouping pages;
 - `policy:<id>` for one policy page.
 
-Public API caching is decided per endpoint. Live availability, Cart, Checkout, Order, Payment, Customer, tracking-token, inventory-truth, and Admin responses are private or `no-store`. Live Variant availability is fetched in one batched request after the cached HTML and never blocks the initial document. Checkout revalidates all commercial truth.
+Public cacheable HTML never sets cookies or varies by Staff, Customer, Cart, or session state. Public API caching is decided per endpoint. Live availability, Cart, Checkout, Order, Payment, Customer, tracking-token, inventory-truth, and Admin responses are private or `no-store`. Live Variant availability is fetched in one batched request after the cached HTML and never blocks the initial document. Checkout revalidates all commercial truth.
 
 The performance proof target distinguishes warm and cold paths:
 
@@ -132,7 +133,7 @@ The asset split is:
 
 The app exposes a small repository-approved font catalog. The published Theme stores only `bodyFontId` and `headingFontId`. Applying a complete preset may change its default font pairing; editing colors alone does not alter typography, and Admin may select heading and body fonts independently from the same catalog. Selecting an existing font requires only Theme publication. Adding a font requires a repository change and deployment.
 
-Every approved font is self-hosted as an immutable WOFF2 R2 asset, has verified redistribution rights, covers Mongolian Cyrillic including Ө, ө, Ү, and ү, is subset to required characters and weights, and has fallback metrics chosen to limit layout shift. A storefront uses at most two active font families and never loads Google Fonts at runtime.
+Every approved font is self-hosted as an immutable WOFF2 R2 asset, has verified redistribution rights, and covers Mongolian Cyrillic including Ө, ө, Ү, and ү. A storefront uses at most two active font families and never loads Google Fonts at runtime.
 
 Primary inspiration:
 
@@ -142,7 +143,7 @@ Primary inspiration:
 
 ## Media references and banner rendering
 
-V1 media deliberately has no processing pipeline. An authenticated, size-limited Admin upload accepts a declared JPEG, PNG, or WebP and stores its bytes unchanged under a random immutable R2 object key. A minimal D1 Media Asset contains identity, object key, declared content type, alt text, and creation time. It has no content digest, provenance record, generated derivative rows, or creator audit metadata.
+V1 media deliberately has no processing pipeline. Each Store owns one isolated R2 bucket. An authenticated, size-limited Admin upload accepts a declared JPEG, PNG, or WebP and stores its bytes unchanged under a random immutable object key. A minimal D1 Media Asset contains identity, object key, declared content type, and creation time. Contextual alt text belongs to the CMS or Catalog image reference rather than the reusable Media Asset. It has no content digest, provenance record, generated derivative rows, or creator audit metadata.
 
 A CMS record references Media Asset identity rather than a mutable `latest` object. Replacing a Banner image uploads a new object, atomically changes the Banner's `mediaAssetId` with its other published fields, and purges affected HTML and public-data tags. Existing objects are never overwritten.
 
@@ -154,7 +155,7 @@ Raw-file normalization, EXIF correction or stripping, color normalization, conte
 
 A Prospect Demo runtime is never promoted, cloned, or treated as a Production Store backup. After merchant acceptance, the reviewed merchant app source may retain its storefront code, Store Profile, Theme defaults, and approved private CMS and Catalog seed artifact, but provisioning creates entirely new Production Worker, D1, KV, R2, secrets, and deployment configuration. Shared migrations run from zero.
 
-The private approved artifact, not the running Demo deployment, is the transfer boundary. A resumable import creates new Production store-scoped identities and copies approved media into Production R2. Imported Catalog, CMS, Theme, and Navigation content remains Draft until the merchant confirms prices, initial inventory, identity and contacts, delivery settings, and payment configuration. Publication follows activation review and live proof.
+The private approved artifact, not the running Demo deployment, is the transfer boundary. A resumable import creates new Production store-scoped identities and copies approved media into Production R2. Imported Catalog, CMS, Theme, and Navigation content remains Draft until the merchant confirms prices, initial inventory, identity and contacts, delivery settings, and payment configuration. Provisioning refuses public activation until every required baseline aggregate has a Published revision. Publication follows activation review and live proof.
 
 Demo D1 state, resource identifiers, synthetic Orders or Customers, Payment or inventory state, sessions, tracking tokens, demo passwords, demo Telegram routing, secrets, and cache contents never cross the boundary. Provisioning and import use the already-approved resumable journal behavior.
 
@@ -171,4 +172,5 @@ There are zero reference-store branches or relaxed invariants in the shared kern
 - [Workers Cache](https://developers.cloudflare.com/workers/cache/)
 - [Workers Cache purging](https://developers.cloudflare.com/workers/cache/purge/)
 - [Workers Cache keys](https://developers.cloudflare.com/workers/cache/cache-keys/)
-- [D1 global read replication](https://developers.cloudflare.com/d1/best-practices/read-replication/)
+- [Workers Cache configuration and header precedence](https://developers.cloudflare.com/workers/cache/configuration/)
+- [Cloudflare Images binding for private R2 input](https://developers.cloudflare.com/images/optimization/transformations/bindings/)
