@@ -55,6 +55,10 @@ A separate singleton Announcement Bar presents one short active Mongolian messag
 
 Reusable Ordering Notices may appear on Product pages, Cart, and Checkout according to explicit placement values. A Product may also have one optional product-specific Purchase Notice. Both are explanatory content only: they cannot alter or override price, live availability, inventory, personalization requirements, discount eligibility, Delivery Option quotes, Payment availability, policy acceptance, or any other shared-kernel truth. Structured commerce results always win. V1 notices do not introduce required checkboxes or arbitrary conditional logic.
 
+D1 owns separate Primary Navigation and Footer Navigation aggregates. Primary Navigation has at most two levels and drives desktop and mobile presentation. Footer Navigation is a sequence of named groups with one level of ordered items. Every item has stable identity, Mongolian label, position, enabled state, and a typed destination. Internal destinations reference Home, Category, Collection, Catalog Item, Location, or Policy identity rather than storing a handwritten URL. External destinations accept validated HTTPS URLs and may explicitly open in a new tab. Arbitrary HTML, JavaScript URLs, and merchant-defined application routes are excluded.
+
+Navigation publication rejects missing, inactive, or cyclic destinations. Content referenced by active navigation must be removed from that navigation before archival. Storefront code owns responsive and visual presentation while the shared contract owns navigation structure, destination resolution, and link safety.
+
 ## Storefront rendering and caching
 
 Anonymous storefront content is rendered by Astro SSR. On a Workers Cache miss, the server reads current CMS and non-stock Catalog data directly from D1, renders complete HTML, and returns a cacheable response. SSR does not call the Store's own public HTTP API and does not put a duplicate CMS representation in KV.
