@@ -132,6 +132,14 @@ The Store serves images from private R2 through a bounded media route using Clou
 
 Raw-file normalization, EXIF correction or stripping, color normalization, content hashing, pre-generated derivatives, and automated orphan reconciliation are excluded. Unreferenced old R2 objects may remain in v1 and be deleted manually. Prospect evidence provenance remains in the private prospect artifact and is not copied into Production D1.
 
+## Prospect Demo to Production initialization
+
+A Prospect Demo runtime is never promoted, cloned, or treated as a Production Store backup. After merchant acceptance, the reviewed merchant app source may retain its storefront code, Store Profile, Theme defaults, and approved private CMS and Catalog seed artifact, but provisioning creates entirely new Production Worker, D1, KV, R2, secrets, and deployment configuration. Shared migrations run from zero.
+
+The private approved artifact, not the running Demo deployment, is the transfer boundary. A resumable import creates new Production store-scoped identities and copies approved media into Production R2. Imported Catalog, CMS, Theme, and Navigation content remains Draft until the merchant confirms prices, initial inventory, identity and contacts, delivery settings, and payment configuration. Publication follows activation review and live proof.
+
+Demo D1 state, resource identifiers, synthetic Orders or Customers, Payment or inventory state, sessions, tracking tokens, demo passwords, demo Telegram routing, secrets, and cache contents never cross the boundary. Provisioning and import use the already-approved resumable journal behavior.
+
 ## Primary platform evidence
 
 - [Workers Cache](https://developers.cloudflare.com/workers/cache/)
