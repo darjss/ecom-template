@@ -4,7 +4,7 @@ This is the approved pre-schema contract for the shared commerce kernel. Persist
 
 ## Boundaries and ownership
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 Every commerce identity, command, idempotency key, event, and reference is scoped to exactly one independently deployed Store, and all references resolve within it. Customer and Staff Member identities never link or merge across Stores, even when phone numbers match. Each Store's D1 SQL database is authoritative; no global commerce identity or cross-store aggregate exists in v1. The shared kernel uses SQL directly through the repository-owned data layer rather than maintaining a storage-neutral commerce abstraction. The merchant app may choose presentation, but only the shared kernel may mutate price, inventory, checkout, Payment, Order, cancellation, refund, or Fulfillment truth.
 
@@ -26,7 +26,7 @@ Separate aggregates may change in one D1 SQL transaction when an invariant spans
 
 ## Shared value rules
 
-**Money and snapshot status:** Approved by the orchestrator.
+**Money and snapshot status:** Founder approved.
 
 - Money is integer Mongolian tögrög (MNT). No floating-point money enters the domain. Customer prices and fees are tax-inclusive in v1; the kernel does not calculate a separate dynamic tax.
 - Cart Line, Order Line, Variant stock, reservation, adjustment, and Bundle component quantities are positive integers with platform hard maxima and optional stricter merchant or Order limits. Fractional, weight-based, and continuously measured products are excluded in v1.
@@ -38,7 +38,7 @@ Separate aggregates may change in one D1 SQL transaction when an invariant spans
 
 ## Catalog model
 
-**Lifecycle/composition and option/variant status:** Approved by the orchestrator.
+**Lifecycle/composition and option/variant status:** Founder approved.
 
 A Product always has at least one Variant. Products with no customer-selectable options receive one Default Variant; interfaces may hide it, but commerce code never has a second path for directly sellable Products.
 
@@ -64,7 +64,7 @@ Draft items are freely editable but not purchasable. Publishing requires every c
 
 ## Cart, checkout, and commercial truth
 
-**Checkout-boundary status:** Approved by the orchestrator.
+**Checkout-boundary status:** Founder approved.
 
 The Cart is localStorage-only convenience state. It may contain stale labels, prices, or availability and never reserves stock. The server accepts cart intent, not cart truth.
 
@@ -83,7 +83,7 @@ An Order Line snapshots customer-visible item identity and name, applicable Vari
 
 ### Discounts
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 Discount Rules are either a percentage or fixed-MNT merchandise reduction. A rule may be automatic or require one normalized code, may target the whole catalog or explicit Products, Variants, Categories, or Collections, and may set an activation window, minimum eligible subtotal, and global redemption limit. Customer-specific and per-customer limits are excluded in v1 because guest checkout remains valid. Exactly one rule applies to an Order; the submitted valid code wins, otherwise the kernel chooses the eligible automatic rule producing the greatest reduction. Fixed reductions are capped at eligible merchandise subtotal, percentage reductions are bounded from 1–100%, and the result is allocated deterministically across eligible Order Lines. Discounts do not reduce delivery fees; free delivery is computed separately from the post-discount merchandise subtotal.
 
@@ -112,7 +112,7 @@ For every Placed Order, subtotal equals the sum of pre-discount line totals; tot
 
 ### Payment
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 ```text
 QPay:           Pending --confirm evidence--> Confirmed --partial refund--> Partially Refunded --full refund--> Refunded
@@ -135,7 +135,7 @@ Transfer/COD:  Awaiting Confirmation --staff confirm--> Confirmed --partial refu
 
 ### Fulfillment
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 ```text
 Unfulfilled --start--> Processing --ready--> Ready
@@ -154,7 +154,7 @@ Unfulfilled --start--> Processing --ready--> Ready
 
 ### Inventory Reservation
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 ```text
 Active --accept/confirm--> Consumed
@@ -171,7 +171,7 @@ Active --accept/confirm--> Consumed
 
 ## Inventory invariants
 
-**Stock, ledger, and concurrency status:** Approved by the orchestrator.
+**Stock, ledger, and concurrency status:** Founder approved.
 
 A Variant maps to exactly one Stock Item in the store's single shared inventory pool. Available Quantity is current on-hand quantity minus all Active reservation demand and can never be negative. Bundle availability is derived from component Variant availability and required quantities; no Bundle stock is persisted. The minimum reservation model is one D1-backed Inventory Reservation per Order, normalized Variant demand, and Stock Item on-hand and reserved balances. Placing an Order conditionally updates every demanded Stock Item in one D1 SQL transaction so either all demand is reserved or none is. Order, Payment, discount, and inventory changes share one transaction boundary; inventory reservations do not use Durable Objects. Warehouses, stock batches, partial reservations, waitlists, and automatic rebalancing are excluded in v1.
 
@@ -181,13 +181,13 @@ Cached storefront HTML does not contain authoritative stock. The live availabili
 
 ## Delivery options
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 Delivery Options are either free Pickup at an active public Location or Delivery within Ulaanbaatar priced by one storewide flat fee. Delivery becomes free when the post-discount merchandise subtotal meets the merchant's optional configured threshold. Checkout snapshots the mode, selected Pickup Location or submitted delivery destination, fee, and threshold result. Merchant staff handle out-of-area requests and other edge cases operationally. All Locations draw from the same inventory pool. Locations move `Draft → Active ↔ Archived`; only Active Locations may be selected for Pickup. Revisioned edits affect future Orders only, while placed Orders retain immutable labels, addresses, fees, and destination facts. An archived Location may reactivate under the same identity when its invariants still hold; historical identity is preserved and never reused. Geospatial validation, distance pricing, and live courier quotes are excluded in v1.
 
 ## Commands and transition authority
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 The application layer exposes intention-revealing commands; persistence and adapters remain behind it. The minimum command vocabulary is:
 
@@ -205,7 +205,7 @@ Commands either commit every owned state change and its required inventory, fina
 
 ## Cancellation and refund rules
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 Cancellation is a whole-Order decision, while Refund is a Payment fact. Line-level and quantity-level cancellation are excluded in v1; before handoff or Pickup, staff continue the complete Order or cancel it entirely. Split shipments, exchanges, and general post-fulfillment returns are handled operationally outside the system. A Returned delivery permits narrow post-handoff Cancellation only after the complete Order is verified back in merchant custody; Delivery Failed alone never permits cancellation or stock restoration. Unconfirmed COD becomes Rejected; any Confirmed Payment—including COD—preserves immutable confirmation truth and creates a Refund Obligation. Confirmed never transitions to Rejected. Returns after Fulfilled remain outside v1. Discretionary partial Refunds remain financial-only and never alter ordered quantities, Inventory Demand, pricing, or Fulfillment. Cancellation and Refund are related but never aliases:
 
@@ -217,7 +217,7 @@ Cancellation is a whole-Order decision, while Refund is a Payment fact. Line-lev
 
 ## Customer and guest linking
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 An authenticated Customer owns the Order they place, while submitted recipient name, normalized phone, and destination may differ and remain immutable Fulfillment snapshots. Recipient facts never establish, transfer, or relink Customer identity. Checkout snapshots recipient and consent-relevant facts onto the Order. A Guest Order has no Customer identity and receives a narrow Guest Tracking Link. The stored secret is non-recoverable and scoped to read-only tracking of one Order; it cannot authorize profile, payment, cancellation, or other Order access. The link remains valid while the Order is active and expires automatically 30 days after the Order becomes Completed or Cancelled; v1 has no staff revocation workflow.
 
@@ -225,7 +225,7 @@ Exactly one Customer identity may exist per normalized verified phone within a S
 
 ## Evidence, audit, and adapters
 
-**Decision status:** Approved by the orchestrator.
+**Decision status:** Founder approved.
 
 Current aggregate state remains on Order, Payment, Fulfillment, and Stock Item rows; the kernel is not event sourced and does not store growing history arrays on those rows. Dedicated append-only Inventory Entry and Financial Entry tables explain stock and money. One shared Audit Event table records only consequential authorization changes, Fulfillment transitions, Cancellations, manual overrides, and provider decisions. Routine reads, requests, and ordinary content edits do not enter commerce audit storage. Each Audit Event contains only the applicable entity identity, action type, actor or provider source, reason, command correlation, server time, and minimized safe facts needed to explain the action. Business ledger and Order-related audit evidence is retained for the Store's lifetime. Domain Events are emitted only for concrete downstream reactions defined by an interface contract. Corrections append compensating evidence rather than rewriting history. Bearer secrets and unnecessary direct PII never enter evidence or audit records.
 
