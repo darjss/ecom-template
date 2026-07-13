@@ -193,7 +193,7 @@ The application layer exposes intention-revealing commands; persistence and adap
 
 - Catalog: `CreateProduct`, `ChangeProduct`, `PublishProduct`, `ArchiveProduct`, `ReactivateProduct`, `CreateBundle`, `ChangeBundle`, `PublishBundle`, `ArchiveBundle`, `ReactivateBundle`, `ReactivateVariant`.
 - Pricing: `CreateDiscountRule`, `ChangeDiscountRule`, `ActivateDiscountRule`, `DeactivateDiscountRule`.
-- Ordering: `PlaceOrder`, `CancelOrder`, `CompleteOrder`. Authorized staff may cancel any eligible Order; an authenticated store-scoped Customer may cancel their own eligible Order. Guest Tracking Links remain read-only, so Guest customers contact the merchant or wait for QPay expiry. Detailed role and session enforcement belongs to the auth boundary.
+- Ordering: `PlaceOrder`, `CancelOrder`, `CompleteOrder`. Cancellation is staff-operated in v1. Customer sessions and Guest Tracking Links remain read-only for Order operations, so Customers and guests contact the merchant or wait for QPay expiry. Detailed role and session enforcement belongs to the auth boundary.
 - Payment: `BeginPayment`, `SwitchPaymentToBankTransfer`, `RecordPaymentEvidence`, `ConfirmPayment`, `RejectPayment`, `ExpirePayment`, `RecordRefund`.
 - Inventory: `AdjustInventory`; reservation, consumption, release, and expiry are internal consequences of Order, Payment, COD acceptance, cancellation, or scheduled-expiry commands.
 - Fulfillment: `AcceptCodOrder`, `StartFulfillment`, `MarkReady`, `HandOffDelivery`, `MarkDeliveryFailed`, `RecordReturned`, `RecordPickup`, `CompleteFulfillment`.
