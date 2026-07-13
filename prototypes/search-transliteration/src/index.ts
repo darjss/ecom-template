@@ -49,6 +49,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, worker: "wf19-search-transliteration-worker", transliteration_version: TRANSLITERATION_VERSION });
+    if (url.pathname === "/products" && request.method === "GET") {
+      const rawLimit = url.searchParams.get("limit") ?? "20";
+      const limit = Number(rawLimit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 20) return json({ error: "invalid_limit", max: 20 }, 400);
+      const result = await env.DB.prepare("SELECT name, sku, category, price_mnt FROM products ORDER BY id ASC LIMIT ?").bind(limit).all<{ name: string; sku: string; category: string; price_mnt: number }>();
+      return json({ prototype: true, products: result.results });
+    }
     if (url.pathname !== "/search" || request.method !== "GET") return json({ error: "not_found" }, 404);
     const query = url.searchParams.get("q") ?? "";
     const modeValue = url.searchParams.get("mode") ?? "strict";

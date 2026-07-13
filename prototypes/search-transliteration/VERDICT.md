@@ -71,6 +71,14 @@ The previous fallback baseline was approximately 1.1s with three sequential tier
 - Actual deployment, `/health` curl, native/strict/basic samples, and real 60-request harness completed.
 - No unit/integration tests were added, per repository policy.
 
+## Final founder-review convenience
+
+Added prototype-only `GET /products?limit=20` with integer limit validation (`1..20`), deterministic `id ASC` ordering, synthetic `name`, `sku`, `category`, and `price_mnt` fields only, and `private, no-store`. `limit=21` returned HTTP 400 with `max:20`.
+
+Added the dependency-light CLI `bun prototypes/search-transliteration/scripts/try-search.ts`. No arguments or `--list` fetches 18 deployed products and suggests `өдөр`, `odor`, `udur`, `usnii boolt`, and `nooson tsamts`; positional queries call tiered mode and print source, confidence, ambiguity, network, Worker, D1, and binding-call timing. The live prototype URL is the explicit default; `--url` is optional.
+
+Live convenience proof returned HTTP 200 and sample products `Ноосон цамц`, `Өдөр тутмын цүнх`, `Үсний боолт`. CLI proof succeeded for `usnii boolt` (one low-confidence basic result), `odor` (two candidates with `expose_multiple`), and `өдөр` (native high-confidence results).
+
 ## Remaining risks and recommendation
 
 The semantic recommendation is unchanged and now has a viable latency shape: retain tiered mode with explicit low-confidence ambiguity exposure. Remaining risks are FTS ranking quality at larger catalogs, basic transliteration collision rate on real merchant text, the single-statement SQL plan at scale, and the 40-product-only benchmark. Before production, run representative catalog collision/latency sampling and verify query plans; do not silently promote basic candidates.
