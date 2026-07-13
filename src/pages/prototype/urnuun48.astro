@@ -1,0 +1,20 @@
+---
+import { Urnuun48Prototype } from "@/components/prototypes/urnuun48/Urnuun48Prototype";
+import "@/styles/global.css";
+import "@/components/prototypes/urnuun48/urnuun48.css";
+import "@/components/prototypes/urnuun48/urnuun48-views.css";
+---
+
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Өрнүүн 48 зохиомол жишиг дэлгүүрийн throwaway prototype" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Өрнүүн 48 · Зохиомол жишиг дэлгүүр</title>
+  </head>
+  <body>
+    <Urnuun48Prototype client:load showPrototypeNav={!import.meta.env.PROD} />
+  </body>
+</html>
