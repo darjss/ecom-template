@@ -8,7 +8,7 @@ A Store is one independently deployed merchant application. Its repository-owned
 
 - immutable store and application identity;
 - Mongolian locale and MNT currency invariants;
-- enabled shared-kernel capabilities;
+- supported shared-kernel capabilities;
 - statically registered provider choices;
 - non-secret operational limits and defaults;
 - app-owned storefront entrypoints, Theme schema defaults, and the approved font catalog.
@@ -18,7 +18,7 @@ D1 owns merchant-editable public truth:
 - storefront and legal identity;
 - logos and other Media Assets;
 - contacts, trust content, and Locations;
-- navigation and SEO settings;
+- navigation and ordinary content used by automatic SEO;
 - the published Theme token document and selected approved fonts;
 - announcements, banners, homepage sections, and policies;
 - Catalog Items, groupings, merchandising, and delivery settings.
@@ -31,23 +31,25 @@ The Profile contains no Cloudflare resource IDs, domain, merchant copy, contacts
 
 A Store Profile cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content and Theme publication never require deployment. Storefront code, the Theme token schema and compiler, approved font catalog, capability ceiling, provider wiring, and other build-owned configuration do require deployment.
 
-## Immediate publishing
+## Draft and publish
 
-D1 contains only current published CMS truth. V1 has no persisted CMS draft, schedule, release, or site-wide publish model.
+Each CMS aggregate has one current Published revision used by the public storefront and at most one server-persisted Draft revision. Unsaved edits remain browser-local under the approved versioned local-draft and reconciliation contract, layered over the current server Draft or Published base. Preview renders local or server-Draft values against the real app-owned storefront.
 
-Unsaved edits remain browser-local under the approved versioned draft and reconciliation contract. Preview renders those local values against the real app-owned storefront. Publishing sends one complete logical aggregate with its expected Revision. The D1 write is atomic, increments the Revision, and becomes the current published value immediately.
+`Save Draft` atomically persists one complete private aggregate under its expected Draft and base Published Revisions. It does not affect public reads or purge caches. `Publish` atomically promotes the complete Draft to a new Published Revision, clears that Draft, and triggers targeted global cache purging. A Revision conflict rejects the operation for explicit reconciliation.
 
-Logical publishing aggregates include:
+Draft and publication aggregates include:
 
 - the Homepage and its ordered sections;
+- the Theme;
 - one navigation menu;
 - one policy page;
-- store identity and contact settings;
-- one announcement or banner.
+- Storefront Identity and contact settings;
+- one Announcement Bar;
+- one Ordering Notice.
 
-A Revision conflict rejects the write for explicit reconciliation. A successful write is followed by targeted global cache purging. Publication is a D1 write plus cache invalidation, never a Worker deployment.
+V1 has no schedules, multi-step approval workflow, retained CMS version history, or site-wide release. Publication is a D1 promotion plus cache invalidation, never a Worker deployment.
 
-The CMS contract has no asynchronous cache-invalidation status or retry outbox. The publication request awaits its purge attempt. A purge failure is surfaced and logged as an operational error after the content is already durable; TTL expiry remains the fallback.
+The CMS contract has no asynchronous cache-invalidation status or retry outbox. The publication request awaits its purge attempt. A purge failure is surfaced and logged as an operational error after the Published revision is already durable; TTL expiry remains the fallback.
 
 ## Bounded CMS content
 
@@ -110,7 +112,7 @@ The performance proof target distinguishes warm and cold paths:
 
 ## Theme architecture
 
-The shared presentation package owns a versioned, typed Theme token schema, Valibot validation, Tailwind v4 mappings, a safe CSS-variable compiler, contrast requirements, and bounded font, radius, and shadow choices. The merchant app owns its storefront composition, initial Theme, and approved preset and font catalogs. D1 owns one current revisioned published Theme document.
+The shared presentation package owns a versioned, typed Theme token schema, Valibot validation, Tailwind v4 mappings, a safe CSS-variable compiler, contrast requirements, and bounded font, radius, and shadow choices. The merchant app owns its storefront composition, initial Theme, and approved preset and font catalogs. D1 owns one current Published Theme revision and at most one server Draft.
 
 The design takes inspiration from tweakcn's paired semantic tokens, presets, live CSS-variable preview, checkpoints, and Tailwind v4 variable mapping without embedding tweakcn or adopting its React state architecture. Implementation uses SolidJS, TanStack Form, Valibot, and the already-approved local draft and reconciliation behavior. Theme values are validated OKLCH and bounded choices rather than arbitrary CSS strings. Merchant Admin styling is outside the storefront Theme scope.
 
@@ -118,7 +120,7 @@ The initial token contract covers the Zaidan-compatible semantic surface and for
 
 A Store publishes one intentional Theme mode with an explicit `light` or `dark` appearance used for native browser color-scheme behavior. Some presets may be light and others dark, and applying a preset may change that appearance. The customer storefront has no mode toggle, duplicate light/dark token documents, or automatic operating-system switching. Merchant Admin's independent appearance preference does not affect the Storefront Theme.
 
-Unsaved Theme edits apply CSS custom properties only to the scoped storefront preview. Publishing validates and atomically replaces the complete Theme document under an expected Revision, then globally purges the `store-theme` tag attached to every public storefront HTML response. On the next cache miss, Astro reads the Theme with page data, compiles roughly one kilobyte of CSS custom properties, and inlines them in the rendered HTML. Tailwind utilities and component CSS remain statically compiled. A normal Theme value change therefore requires publication and cache invalidation, not deployment.
+Unsaved Theme edits apply CSS custom properties only to the scoped storefront preview. Saving persists the complete private Theme Draft without affecting storefront caches. Publishing validates and atomically promotes that Draft under expected Draft and Published Revisions, then globally purges the `store-theme` tag attached to every public storefront HTML response. On the next cache miss, Astro reads the Published Theme with page data, compiles roughly one kilobyte of CSS custom properties, and inlines them in the rendered HTML. Tailwind utilities and component CSS remain statically compiled. A normal Theme value change therefore requires publication and cache invalidation, not deployment.
 
 The asset split is:
 
