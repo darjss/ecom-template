@@ -1,0 +1,20 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "wf19-search-transliteration-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 1 }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wf19-search-transliteration-d1",
+      "database_id": "d300867e-ddaf-4e0d-84c8-960ca32158a0",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
