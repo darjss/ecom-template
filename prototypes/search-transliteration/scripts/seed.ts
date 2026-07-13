@@ -1,4 +1,4 @@
-import { keyFor, normalize } from "../src/transliteration";
+import { basicVariants, keyFor, normalize, transliterateStrictAscii } from "../src/transliteration";
 
 type Product = { name: string; category: string; tags: string; sku: string; price: number };
 const words = [
@@ -9,10 +9,14 @@ const words = [
 ] satisfies readonly [string, string, string, string][];
 const sql = (value: string): string => `'${value.replaceAll("'", "''")}'`;
 const rows = words.map(([name, sku, category, tags], index): Product => ({ name, sku, category, tags, price: 12000 + index * 1750 }));
-const statements = ["DELETE FROM product_search;", "DELETE FROM products;", ...rows.flatMap((product, index) => {
+const statements = ["DELETE FROM product_search_tiered;", "DELETE FROM product_search;", "DELETE FROM products;", ...rows.flatMap((product, index) => {
   const strict = keyFor(`${product.name} ${product.category} ${product.tags} ${product.sku}`, "strict");
   const basic = keyFor(`${product.name} ${product.category} ${product.tags} ${product.sku}`, "basic");
+  const searchable = `${product.name} ${product.category} ${product.tags} ${product.sku}`;
+  const nativeKey = normalize(searchable);
+  const strictAsciiKey = transliterateStrictAscii(searchable);
+  const basicKey = basicVariants(searchable).join(" ");
   const skuNormalized = normalize(product.sku).replaceAll(" ", "").replaceAll("-", "");
-  return [`INSERT INTO products (id, sku, sku_normalized, name, category, tags, price_mnt, strict_key, basic_key) VALUES (${index + 1}, ${sql(product.sku)}, ${sql(skuNormalized)}, ${sql(product.name)}, ${sql(product.category)}, ${sql(product.tags)}, ${product.price}, ${sql(strict)}, ${sql(basic)});`, `INSERT INTO product_search (product_id, name, category, tags, sku, strict_key, basic_key) VALUES (${index + 1}, ${sql(keyFor(product.name, "strict"))}, ${sql(keyFor(product.category, "strict"))}, ${sql(keyFor(product.tags, "strict"))}, ${sql(keyFor(product.sku, "strict"))}, ${sql(strict)}, ${sql(basic)});`]; })];
+  return [`INSERT INTO products (id, sku, sku_normalized, name, category, tags, price_mnt, strict_key, basic_key) VALUES (${index + 1}, ${sql(product.sku)}, ${sql(skuNormalized)}, ${sql(product.name)}, ${sql(product.category)}, ${sql(product.tags)}, ${product.price}, ${sql(strict)}, ${sql(basic)});`, `INSERT INTO product_search (product_id, name, category, tags, sku, strict_key, basic_key) VALUES (${index + 1}, ${sql(keyFor(product.name, "strict"))}, ${sql(keyFor(product.category, "strict"))}, ${sql(keyFor(product.tags, "strict"))}, ${sql(keyFor(product.sku, "strict"))}, ${sql(strict)}, ${sql(basic)});`, `INSERT INTO product_search_tiered (product_id, native_key, strict_key, basic_key, sku_key) VALUES (${index + 1}, ${sql(nativeKey)}, ${sql(strictAsciiKey)}, ${sql(basicKey)}, ${sql(skuNormalized)});`]; })];
 await Bun.write(new URL("../seed.sql", import.meta.url), `${statements.join("\n")}\n`);
 console.log(`wrote ${rows.length} synthetic products`);
