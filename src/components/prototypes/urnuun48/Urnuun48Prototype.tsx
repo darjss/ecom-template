@@ -23,7 +23,7 @@ interface Urnuun48PrototypeProps {
 }
 
 export const Urnuun48Prototype = (props: Urnuun48PrototypeProps) => {
-  const params = new URLSearchParams(window.location.search);
+  const params = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const [view, setView] = createSignal<PrototypeView>(parseView(params.get("view")));
   const [productId, setProductId] = createSignal(params.get("product") ?? "P07");
   const [query, setQuery] = createSignal(params.get("q") ?? "");
