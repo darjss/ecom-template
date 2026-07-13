@@ -25,7 +25,11 @@ D1 owns merchant-editable public truth:
 
 Worker bindings own secrets. Generated Wrangler configuration owns binding and deployment wiring.
 
-A Store Profile may select shared capabilities but cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content and Theme publication never require deployment. Storefront code, the Theme token schema and compiler, approved font catalog, capabilities, provider wiring, and other build-owned configuration do require deployment.
+A Store Profile is the compile-time capability ceiling rather than current merchant settings. Its closed, versioned definition contains stable `storeKey`, `mn-MN` locale, MNT currency, storefront entrypoint, Theme schema version, supported shared capabilities, statically registered adapter choices, and approved font IDs. D1 stores which supported capabilities are currently enabled and their non-secret merchant settings; a capability is available only when the Profile supports it, D1 enables it, and required secret bindings exist.
+
+The Profile contains no Cloudflare resource IDs, domain, merchant copy, contacts, price, credentials, current operational settings, or arbitrary extension bag. Generated Wrangler configuration owns environment-specific deployment identity and bindings. Profile validation runs during app generation, build, and provisioning; unknown schema versions and unsupported combinations fail before deployment.
+
+A Store Profile cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content and Theme publication never require deployment. Storefront code, the Theme token schema and compiler, approved font catalog, capability ceiling, provider wiring, and other build-owned configuration do require deployment.
 
 ## Immediate publishing
 
