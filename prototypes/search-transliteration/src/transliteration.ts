@@ -22,6 +22,8 @@ export const basicTokenVariants = (input: string): string[][] => normalize(input
 
 export const basicVariants = (input: string): string[] => basicTokenVariants(input).flat();
 
+export const deletionKeys = (term: string): string[] => [...new Set([term, ...[...term].map((_, index) => `${term.slice(0, index)}${term.slice(index + 1)}`)])];
+
 export const keyFor = (input: string, mode: "strict" | "basic"): string => {
   const normalized = normalize(input);
   const transliteration = mode === "strict" ? transliterateStrict(normalized) : transliterateBasic(normalized);

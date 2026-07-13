@@ -1,4 +1,4 @@
-type Product = { name: string; sku: string; brand: string; category: string; price_mnt: number; available: number; source?: string; confidence?: string; matched_field?: string };
+type Product = { name: string; sku: string; brand: string; category: string; price_mnt: number; available: boolean; source?: string; confidence?: string; matched_field?: string };
 type ProductResponse = { products: Product[] };
 type SearchResponse = { products: Product[]; source: string; confidence: string; ambiguity: string; timing_ms: { total: number; sql: number; binding_calls: number } };
 

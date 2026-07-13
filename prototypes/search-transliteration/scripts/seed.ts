@@ -1,4 +1,4 @@
-import { basicVariants, keyFor, normalize, transliterateBasic, transliterateStrictAscii } from "../src/transliteration";
+import { basicVariants, deletionKeys, keyFor, normalize, transliterateBasic, transliterateStrictAscii } from "../src/transliteration";
 
 type Product = { name: string; category: string; tags: string; sku: string; price: number; brand: string; description: string; available: number; position: number };
 const words = [
@@ -10,7 +10,7 @@ const words = [
 const sql = (value: string): string => `'${value.replaceAll("'", "''")}'`;
 const brands = ["Талын Од", "Хөх Тэнгэр", "Алтан Өргөө", "Цагаан Сар", "Нүүдэл"];
 const rows = words.map(([name, sku, category, tags], index): Product => ({ name, sku, category, tags, price: 12000 + index * 1750, brand: brands[index % brands.length] ?? "Талын Од", description: `${category} зориулсан синтетик туршилтын бүтээгдэхүүн ${tags}`, available: index % 7 === 4 ? 0 : 1, position: index + 1 }));
-const statements = ["DELETE FROM search_terms;", "DELETE FROM product_search_resilient;", "DELETE FROM product_search_tiered;", "DELETE FROM product_search;", "DELETE FROM products;", ...rows.flatMap((product, index) => {
+const statements = ["DELETE FROM search_deletion_keys;", "DELETE FROM search_terms;", "DELETE FROM product_search_resilient;",  "DELETE FROM product_search_tiered;", "DELETE FROM product_search;", "DELETE FROM products;", ...rows.flatMap((product, index) => {
   const strict = keyFor(`${product.name} ${product.category} ${product.tags} ${product.sku}`, "strict");
   const basic = keyFor(`${product.name} ${product.category} ${product.tags} ${product.sku}`, "basic");
   const searchable = `${product.name} ${product.category} ${product.tags} ${product.sku}`;
@@ -21,7 +21,7 @@ const statements = ["DELETE FROM search_terms;", "DELETE FROM product_search_res
   const fields = [{ name: "title", value: product.name }, { name: "brand", value: product.brand }, { name: "category", value: product.category }];
   const termStatements = fields.flatMap((field) => ["native", "strict", "basic"].flatMap((representation) => {
     const value = representation === "native" ? normalize(field.value) : representation === "strict" ? transliterateStrictAscii(field.value) : transliterateBasic(field.value);
-    return value.split(" ").filter((term) => term.length >= 4).map((term) => `INSERT OR IGNORE INTO search_terms (term, product_id, field, representation) VALUES (${sql(term)}, ${index + 1}, ${sql(field.name)}, ${sql(representation)});`);
+    return value.split(" ").filter((term) => term.length >= 4).flatMap((term) => [`INSERT OR IGNORE INTO search_terms (term, product_id, field, representation) VALUES (${sql(term)}, ${index + 1}, ${sql(field.name)}, ${sql(representation)});`, ...deletionKeys(term).map((deletionKey) => `INSERT OR IGNORE INTO search_deletion_keys (deletion_key, term, product_id, field, representation) VALUES (${sql(deletionKey)}, ${sql(term)}, ${index + 1}, ${sql(field.name)}, ${sql(representation)});`)]);
   }));
   const nativeFields = [product.name, product.brand, product.category, product.tags, product.description].map(normalize);
   const strictFields = [product.name, product.brand, product.category, product.tags, product.description].map(transliterateStrictAscii);
