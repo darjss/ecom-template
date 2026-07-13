@@ -11,7 +11,7 @@ A Store is one independently deployed merchant application. Its repository-owned
 - enabled shared-kernel capabilities;
 - statically registered provider choices;
 - non-secret operational limits and defaults;
-- app-owned theme tokens and storefront entrypoints.
+- app-owned storefront entrypoints, Theme schema defaults, and the approved font catalog.
 
 D1 owns merchant-editable public truth:
 
@@ -19,12 +19,13 @@ D1 owns merchant-editable public truth:
 - logos and other Media Assets;
 - contacts, trust content, and Locations;
 - navigation and SEO settings;
+- the published Theme token document and selected approved fonts;
 - announcements, banners, homepage sections, and policies;
 - Catalog Items, groupings, merchandising, and delivery settings.
 
 Worker bindings own secrets. Generated Wrangler configuration owns binding and deployment wiring.
 
-A Store Profile may select shared capabilities but cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content publication never requires deployment. Storefront code, foundational theme tokens, capabilities, provider wiring, and other build-owned configuration do require deployment.
+A Store Profile may select shared capabilities but cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content and Theme publication never require deployment. Storefront code, the Theme token schema and compiler, approved font catalog, capabilities, provider wiring, and other build-owned configuration do require deployment.
 
 ## Immediate publishing
 
@@ -76,6 +77,32 @@ The performance proof target distinguishes warm and cold paths:
 - cached assets and media p75 response start below 50 ms;
 - live availability p95 below 150 ms without blocking initial HTML;
 - cold HTML render measured and reported separately rather than represented as a sub-50 ms cache hit.
+
+## Theme architecture
+
+The shared presentation package owns a versioned, typed Theme token schema, Valibot validation, Tailwind v4 mappings, a safe CSS-variable compiler, contrast requirements, and bounded font, radius, and shadow choices. The merchant app owns its storefront composition, initial Theme, and approved preset and font catalogs. D1 owns one current revisioned published Theme document.
+
+The design takes inspiration from tweakcn's paired semantic tokens, presets, live CSS-variable preview, checkpoints, and Tailwind v4 variable mapping without embedding tweakcn or adopting its React state architecture. Implementation uses SolidJS, TanStack Form, Valibot, and the already-approved local draft and reconciliation behavior. Theme values are validated OKLCH and bounded choices rather than arbitrary CSS strings. Merchant Admin styling is outside the storefront Theme scope.
+
+The initial token contract covers the Zaidan-compatible semantic surface and foreground pairs, including background, card, popover, primary, secondary, muted, accent, destructive, border, input, and focus ring, plus heading and body typography, base radius, and bounded shadow treatment. Global spacing is not merchant-editable because it can break app-owned storefront composition. Repository-owned starter presets and the fictional reference Store Theme are browser-reviewed rather than importing tweakcn's preset catalog wholesale.
+
+Unsaved Theme edits apply CSS custom properties only to the scoped storefront preview. Publishing validates and atomically replaces the complete Theme document under an expected Revision, then globally purges the `store-theme` tag attached to every public storefront HTML response. On the next cache miss, Astro reads the Theme with page data, compiles roughly one kilobyte of CSS custom properties, and inlines them in the rendered HTML. Tailwind utilities and component CSS remain statically compiled. A normal Theme value change therefore requires publication and cache invalidation, not deployment.
+
+The asset split is:
+
+- inline in cached HTML: published color, radius, typography, and shadow variables;
+- immutable R2 objects: approved font files, images, textures, and other media;
+- deployed CSS: component structure, Tailwind mappings, layout, responsive behavior, and animations.
+
+The app exposes a small repository-approved font catalog. The published Theme stores only `bodyFontId` and `headingFontId`. Applying a complete preset may change its default font pairing; editing colors alone does not alter typography, and Admin may select heading and body fonts independently from the same catalog. Selecting an existing font requires only Theme publication. Adding a font requires a repository change and deployment.
+
+Every approved font is self-hosted as an immutable WOFF2 R2 asset, has verified redistribution rights, covers Mongolian Cyrillic including Ө, ө, Ү, and ү, is subset to required characters and weights, and has fallback metrics chosen to limit layout shift. A storefront uses at most two active font families and never loads Google Fonts at runtime.
+
+Primary inspiration:
+
+- [tweakcn Theme schema](https://github.com/jnsahaj/tweakcn/blob/f89566aef1b6d71d0f72b998d16a5980bea10c98/types/theme.ts#L5-L76)
+- [tweakcn CSS-variable and Tailwind v4 generation](https://github.com/jnsahaj/tweakcn/blob/f89566aef1b6d71d0f72b998d16a5980bea10c98/utils/theme-style-generator.ts#L11-L164)
+- [tweakcn preset and checkpoint behavior](https://github.com/jnsahaj/tweakcn/blob/f89566aef1b6d71d0f72b998d16a5980bea10c98/store/editor-store.ts#L86-L157)
 
 ## Media references and banner rendering
 
