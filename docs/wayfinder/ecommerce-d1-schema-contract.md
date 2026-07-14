@@ -14,7 +14,7 @@ The schema spends complexity only on commercial truth, authorization, retry safe
 - Cloudflare Workflow remains the retry coordinator. There is no D1 job runner, generic outbox, notification-delivery table, or Failed Notifications workflow. The handoff from a committed D1 change to Workflow creation is intentionally best-effort.
 - Provider-specific tables are excluded. Byl and direct QPay translate into the canonical Payment schema.
 - The approved minimal Media Asset shape is preserved. D1 does not store dimensions, byte size, digests, provenance, derivatives, or orphan-processing state.
-- JSON is exceptional. Current commercial truth and immutable Order snapshots remain relational.
+- JSON is exceptional. Current commercial truth remains relational; only bounded nested display details that are immutable and read with their Order Line use validated JSON.
 
 These overrides are intentional founder decisions for the stated operating scale, not accidental omissions.
 
@@ -76,10 +76,13 @@ Only these fields are JSON in v1:
 
 - `themes.tokens_json`, because Theme tokens are one bounded versioned document;
 - `homepage_sections.content_json`, because each approved section kind has a different bounded payload;
+- `order_lines.options_json`, for immutable selected Option snapshots;
+- `order_lines.personalizations_json`, for immutable validated Personalization answers;
+- `order_lines.bundle_components_json`, for immutable customer-visible Bundle component snapshots;
 - `payment_entries.evidence_json`, only when normalized relational evidence cannot preserve a required redacted provider fact;
 - `audit_events.metadata_json`, for concise, non-PII before/after facts.
 
-Each field has a named Valibot schema selected by record kind. Reads parse and validate before returning typed data. Unknown keys fail validation. No authoritative amount, quantity, state, SKU, inventory demand, Refund allocation, Order selection, or relationship is hidden in JSON.
+Each field has a named Valibot schema selected by record kind. Reads parse and validate before returning typed data. Unknown keys fail validation. No authoritative amount, state, SKU, inventory demand, Refund allocation, or mutable relationship is hidden in JSON. Order Line option, Personalization, and Bundle component documents are bounded, immutable snapshots read as a whole; source identities, keys, labels, and values remain fully represented inside their validated schemas.
 
 ## Relationship overview
 
@@ -439,24 +442,14 @@ Checks enforce mode-specific destination fields and `grand_total = subtotal - di
 - nullable Variant ID
 - item, Variant, and SKU display snapshots
 - quantity, unit price, pre-discount total, discount total, final line total
+- validated `options_json` containing ordered source IDs, machine keys, labels, and values
+- validated `personalizations_json` containing ordered definition IDs/versions, kinds, labels, and typed scalar values
+- validated `bundle_components_json` containing ordered Variant IDs, SKU/name snapshots, and per-bundle and total quantities; empty for Product lines
 - unique `(order_id, position)`
 
-### Relational line snapshots
+The three JSON documents are bounded immutable display snapshots and are normally loaded with the Order Line. Keeping them on the row avoids three child tables and their joins. Inventory Demand and Discount allocation remain relational because commands query and reconcile them independently.
 
-`order_line_options`
-
-- Order Line, position, Option Group and Value source IDs, machine keys, and customer-visible label/value snapshots
-- composite primary key `(order_line_id, position)`
-
-`order_line_personalizations`
-
-- Order Line, position, definition source ID and version/key, kind, label, and typed scalar value columns
-- composite primary key `(order_line_id, position)`
-
-`order_line_bundle_components`
-
-- Order Line and component position, Variant source ID, Variant/SKU/name snapshots, per-bundle and total quantities
-- composite primary key `(order_line_id, position)`
+### Relational operational snapshots
 
 `order_line_inventory_demands`
 
