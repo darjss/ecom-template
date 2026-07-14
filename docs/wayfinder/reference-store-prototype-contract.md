@@ -1,6 +1,6 @@
 # Өрнүүн 48 reference-store prototype contract
 
-**Status:** candidate contract for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28), pending the required browser review. The interactive prototype is `/prototype/urnuun48` in development builds.
+**Status:** founder accepted for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28) on 2026-07-14. The interactive prototype is `/prototype/urnuun48` in development builds.
 
 ## Decision
 
@@ -81,17 +81,8 @@ The following stable keys are canonical:
 
 Each scenario resets clean resources and invokes ordinary shared-kernel commands. Generated database IDs remain runtime values. Stable scenario keys provide lookup and idempotency, not persisted IDs. The exact commands and assertions remain those in the [fixture research matrix](./reference-store-catalog-media-research.md).
 
-## Review gate
+## Review outcome
 
-Before this contract becomes accepted, browser-review the prototype at mobile and desktop widths for:
+The founder reviewed the live Portless prototype, rejected the first generic composition, accepted the revised physical pantry-cabinet direction, and requested closure on 2026-07-14. The accepted revision makes timber beams, numbered compartments, category, product, Bundle, delivery, and Store-number bays the dominant composition while preserving familiar commerce controls.
 
-- identity, Mongolian copy, and synthetic notices;
-- Homepage hierarchy and responsive shelf behavior;
-- search results and empty search;
-- P05, P07, and P08 controls;
-- both Bundle states;
-- Cart and Checkout payment switching;
-- keyboard focus, 200% zoom, reduced motion, and 44px touch targets;
-- missing assets, overflow, console errors, and obvious media defects.
-
-The browser review must wait for the orchestrator's sole browser lease. Until then, browser proof is blocked rather than simulated.
+No agent-browser run occurred because the orchestrator did not grant the sole browser lease. Build, targeted TypeScript and lint checks, SSR curl proof, `/api/health`, media inspection, and founder visual review passed. Downstream implementation must repeat mobile, desktop, keyboard, zoom, reduced-motion, console, and overflow proof against production code rather than treating this throwaway prototype as that proof.

@@ -1,6 +1,6 @@
 # Өрнүүн 48 prototype media manifest
 
-**Status:** reviewed candidate media for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28), generated 2026-07-14. All assets are fictional prototype inputs, not merchant media.
+**Status:** founder-accepted prototype media for [Prototype the fictional reference store and canary fixture](https://github.com/darjss/ecom-template/issues/28), generated and accepted 2026-07-14. All assets are fictional prototype inputs, not merchant media.
 
 ## Provenance
 
