@@ -89,7 +89,7 @@ export const LivePurchase = (props: LivePurchaseProps) => {
       <p class="proof-eyebrow">Solid live island</p>
       <h2 id="purchase-title">Худалдан авах төлөв</h2>
       <label for="variant">Хувилбар</label>
-      <select id="variant" value={selectedId()} onInput={(event) => setSelectedId(event.currentTarget.value)}>
+      <select id="variant" value={selectedId()} onChange={(event) => setSelectedId(event.currentTarget.value)}>
         <For each={props.variants}>{(variant) => <option value={variant.id}>{variant.label}</option>}</For>
       </select>
       <div class="proof-live" aria-live="polite">
