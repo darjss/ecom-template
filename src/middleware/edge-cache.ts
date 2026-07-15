@@ -8,17 +8,14 @@ export const edgeCache = defineMiddleware(async (context, next) => {
   const rule = cacheRuleFor(context.url.pathname);
   const isHtml = (response.headers.get("content-type") ?? "").includes("text/html");
 
-  if (rule && response.ok && isHtml && !response.headers.has("set-cookie")) {
+  if (rule && response.ok && isHtml) {
     response.headers.set("cache-control", "public, max-age=0, must-revalidate");
     response.headers.set(
       "cloudflare-cdn-cache-control",
       `public, max-age=${rule.sMaxAge}, stale-while-revalidate=${rule.staleWhileRevalidate}`,
     );
-    if (rule.cacheTag) response.headers.set("cache-tag", rule.cacheTag);
-  } else {
+  } else if (!response.headers.has("cache-control")) {
     response.headers.set("cache-control", "private, no-store");
-    response.headers.delete("cloudflare-cdn-cache-control");
-    response.headers.delete("cache-tag");
   }
 
   return response;
