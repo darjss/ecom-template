@@ -44,6 +44,8 @@ The canonical triage labels are `needs-triage`, `needs-info`, `ready-for-agent`,
 
 This is a single-context repository. See `docs/agents/domain.md`.
 
+When synthesizing or implementing Wayfinder decisions, apply `docs/wayfinder/final-scope-reconciliation.md` before older artifacts; it records the final founder-approved simplifications and precedence corrections.
+
 ## Verify
 
 `pnpm typecheck && pnpm lint && pnpm build`, then `pnpm dev` and curl `/api/health`.
