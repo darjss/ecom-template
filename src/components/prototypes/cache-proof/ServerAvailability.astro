@@ -1,0 +1,32 @@
+---
+import { env } from "cloudflare:workers";
+
+interface Props {
+  variantId: string;
+}
+
+interface AvailabilityRow {
+  available: number;
+  price_mnt: number;
+}
+
+const { variantId } = Astro.props;
+const availability = await env.DB.prepare(
+  "SELECT available, price_mnt FROM cache_proof_variants WHERE id = ?",
+)
+  .bind(variantId)
+  .first<AvailabilityRow>();
+---
+
+<section class="proof-server" aria-labelledby="server-island-title">
+  <p class="proof-eyebrow">Astro server island comparison</p>
+  <h2 id="server-island-title">Серверийн тусдаа хүсэлт</h2>
+  <p>
+    {
+      availability
+        ? `${availability.available} ширхэг · ${new Intl.NumberFormat("mn-MN").format(availability.price_mnt)} ₮`
+        : "Үлдэгдлийн мэдээлэл олдсонгүй"
+    }
+  </p>
+  <small>Энэ seam шинэ HTML авч чадна, гэхдээ сонголт, batching, checkout төлөвт Solid island илүү шууд.</small>
+</section>
