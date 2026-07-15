@@ -1,0 +1,294 @@
+# Commerce reliability and asynchronous-work contract
+
+**Decision status:** Founder approved.
+
+This contract implements the commerce model accepted in issue #17 without creating alternate Payment, Order, inventory, or Fulfillment truth. It deliberately favors a small Store-scale design over a general command bus or job framework.
+
+Supporting research:
+
+- [Cloudflare background execution primitives](./cloudflare-background-primitives-research.md)
+- [Byl and direct QPay providers](./mongolia-payment-provider-research.md)
+
+The concrete v1 provider decision is recorded separately in issue #32: both Byl and direct QPay adapters ship, while exactly one is manually configured for any Store.
+
+## Reliability target
+
+The system guarantees exactly-once **business effects**, not exactly-once delivery. HTTP requests, provider callbacks, Workflow steps, and scheduled invocations may repeat. Repetition must not create a second Order, confirm money twice, consume or release inventory twice, redeem a Discount twice, or send a second logical notification.
+
+Every consequential mutation commits its domain state, balances, ledger entries, required audit evidence, and durable notification intent in one D1 transaction. External calls remain at-least-once and use deterministic references plus idempotent kernel commands.
+
+D1 is authoritative for commerce. KV is not used for idempotency because it is eventually consistent and cannot atomically commit a key with Order, Payment, or inventory changes.
+
+## Minimal idempotency
+
+Use one small shared D1 idempotency implementation rather than a command framework. A record contains:
+
+- operation scope;
+- caller-provided or deterministic key;
+- normalized request hash;
+- resulting aggregate reference;
+- creation time.
+
+`(scope, key)` is unique within the Store database. Repeating the same key and request returns the existing result. Reusing a key with a different request hash returns a typed conflict. The record is written in the same transaction as the business mutation.
+
+Use it for checkout and other externally retried commands. Provider references also have direct uniqueness constraints. Workflow steps use deterministic keys derived from Workflow instance identity and step purpose. Current-state checks and aggregate Revisions remain the ordinary protection for staff actions and scheduled transitions.
+
+Order-creating keys live with their Orders. Provider transaction references and financial evidence are retained for the Store lifetime.
+
+## Explicit full-stack errors
+
+Use `better-result` for expected domain, authorization, provider, and infrastructure outcomes inside application modules. Error unions are narrow, tagged, serializable data. Do not erase them into a global domain `ApiError`.
+
+```ts
+import { Result, type SerializedResult } from "better-result";
+
+export type PlaceOrderError =
+  | { _tag: "CheckoutChanged"; currentTotalMnt: number }
+  | { _tag: "OutOfStock"; variantIds: string[] }
+  | { _tag: "AuthenticationRequired" }
+  | { _tag: "PermissionDenied"; permission: string };
+
+export type PlaceOrderResponse = SerializedResult<OrderDto, PlaceOrderError>;
+
+export const placeOrderResponse = async (
+  input: PlaceOrderInput,
+): Promise<PlaceOrderResponse> => Result.serialize(await placeOrder(input));
+```
+
+Elysia response schemas describe every serialized success and error variant so Eden carries the route-specific union. `Result.deserialize` reconstructs the Result container on the client; response schemas validate the payload because deserialization validates only the outer Result shape.
+
+Unexpected network failures, malformed responses, and unhandled server failures use one generic thrown `InfrastructureFailure`. Those failures enter TanStack Query's `isError` state. Expected domain and auth failures remain typed Result data.
+
+```ts
+export class InfrastructureFailure extends Error {
+  readonly _tag = "InfrastructureFailure";
+
+  constructor(
+    readonly kind: "network" | "server" | "invalid_response",
+    readonly status?: number,
+  ) {
+    super("The service is temporarily unavailable");
+    this.name = "InfrastructureFailure";
+  }
+}
+```
+
+Generators are optional. Ordinary `await`, explicit narrowing, chaining, or `Result.gen` may be used according to which is clearest. In an async generator, `Result.await` bridges a `Promise<Result<T, E>>`:
+
+```ts
+export const prepareOrder = async (
+  input: PlaceOrderInput,
+): Promise<Result<OrderDraft, PrepareOrderError>> =>
+  Result.gen(async function* () {
+    const cart = yield* Result.await(validateCart(input));
+    const demand = yield* Result.await(resolveInventoryDemand(cart));
+    return Result.ok({ cart, demand });
+  });
+```
+
+### Typed staff authorization
+
+Elysia's auth plugin returns typed `AuthenticationRequired` and `PermissionDenied` bodies for 401 and 403 responses. A shared staff request adapter converts those responses to `Result.err(AuthError)` and throws only generic infrastructure failures. Staff query helpers mark queries with `meta.auth = "staff"`.
+
+The global Query and Mutation caches observe successful Result data. `AuthenticationRequired` redirects once to staff login; `PermissionDenied` shows the shared permission response. Domain errors remain available to the calling interface. Generic infrastructure errors receive the global server-error presentation and limited retry policy.
+
+```ts
+export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onSuccess: (data, query) => handleStaffAuthResult(data, query.meta),
+    onError: reportInfrastructureFailure,
+  }),
+  mutationCache: new MutationCache({
+    onSuccess: (data, _variables, _context, mutation) =>
+      handleStaffAuthResult(data, mutation.meta),
+    onError: reportInfrastructureFailure,
+  }),
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) =>
+        error instanceof InfrastructureFailure &&
+        error.kind !== "invalid_response" &&
+        failureCount < 2,
+    },
+    mutations: { retry: false },
+  },
+});
+```
+
+## Cloudflare background execution
+
+Every Store deployment owns one Store-specific Workflow resource alongside its Worker, D1, KV, R2, and secrets. All Stores import the same statically registered Workflow implementation, but instances, credentials, visibility, and recovery remain isolated per Store.
+
+One Workflow definition accepts a small tagged task union and creates many instances, for example:
+
+```text
+payment:<payment-id>:lifecycle
+notification:<notification-id>:telegram
+reconcile:<scheduled-window>
+```
+
+Use Workflow steps for durable provider inspection, the fifteen-minute automated-payment deadline, notification delivery, retries, and repair work. Side effects occur only inside `step.do`, and every step invokes an idempotent adapter operation or kernel command. Workflow state coordinates execution but never becomes commerce truth.
+
+Use `ctx.waitUntil()` only for short non-critical work such as analytics and best-effort cache cleanup. It is not sufficient for Payment, inventory, required notification, or reconciliation work because it supplies no durable retry or recovery record.
+
+Do not add a generic D1 job runner, Cloudflare Queue, or custom lease system in v1. A Queue remains a later scaling seam if independent event fan-out outgrows Workflow execution.
+
+### Durable handoff and healing
+
+D1 commit and Workflow creation cannot be atomic. The minimum recovery contract is:
+
+1. Commit authoritative business state and deterministic task identity in D1.
+2. Await Workflow creation when the request must prove durable handoff.
+3. If handoff fails after commit, return a retryable infrastructure failure; retrying the original idempotent request returns the committed business result and retries the missing Workflow creation.
+4. A Store Cron trigger starts a bounded reconciliation Workflow that finds overdue or incomplete authoritative state and idempotently starts or repairs missing work.
+
+Notification delivery has a narrow delivery record created with the causal transaction. It records logical notification identity, channel, status, attempts, and sanitized last failure. It is not a general outbox or command queue.
+
+## Adapter scope
+
+Implement only adapters required by real v1 integrations: automated payment, SMS OTP, and Telegram. SMS and Telegram adapters accept an already-authorized delivery intent and return typed provider outcomes; they cannot authorize users, choose commerce transitions, or suppress required audit evidence.
+
+Do not predefine courier or tax adapters in v1. Courier integration and dynamic tax calculation are excluded, so those hypothetical interfaces would add surface without a second implementation. Add their seams only when a paid integration supplies concrete requirements. Every adapter is statically registered; runtime plugin loading and adapter-provided Admin interfaces remain excluded.
+
+## Automated payments
+
+The kernel calls one provider-neutral seam. Both Byl and direct QPay adapters ship in v1, but the founder manually configures exactly one for each Store using merchant-owned credentials. Provisioning and Admin do not choose or switch providers, and a Store never enables both concurrently.
+
+```ts
+export interface AutomatedPaymentAdapter {
+  readonly provider: "byl" | "qpay";
+
+  begin(
+    input: BeginProviderPayment,
+  ): Promise<Result<ProviderPayment, ProviderFailure>>;
+
+  inspect(
+    reference: ProviderPaymentReference,
+  ): Promise<Result<ProviderPaymentObservation, ProviderFailure>>;
+
+  close(
+    reference: ProviderPaymentReference,
+  ): Promise<Result<ProviderCloseOutcome, ProviderFailure>>;
+
+  parseWebhook(
+    request: Request,
+  ): Promise<Result<ProviderPaymentReference, ProviderFailure>>;
+}
+```
+
+`begin` receives the kernel Payment and Order references, exact integer-MNT amount, fifteen-minute deadline, callback URL, and optional normalized customer phone. It returns an opaque provider reference and a customer action:
+
+```ts
+export type ProviderCustomerAction =
+  | { kind: "redirect"; url: string }
+  | { kind: "qr"; payload: string; fallbackUrl?: string }
+  | { kind: "app_approval"; message: string };
+```
+
+`inspect` normalizes only `pending`, `confirmed`, or `closed`, plus authenticated provider reference, amount, currency, and event identity. The kernel validates exact Store, Order, MNT amount, and current state before choosing a transition.
+
+`close` means that an attempt is no longer collectible, or reports that it was already confirmed. The adapter hides whether this uses Byl invoice void, direct QPay cancellation, or a future provider's equivalent. Provider errors never mutate commerce state.
+
+A future Storepay adapter may use `app_approval`. Its `confirmed` observation must mean Storepay has accepted or guaranteed the merchant's full sale amount. Customer installments remain between Storepay and its customer and do not become kernel Payment states.
+
+Byl uses its invoice API, not hosted checkout. The kernel retains ownership of catalog, discounts, contact data, totals, inventory, and Orders.
+
+## Automated-payment lifecycle
+
+Automated payment attempts have a fixed fifteen-minute inventory hold. Provider callbacks and Workflow checks call the same small synchronization operation:
+
+```ts
+syncAutomatedPayment(providerReference)
+```
+
+It authenticates current status through the configured adapter, locates the Payment by unique provider reference, and atomically confirms an exact paid Pending attempt. Repeating confirmation returns the existing result. Failure evidence cannot undo a confirmed Payment.
+
+At the deadline, the Workflow:
+
+1. inspects the provider attempt;
+2. confirms it when exact payment is reported;
+3. otherwise calls `close`;
+4. confirms it if close reports a race with completed payment;
+5. expires Payment and reservation and cancels the unpaid Order only after close proves the attempt is no longer collectible.
+
+If provider status is unavailable or contradictory, the Payment remains Pending and inventory remains held. The Workflow retries, and scheduled reconciliation tries again. There is no `needsAttention` state or separate payment-review system.
+
+Callbacks await synchronization before returning provider success. The browser may poll local Order status but does not repeatedly call the provider.
+
+### Switch to bank transfer
+
+Before confirmation, a customer may switch an automated attempt to full-amount bank transfer. The kernel first asks the configured adapter to close the automated attempt. If already confirmed, it confirms that Payment and rejects the switch. If safely closed, one D1 transaction supersedes the old attempt, creates one Awaiting Confirmation transfer attempt, and preserves the same Order and reservation. Uncertain closure changes nothing. At most one collectible attempt exists.
+
+Manual transfer has no automatic deadline. Its reservation remains Active until owner/manager confirmation, rejection, or Order cancellation. Confirmation consumes inventory; rejection or cancellation releases it.
+
+## COD amendment
+
+This contract supersedes the earlier anonymous-COD and `AcceptCodOrder` rules:
+
+- Admin may enable or disable COD for new checkouts.
+- COD requires SMS OTP verification of the checkout phone through the existing Store-scoped Customer verification flow.
+- A successful COD Order belongs to that verified Customer.
+- COD placement immediately consumes inventory; there is no separate `AcceptCodOrder` command.
+- COD Payment remains Awaiting Confirmation until authorized staff records cash collection.
+- Fulfillment may begin after placement while payment awaits collection.
+- Cancellation before handoff restores inventory. A verified complete return after failed delivery permits the accepted post-handoff cancellation and restoration path.
+- Disabling COD affects new checkout only and never rewrites existing Orders.
+
+Anonymous checkout remains available for automated payment and manual bank transfer.
+
+## Inventory and bundle reliability
+
+The approved inventory model remains unchanged except for immediate COD consumption. Placement atomically reserves complete normalized Variant demand for Products and fixed Bundles. Bundle demand is expanded to component Variants before the transaction. Conditional Stock Item updates either reserve all demand or none.
+
+Reservation consumption, release, expiry, and restoration are conditional state transitions with immutable Inventory Entries and resulting balances. Repeated commands return the existing transition. No path edits balances directly. Uncertain automated payment keeps the reservation Active; stock is never released based only on a local timer.
+
+## Notification isolation
+
+Required Telegram and SMS notifications are durable Workflow tasks created after their causal commerce transaction. Notification failure never rolls back or changes Order, Payment, inventory, or Fulfillment state.
+
+Workflow retries temporary failures. Exhausted delivery appears in Admin under Failed Notifications with a Retry action. Retry keeps the same logical notification identity, preventing a second logical send. Every action advertised through Telegram remains available in web Admin.
+
+## Evidence and audit
+
+The accepted append-only evidence model remains sufficient:
+
+- Inventory Entries explain every on-hand and reserved balance change.
+- Financial Entries explain expected, confirmed, and manually refunded money.
+- Audit Events record consequential staff, provider, cancellation, fulfillment, and recovery decisions.
+- Provider references and minimized normalized evidence are retained; secrets and unnecessary direct PII are not.
+- Corrections append compensating evidence and never rewrite history.
+
+The kernel is not event sourced. Current state remains on aggregates, and no growing history arrays are stored on aggregate rows.
+
+## Operator recovery
+
+Normal recovery reuses existing commands and Workflow controls rather than privileged database edits:
+
+- retry a failed notification;
+- retry or restart an errored Workflow instance;
+- confirm or reject manual transfer;
+- confirm COD cash collection;
+- cancel an eligible unpaid Order;
+- record a manual Refund with reason and reference;
+- run scheduled reconciliation again.
+
+No generic force-transition command exists. If provider status is uncertain, the safe state is continued Payment Pending plus held inventory until a later authenticated inspection resolves it.
+
+## Required live proof
+
+Implementation tickets must prove these behaviors against real local or sandbox bindings and provider test modes where credentials exist:
+
+- duplicate checkout key returns one Order;
+- changed payload under the same key is rejected;
+- duplicate callback and callback/poll race confirm once;
+- automated expiry closes the provider attempt before releasing inventory;
+- uncertain provider closure retains inventory;
+- automated-to-transfer switch leaves one collectible attempt;
+- complete Bundle demand reserves and consumes once;
+- COD is absent when disabled and requires OTP when enabled;
+- COD placement consumes inventory immediately;
+- notification failure does not alter commerce state and can be retried;
+- reconciliation repairs a missed Workflow handoff;
+- typed domain and auth Results reach the Solid client unchanged while unexpected 500/network failures use global Query error handling.
+
+Follow the repository proof policy: use the actual browser, curl, Wrangler, and TypeScript CLI harnesses; do not introduce unit/integration tests, mocks, or fake provider behavior. Missing credentials must be reported as blocked rather than simulated as green.
