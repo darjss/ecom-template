@@ -101,7 +101,7 @@ export const LivePurchase = (props: LivePurchaseProps) => {
             </span>
           )}
         </Show>
-        <Show when={state() === "stale"}>Шинэ мэдээлэл авч чадсангүй. Худалдан авалт түр хаалттай.</Show>
+        <Show when={state() === "stale"}>Мэдээлэл шинэ биш байна. Худалдан авалт түр хаалттай.</Show>
       </div>
       <label for="quantity">Тоо ширхэг</label>
       <input

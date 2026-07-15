@@ -15,8 +15,10 @@ export const edgeCache = defineMiddleware(async (context, next) => {
       `public, max-age=${rule.sMaxAge}, stale-while-revalidate=${rule.staleWhileRevalidate}`,
     );
     if (rule.cacheTag) response.headers.set("cache-tag", rule.cacheTag);
-  } else if (!response.headers.has("cache-control")) {
+  } else {
     response.headers.set("cache-control", "private, no-store");
+    response.headers.delete("cloudflare-cdn-cache-control");
+    response.headers.delete("cache-tag");
   }
 
   return response;
