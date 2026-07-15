@@ -20,7 +20,9 @@ The minimum safety boundary remains:
 - make replay harmless through current-state predicates and scoped D1 idempotency;
 - reload the Payment, Order, expected amount, and current state before mutation;
 - invoke the same kernel Confirm or Reject command used by web Admin;
-- record the configured Telegram operator label and user ID as consequential audit evidence.
+- record the configured Telegram operator label and user ID as consequential financial evidence.
+
+The closed actor kind used by Payment Entries and consequential Audit Events includes `telegram_operator`. That actor stores the configured short label and exact numeric Telegram user ID without a Staff foreign key or role snapshot. Financial truth remains in the Payment Entry; an Audit Event is used only where the accepted evidence policy requires one and does not duplicate the ledger fact.
 
 One button tap executes the action. There is no Admin enrollment flow, one-time enrollment link, `telegram_bindings` table, Staff-role revalidation, or second confirmation tap. Telegram notifications and all financial actions remain available in web Admin.
 
@@ -126,8 +128,11 @@ All other accepted recovery rules remain: Production restores are human-authoriz
 The following final decisions resolve stale clauses in earlier artifacts:
 
 - V1 Staff roles are exactly `owner`, `manager`, and `staff`; there is no Fulfillment Staff role.
-- COD placement performs its accepted immediate inventory effect and creates an Awaiting Confirmation cash Payment. There is no `AcceptCodOrder` command or route. Authorized cash collection uses the ordinary Payment confirmation command.
+- COD placement performs its accepted immediate inventory effect and creates an Awaiting Confirmation cash Payment. There is no `AcceptCodOrder` command, route, or Canary Scenario. Authorized cash collection uses the ordinary Payment confirmation command. The Reference Store COD scenario proves OTP-backed placement, immediate inventory consumption, and later cash confirmation instead.
 - Live availability uses `GET /api/catalog/availability?variantIds=...`, is batched, and is `private, no-store`.
+- Public search uses one `CatalogItemSearchResult` discriminated by `kind: product | bundle`. Published Products and Bundles share one FTS projection and endpoint. A Variant SKU resolves to its Product; a Bundle SKU resolves to its Bundle. Category and Collection shortcuts remain separate result kinds, not separate indexes.
+- Elysia HTTP uses route-specific success DTOs and one closed `ApiErrorEnvelope` with meaningful HTTP status codes. Internal kernel operations may use typed Results, but the HTTP adapter maps them once. Serialized Result containers, client `Result.deserialize`, and a second transport-level `InfrastructureFailure` hierarchy are not part of the wire protocol.
+- Customer OTP has one policy: five-minute single-use code; replacement invalidates the previous code; five verification attempts; 30-second resend cooldown; at most five sends per normalized phone per day; and at most ten sends per IP per 15 minutes. All counters use the prefixed `EPHEMERAL_KV` namespace. Earlier overlapping hourly phone/IP windows are removed.
 - Ordinary Catalog, settings, and typed CMS Draft writes are last-write-wins. General aggregate Revision columns and expected-Revision HTTP contracts are absent. Consequential state transitions retain atomic current-state predicates and idempotency where retries occur.
 - Cloudflare Workflow may coordinate payment expiry, provider inspection, notifications, and repair, but D1 remains the only commerce truth. The accepted schema has no generic job table, outbox, notification-delivery table, or Failed Notifications subsystem.
 - A committed commerce mutation followed by failed Workflow creation returns an explicit retryable partial outcome when the request observes the failure. Retrying the original idempotent command may start missing work. A bounded scheduled reconciliation pass detects overdue authoritative Payment, Reservation, and unresolved business state and idempotently starts or repairs required Workflow work.
