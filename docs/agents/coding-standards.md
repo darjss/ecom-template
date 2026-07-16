@@ -62,7 +62,7 @@ For external synchronization, create one authoritative reconciliation function t
 
 ## Typed failures
 
-Kernel and integration operations return Better Results for expected narrow tagged failures. Prefer ordinary `await`, early narrowing, and fluent Result transformations; generator composition is exceptional.
+Kernel and integration operations return Better Results for expected narrow tagged failures. Convert throwing SDK and network work once at the integration boundary. Prefer ordinary `await`, early narrowing, and fluent Result transformations; generator composition is exceptional.
 
 Elysia maps each Result once to a meaningful status and route-specific Valibot envelope. Better Result is never serialized over HTTP or placed inside Query data.
 
@@ -80,7 +80,7 @@ A non-critical external read may fail with an explicit fallback and diagnostic e
 - Solid stores/context own Cart, session, and transient UI state.
 - Solid Primitives storage owns compatible Cart and browser-draft persistence.
 
-Use current Solid Query `useQuery`, `useMutation`, and `useQueries` APIs. Export reusable `queryOptions` and mutation configurations. Create a hook only for genuine reactive composition. Mutations invalidate authoritative queries rather than patching server truth into cache or global state.
+Use current Solid Query `useQuery`, `useMutation`, and `useQueries` APIs. Export reusable `queryOptions` and mutation configurations. Create a hook only for genuine reactive composition. Mutations invalidate authoritative queries rather than patching server truth into cache or global state. Optimistic UI requires a measured need plus cancel, rollback, and revalidation; never use it for inventory, price, payment, or fulfillment truth.
 
 Astro performs consolidated Storefront server reads directly in-process. Do not replace one coherent SSR read with fragmented browser round trips or an HTTP self-call.
 
