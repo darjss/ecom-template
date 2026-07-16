@@ -116,6 +116,7 @@ export const StaffClientErrorSchema = v.variant("kind", [
 export const StaffSessionStateSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("active"), role: StaffRoleSchema }),
   v.strictObject({ kind: v.literal("awaiting_approval") }),
+  v.strictObject({ kind: v.literal("identity_conflict") }),
   v.strictObject({ kind: v.literal("unauthorized") }),
 ]);
 
