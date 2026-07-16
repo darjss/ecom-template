@@ -399,14 +399,9 @@ Checks require an Active Staff Member to have a role. The command transaction pr
 
 There is no address book, cross-Store identity, merge table, or phone-change workflow in v1.
 
-### `telegram_bindings`
+### Telegram action state
 
-- TypeID `id`
-- unique `staff_id`
-- unique `telegram_user_id`
-- enrolled and revoked timestamps
-
-Short-lived enrollment and second-tap tokens live in the prefixed KV namespace. Telegram update IDs and action commands use the shared D1 idempotency table when they can cause a business effect.
+There is no `telegram_bindings` table. Exact Telegram operator IDs and short audit labels are founder-maintained deployment configuration. Opaque bounded Payment action references live in the prefixed KV namespace. Telegram update IDs and financial action commands use the shared D1 idempotency table when they can cause a business effect.
 
 ### `guest_tracking_links`
 
@@ -654,7 +649,7 @@ The implementation must preserve these atomic groups:
 - **Record Refund:** Payment Entries and reconciled Payment/refund-obligation balances.
 - **Adjust inventory:** conditional Stock Item balance and one Inventory Entry.
 - **Publish CMS:** replace one Published aggregate and children from Draft, then remove Draft. Cache purge follows the commit and may report a partial outcome.
-- **Staff authority change:** Staff state/role, affected Better Auth session deletion, Telegram revocation where relevant, and Audit Event.
+- **Staff authority change:** Staff state/role, affected Better Auth session deletion, and Audit Event.
 
 Conditional state updates must affect exactly one expected row. Zero affected rows return a typed conflict or already-resolved result. Constraints and idempotency prevent duplicate business effects even when HTTP, provider, Telegram, Cron, or Workflow delivery repeats.
 

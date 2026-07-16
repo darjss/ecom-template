@@ -4,7 +4,7 @@
 
 **Decision status:** Founder approved.
 
-Each Store has one independently deployed Worker, D1 database, and session KV resource. Staff Members, Customers, sessions, pending approvals, Telegram bindings, and Guest Tracking Links belong to exactly one Store and never link across Stores. Matching Google emails, phone numbers, or Telegram users in another Store confer no identity or authority.
+Each Store has one independently deployed Worker, D1 database, and `EPHEMERAL_KV` resource. Staff Members, Customers, sessions, pending approvals, and Guest Tracking Links belong to exactly one Store and never link across Stores. The Store's founder-maintained Telegram operator allowlist is deployment configuration, never shared identity. Matching Google emails, phone numbers, or Telegram users in another Store confer no identity or authority.
 
 The Store runs two separately configured Better Auth instances. They share infrastructure only where explicitly stated; neither instance accepts the other instance's users, sessions, cookies, or verification records.
 
@@ -14,9 +14,9 @@ The Store runs two separately configured Better Auth instances. They share infra
 | Customer Auth | SMS phone OTP | `/api/auth/customer` | Optional Customer identity and Order history |
 | Demo Admin | Expiring demo password | app-owned demo path | Restricted synthetic demo only |
 | Guest tracking | Order-specific bearer token | public tracking path | Read one Guest Order only |
-| Telegram | Admin-enrolled Telegram user | bot webhook | Companion actions within current Staff authority |
+| Telegram | Founder-allowlisted Telegram operator | bot webhook | Store-local financial companion actions |
 
-Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store session KV binding is sufficient; logical key prefixes isolate Staff, Customer, verification, rate-limit, and Demo Admin records. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
+Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store `EPHEMERAL_KV` binding is sufficient; logical key prefixes isolate Staff, Customer, verification, rate-limit, Demo Admin, cache, and short-lived action records. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
 
 ## Staff identity and approval
 
@@ -67,8 +67,8 @@ Customer Auth accepts a normalized Mongolian phone number and a four-digit OTP w
 - single use;
 - at most five verification attempts before deletion;
 - requesting a replacement invalidates the previous OTP;
-- one SMS per phone per 30 seconds, five per hour, and ten per day;
-- a secondary generous IP limit of 100 OTP requests per hour;
+- one SMS per phone per 30 seconds and at most five per normalized phone per day;
+- at most ten sends per IP per 15 minutes;
 - generic responses that do not disclose whether a Customer exists;
 - only a non-recoverable representation of verification secrets is stored.
 
@@ -90,22 +90,21 @@ Demo Admin may exercise the approved synthetic operating journey but cannot mana
 
 ## Telegram companion authority
 
-Telegram never establishes Staff identity by username, phone number, chat membership, or bot interaction alone. An authenticated Staff Member starts enrollment in web Admin and opens a one-time bot link valid for 10 minutes. The bot binds that Telegram user ID to the Staff record in that Store. Staff revocation removes its Telegram authorization.
+Telegram never establishes Staff identity. Each Store has founder-maintained deployment configuration containing exact numeric Telegram operator IDs and short audit labels. Merchant Admin cannot enroll operators or grant Telegram authority.
 
 Telegram bank-transfer Confirm and Reject actions:
 
-1. verify the Telegram webhook secret and reject replayed updates;
-2. resolve the Store-scoped Telegram binding;
-3. query the current active Staff record and require Owner or Manager;
+1. verify the Store's Telegram webhook secret and reject replayed updates;
+2. require an exact allowlisted Telegram user ID;
+3. consume one opaque bounded action reference created for that Payment message;
 4. revalidate Payment state, expected amount, and command idempotency;
-5. require a second confirmation tap through a short-lived, single-use action;
-6. execute the same shared-kernel command as web Admin;
-7. record the acting Staff Member and authenticated Telegram evidence in the compact audit trail.
+5. execute the same shared-kernel Confirm or Reject command used by web Admin;
+6. record the configured operator label and Telegram user ID as consequential evidence.
 
-Telegram is a notification and command companion only. It never owns Payment, Order, role, session, or audit truth, and every capability remains available in web Admin.
+One button tap executes the action. There is no enrollment, Staff-role lookup, or second confirmation tap. Telegram never owns Payment, Order, role, session, or audit truth, and every capability remains available in web Admin.
 
 ## Implementation and proof handoff
 
 The schema ticket owns physical columns, indexes, Better Auth model names, and migrations without changing these authority boundaries. The interface ticket owns Elysia/Eden route shapes and command middleware. Implementation must update the Better Auth schema-generation config for both instances and preserve `aot: false`.
 
-Live proof must use real Google OAuth on an approved canonical origin, real D1 and KV bindings, the private SMS Worker service binding with Android delivery, actual browser cookies, and an actual Telegram bot. It must demonstrate pending Staff denial, approval, role enforcement, all-session revocation, cross-Store cookie/session rejection, OTP expiry and limits, Guest linking, demo build exclusion, Telegram enrollment, replay rejection, and financial role checks. Missing credentials or infrastructure are reported as blocked rather than replaced with mocks or stubs.
+Live proof must use real Google OAuth on an approved canonical origin, real D1 and KV bindings, the private SMS Worker service binding with Android delivery, actual browser cookies, and an actual Telegram bot. It must demonstrate pending Staff denial, approval, role enforcement, all-session revocation, cross-Store cookie/session rejection, OTP expiry and limits, Guest linking, demo build exclusion, exact Telegram allowlist enforcement, bounded one-tap action references, replay rejection, and financial command checks. Missing credentials or infrastructure are reported as blocked rather than replaced with mocks or stubs.

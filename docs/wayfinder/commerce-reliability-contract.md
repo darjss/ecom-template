@@ -31,7 +31,7 @@ Use one small shared D1 idempotency implementation rather than a command framewo
 
 `(scope, key)` is unique within the Store database. Repeating the same key and request returns the existing result. Reusing a key with a different request hash returns a typed conflict. The record is written in the same transaction as the business mutation.
 
-Use it for checkout and other externally retried commands. Provider references also have direct uniqueness constraints. Workflow steps use deterministic keys derived from Workflow instance identity and step purpose. Current-state checks and aggregate Revisions remain the ordinary protection for staff actions and scheduled transitions.
+Use it for checkout and other externally retried commands. Provider references also have direct uniqueness constraints. Workflow steps use deterministic keys derived from Workflow instance identity and step purpose. Current-state predicates, direct uniqueness constraints, and command idempotency protect staff actions and scheduled transitions; there are no general aggregate Revision fields.
 
 Order-creating keys live with their Orders. Provider transaction references and financial evidence are retained for the Store lifetime.
 
@@ -226,7 +226,7 @@ Reservation consumption, release, expiry, and restoration are conditional state 
 
 Required Telegram and SMS notifications are durable Workflow tasks created after their causal commerce transaction. Notification failure never rolls back or changes Order, Payment, inventory, or Fulfillment state.
 
-Workflow retries temporary failures. Exhausted delivery appears in Admin under Failed Notifications with a Retry action. Retry keeps the same logical notification identity, preventing a second logical send. Every action advertised through Telegram remains available in web Admin.
+Workflow retries temporary failures. Exhausted delivery emits a restricted Evlog event and follows the operations runbook; v1 has no Failed Notifications subsystem or notification-delivery table. A manual retrigger retains the same logical notification identity so it cannot create a second logical send. Every action advertised through Telegram remains available in web Admin.
 
 ## Evidence and audit
 
