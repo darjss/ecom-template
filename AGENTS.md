@@ -1,51 +1,50 @@
 # Agent conventions
 
-Astro 7 SSR on Cloudflare Workers. SolidJS islands (never React). Tailwind v4 — theme lives in `src/styles/global.css` + `src/styles/base.css` (Zaidan vega; don't hand-edit base.css).
+Before coding, read [`docs/agents/coding-standards.md`](docs/agents/coding-standards.md). For architecture, [`docs/wayfinder/final-scope-reconciliation.md`](docs/wayfinder/final-scope-reconciliation.md) overrides older artifacts.
 
-## Layout
+## North star
 
-- `src/pages` — Astro routes; `/app/[...path].astro` hosts the Solid SPA (`src/components/app`), `/api/[...slug].ts` hosts Elysia (`src/server/api`)
-- `src/server` — API (`api/`), db (`db/`), auth (`lib/auth.ts`), billing seam (`billing/`)
-- `src/lib` — client-shared code: Eden client (`api.ts`), auth client, plans, cache map, form helper, queries
-- `src/middleware` — edge cache + session guard
+- **Fix causes, not symptoms.** Make invalid internal states impossible at their source.
+- **Use the simplest maintainable means.** Never add enterprise-style structure or hypothetical extension points.
+- This is greenfield software. Prefer a coherent breaking correction over compatibility with a bad internal interface.
+- Commit each small coherent change.
 
-## Product scale and complexity budget
+## Product scale
 
-- Target small independent Stores: typically 10–20 Orders per day, designed comfortably for roughly 50 Orders per day and merchant audiences up to roughly 50,000 followers. These are sizing assumptions, not artificial hard limits.
-- Prefer the smallest reliable design for this scale. Do not chase hypothetical scale, generic platform flexibility, regulatory ceremony, distributed coordination, or enterprise operations without current evidence.
-- Preserve basic safety and a strong code foundation: Store isolation, authorization, validation, atomic commercial and inventory truth, idempotency where retries occur, recoverable operations, and compact evidence for consequential actions.
-- Add an abstraction or seam only when it hides real complexity or supports an accepted variation. Avoid speculative services, adapters, event systems, configuration layers, and extension points.
+Design for independent Stores doing roughly 10–20 Orders per day, comfortably around 50 Orders per day and audiences up to about 50,000 followers. Preserve Store isolation, authorization, validation, atomic commercial and inventory truth, retry idempotency, recoverability, and compact evidence. Do not optimize for unsupported enterprise scale.
 
-## Rules
+## Stack and ownership
 
-- Strict TS, no `any`, no type assertions, named exports only, no classes except the error hierarchy (`AppError`, `ApiError`)
-- No inline comments except the TODO seams already present
-- Files stay small and single-purpose; ~150 lines needs a reason
-- API: one Elysia plugin per concern, TypeBox `t` validation, throw `AppError` subclasses; keep `aot: false`
-- Client data: solid-query through the shared `queryClient`; mutations invalidate queries — never poke the cache
-- Forms: TanStack Form + Valibot; keep credential forms out of local draft persistence
-- Icons: `lucide-solid/icons/<name>` deep imports only — the barrel import breaks SSR in workerd
-- UI components: `pnpm dlx shadcn@latest add @zaidan/<name>` into `src/components/ui`
-- DB: cuid2 ids + createdAt/updatedAt via `src/server/db/columns.ts`; explicit indexes; after schema changes run `pnpm db:generate && pnpm db:migrate:local`
-- Auth schema changes (new plugins): edit `scripts/auth-schema.config.ts` to match `src/server/lib/auth.ts`, run `pnpm auth:generate`
-- Env vars: add to `src/env.ts` (valibot), `.dev.vars.example`, and `wrangler.jsonc` vars if public; rerun `wrangler types`
+Astro 7 SSR runs on Cloudflare Workers. SolidJS powers islands and the `/admin/*` SPA; never React. Elysia owns `/api`. Tailwind v4 Theme output belongs in `src/styles/global.css`; do not hand-edit Zaidan-generated `base.css`.
 
-## Agent skills
+The target workspace has one minimal Store app and nine shared packages: `contracts`, `kernel`, `api`, `client`, `admin`, `storefront`, `ui`, `integrations`, and `delivery`. See [`docs/architecture/bootstrap-plan.md`](docs/architecture/bootstrap-plan.md).
 
-### Issue tracker
+- Valibot owns runtime contracts. Raw Drizzle rows never cross the browser boundary.
+- Better Result is internal. HTTP uses meaningful statuses and typed envelopes; Query data never contains Result containers.
+- Server owners import fixed bindings directly from `cloudflare:workers`; do not inject binding wrappers.
+- TanStack Query owns remote state, TanStack Form owns forms, URLs own shareable navigation, and Solid stores/context own Cart/session/UI state.
+- Mutations invalidate authoritative queries rather than patching cache truth.
+- Store customization replaces Astro route presentation while shared packages retain commerce behavior and accessibility.
+- Solar Icons only, through deep Solid imports where applicable.
 
-Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+## Hard guardrails
 
-### Triage labels
+Strict TypeScript: no `any`, unchecked assertions, non-null assertions, ignored errors, or classes except the established error hierarchy. Use named exports and feature public entrypoints. Keep routes thin and raw table access inside feature persistence modules. Cross-feature backend calls are direct operations, never HTTP self-calls.
 
-The canonical triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+Do not add unit or integration tests, mocks, stubs, or fake providers. Verify frontend work in a real browser; verify API/backend work with real curl or a focused TypeScript CLI harness. For model behavior, build an interactive CLI harness.
 
-### Domain docs
+Add dependencies only at an accepted owning seam. Do not introduce a competing validation, Result, state, date, icon, motion, logging, utility, or matching stack.
 
-This is a single-context repository. See `docs/agents/domain.md`.
+## Repository operations
 
-When synthesizing or implementing Wayfinder decisions, apply `docs/wayfinder/final-scope-reconciliation.md` before older artifacts; it records the final founder-approved simplifications and precedence corrections.
+- UI components: `pnpm dlx shadcn@latest add @zaidan/<name>` into the owning shared UI package.
+- Schema changes: update the kernel schema, then run the repository's generate and local-migrate commands.
+- Better Auth plugin changes: update its schema-generation config and regenerate.
+- Environment variables: update Valibot env contracts, `.dev.vars.example`, public Wrangler vars where applicable, and regenerate binding types.
+- Issues and PRDs: [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+- Triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
+- Domain language: [`docs/agents/domain.md`](docs/agents/domain.md).
 
-## Verify
+## Proof
 
-`pnpm typecheck && pnpm lint && pnpm build`, then `pnpm dev` and curl `/api/health`.
+Run every applicable repository gate: frozen install, format, lint, TypeScript 7 typecheck, Astro check, Knip, Sherif, dependency-direction checks, and production build. Then run the app through Portless, inspect affected browser behavior, and curl `/api/health` plus relevant cache/no-store headers. Missing credentials or infrastructure means blocked, not passed.
