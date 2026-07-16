@@ -4,8 +4,6 @@ dist/
 .wrangler/
 .dev.vars
 .env
-*.log
+.private/
+coverage/
 worker-configuration.d.ts
-/.private/
-/CONTEXT.md
-/FOUNDER-BRIEF.md

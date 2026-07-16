@@ -1,0 +1,8 @@
+schemaVersion: 1
+targets:
+  urnuun-local:
+    kind: local
+    app: "@shops/urnuun-48"
+    resourcePrefix: urnuun-local
+    workerName: urnuun-48-local
+    routes: []

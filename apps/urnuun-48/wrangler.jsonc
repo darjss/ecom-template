@@ -1,0 +1,50 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "urnuun-48",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "urnuun-48-db",
+      "database_id": "00000000-0000-0000-0000-000000000048",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "EPHEMERAL_KV",
+      "id": "00000000000000000000000000000048",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "urnuun-48-media",
+    },
+  ],
+  "workflows": [
+    {
+      "name": "urnuun-48-background",
+      "binding": "STORE_WORKFLOW",
+      "class_name": "StoreWorkflow",
+    },
+  ],
+  "services": [
+    {
+      "binding": "SMS_GATEWAY",
+      "service": "shared-sms-gateway",
+    },
+  ],
+  "triggers": {
+    "crons": ["17 2 * * *"],
+  },
+  "vars": {
+    "PUBLIC_STORE_ORIGIN": "http://urnuun-48.shop.localhost:4321",
+  },
+}

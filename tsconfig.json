@@ -1,22 +1,17 @@
 {
-  "extends": "astro/tsconfigs/strict",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "verbatimModuleSyntax": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    },
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
   },
   "include": [
-    ".astro/types.d.ts",
-    "worker-configuration.d.ts",
-    "src",
-    "scripts",
-    "drizzle.config.ts"
-  ],
-  "exclude": ["dist", ".astro", "node_modules"]
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "apps/urnuun-48/src/**/*.ts",
+    "apps/urnuun-48/src/**/*.tsx",
+    "apps/urnuun-48/worker-configuration.d.ts",
+    "scripts/**/*.mjs"
+  ]
 }

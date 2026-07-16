@@ -1,0 +1,21 @@
+{
+  "name": "@ecom/kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/db/schema.ts"
+  },
+  "dependencies": {
+    "@ecom/contracts": "workspace:*",
+    "better-auth": "1.6.23",
+    "better-result": "2.9.2",
+    "drizzle-orm": "0.45.2",
+    "evlog": "2.21.0",
+    "json-canonicalize": "2.0.0"
+  },
+  "devDependencies": {
+    "better-sqlite3": "12.11.1"
+  }
+}

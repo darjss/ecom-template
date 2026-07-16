@@ -1,0 +1,43 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"]
+    },
+    "apps/urnuun-48": {
+      "entry": ["src/pages/**/*.{astro,ts}", "src/profile/*.ts"]
+    },
+    "packages/*": {
+      "entry": ["src/index.{ts,tsx}"]
+    },
+    "packages/delivery": {
+      "entry": ["src/index.ts", "src/cli.ts"]
+    },
+    "packages/kernel": {
+      "entry": ["src/index.ts", "scripts/*.ts", "drizzle.config.ts"]
+    }
+  },
+  "ignoreDependencies": [
+    "@astrojs/check",
+    "@corvu/drawer",
+    "@date-fns/tz",
+    "@ecom/client",
+    "@ecom/contracts",
+    "@ecom/integrations",
+    "@ecom/kernel",
+    "@kobalte/core",
+    "@solidjs/router",
+    "@types/better-sqlite3",
+    "better-auth",
+    "better-result",
+    "class-variance-authority",
+    "cloudflare",
+    "clsx",
+    "date-fns",
+    "evlog",
+    "json-canonicalize",
+    "solid-js",
+    "tailwind-merge",
+    "tailwindcss"
+  ]
+}

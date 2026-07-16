@@ -1,0 +1,16 @@
+{
+  "name": "@ecom/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@date-fns/tz": "1.4.1",
+    "@ecom/contracts": "workspace:*",
+    "better-result": "2.9.2",
+    "date-fns": "4.1.0",
+    "valibot": "1.4.2"
+  }
+}

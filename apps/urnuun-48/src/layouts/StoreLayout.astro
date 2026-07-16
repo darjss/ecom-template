@@ -1,0 +1,27 @@
+---
+import { ClientRouter } from "astro:transitions";
+import "@ecom/ui/styles.css";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f6f0df" />
+    <title>{title}</title>
+    <ClientRouter />
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Үндсэн агуулга руу очих</a>
+    <slot />
+  </body>
+</html>
