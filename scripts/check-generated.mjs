@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 const authOutputs = [
   {
@@ -14,21 +14,27 @@ const authOutputs = [
   },
 ];
 const trackedMigrations = "packages/kernel/migrations";
+const kernelSchema = "packages/kernel/src/db/schema.ts";
 const authWriteCommand = "pnpm auth:generate";
 const migrationWriteCommand = "pnpm db:generate";
+const commandTimeoutMs = 300_000;
 
-export const isFatalGeneratedOutput = (output) => /(?:^|\n)(?:Error {2}|\w*Error:)/.test(output);
+const isFatalGeneratedOutput = (output) => /(?:^|\n)(?:Error {2}|\w*Error:)/.test(output);
 
 const run = (args, label, temporaryRoot) => {
   const result = spawnSync("pnpm", args, {
     cwd: process.cwd(),
     encoding: "utf8",
     env: process.env,
+    timeout: commandTimeoutMs,
   });
   if (result.error) {
+    if (result.error.code === "ETIMEDOUT") {
+      throw new Error(`${label} timed out after ${commandTimeoutMs}ms`);
+    }
     throw new Error(`${label} could not start: ${result.error.message}`);
   }
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
     .replaceAll(temporaryRoot, "<temporary directory>")
     .trim();
   if (result.status !== 0 || isFatalGeneratedOutput(output)) {
@@ -103,6 +109,23 @@ try {
     temporaryRoot,
   );
 
+  let temporarySchemaSource = await readFile(kernelSchema, "utf8");
+  for (const { tracked, generated } of temporaryAuthOutputs) {
+    const trackedSpecifier = relative(dirname(kernelSchema), tracked)
+      .replaceAll("\\", "/")
+      .replace(/\.ts$/, "");
+    const trackedToken = JSON.stringify(trackedSpecifier);
+    if (!temporarySchemaSource.includes(trackedToken)) {
+      throw new Error(`${kernelSchema}: missing generated auth export ${trackedSpecifier}`);
+    }
+    temporarySchemaSource = temporarySchemaSource.replace(
+      trackedToken,
+      JSON.stringify(generated.replaceAll("\\", "/")),
+    );
+  }
+  const temporarySchema = join(temporaryRoot, "schema.ts");
+  await writeFile(temporarySchema, temporarySchemaSource);
+
   const temporaryMigrations = join(temporaryRoot, "migrations");
   await cp(trackedMigrations, temporaryMigrations, { recursive: true });
   run(
@@ -113,7 +136,7 @@ try {
       "--dialect",
       "sqlite",
       "--schema",
-      "packages/kernel/src/db/schema.ts",
+      temporarySchema,
       "--out",
       relative(process.cwd(), temporaryMigrations),
     ],

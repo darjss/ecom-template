@@ -21,8 +21,7 @@ const forbiddenPackages = new Map([
   ["lucide", "Lucide"],
   ["lucide-react", "Lucide"],
   ["lucide-solid", "Lucide"],
-  ["@polar-sh/sdk", "Polar"],
-  ["@polar-sh/better-auth", "Polar"],
+  ["@polar-sh", "Polar"],
   ["@sinclair/typebox", "TypeBox"],
   ["typebox", "TypeBox"],
   ["@paralleldrive/cuid2", "Cuid2"],
@@ -136,9 +135,12 @@ for (const packageName of packageNames) {
   }
 }
 
-const appNames = await readdir("apps");
-for (const appName of appNames) {
-  const manifestPath = join("apps", appName, "package.json");
+const appEntries = await readdir("apps", { withFileTypes: true });
+for (const appEntry of appEntries) {
+  if (!appEntry.isDirectory()) {
+    continue;
+  }
+  const manifestPath = join("apps", appEntry.name, "package.json");
   const manifest = await readManifest(manifestPath);
   checkRemovedDependencies(manifestPath, manifest);
   for (const [, dependency] of dependencyEntries(manifest)) {
