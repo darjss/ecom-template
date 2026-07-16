@@ -38,6 +38,16 @@ body {
   color: var(--muted);
   line-height: 1.65;
 }
+.login-health {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid oklch(24% 0.025 66 / 0.12);
+  font-size: 0.875rem;
+}
 .login-message {
   min-height: 1.5rem;
   margin: 1rem 0 0;

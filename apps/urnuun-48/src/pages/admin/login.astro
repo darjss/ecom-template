@@ -1,5 +1,5 @@
 ---
-import { StaffLoginForm } from "@ecom/admin";
+import { AdminHealthStatus, StaffLoginForm } from "@ecom/admin";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 
 Astro.response.headers.set("Cache-Control", "private, no-store");
@@ -11,6 +11,10 @@ Astro.response.headers.set("Cache-Control", "private, no-store");
       <h1 id="login-title">Ажилтны нэвтрэх</h1>
       <p>Зөвшөөрөгдсөн Google хаягаар нэвтэрсний дараа удирдлагын хэсэг нээгдэнэ.</p>
       <StaffLoginForm client:only="solid-js" />
+      <div class="login-health">
+        <span>Системийн төлөв</span>
+        <AdminHealthStatus client:only="solid-js" />
+      </div>
       <a class="store-link-back" href="/">Дэлгүүр рүү буцах</a>
     </section>
   </main>

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./cache": "./src/cache.ts",
     "./cart": "./src/CartIsland.tsx"
   },
   "dependencies": {
