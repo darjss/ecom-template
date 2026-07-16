@@ -4,7 +4,7 @@ CREATE TABLE `system_metadata` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `customer_auth_account` (
+CREATE TABLE `customer_auth_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`account_id` text NOT NULL,
 	`provider_id` text NOT NULL,
@@ -18,11 +18,11 @@ CREATE TABLE `customer_auth_account` (
 	`password` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `customer_auth_user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `customer_auth_users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `customer_auth_account_userId_idx` ON `customer_auth_account` (`user_id`);--> statement-breakpoint
-CREATE TABLE `customer_auth_session` (
+CREATE INDEX `customer_auth_accounts_userId_idx` ON `customer_auth_accounts` (`user_id`);--> statement-breakpoint
+CREATE TABLE `customer_auth_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
 	`token` text NOT NULL,
@@ -31,12 +31,12 @@ CREATE TABLE `customer_auth_session` (
 	`ip_address` text,
 	`user_agent` text,
 	`user_id` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `customer_auth_user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `customer_auth_users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `customer_auth_session_token_unique` ON `customer_auth_session` (`token`);--> statement-breakpoint
-CREATE INDEX `customer_auth_session_userId_idx` ON `customer_auth_session` (`user_id`);--> statement-breakpoint
-CREATE TABLE `customer_auth_user` (
+CREATE UNIQUE INDEX `customer_auth_sessions_token_unique` ON `customer_auth_sessions` (`token`);--> statement-breakpoint
+CREATE INDEX `customer_auth_sessions_userId_idx` ON `customer_auth_sessions` (`user_id`);--> statement-breakpoint
+CREATE TABLE `customer_auth_users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`email` text NOT NULL,
@@ -46,8 +46,8 @@ CREATE TABLE `customer_auth_user` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `customer_auth_user_email_unique` ON `customer_auth_user` (`email`);--> statement-breakpoint
-CREATE TABLE `customer_auth_verification` (
+CREATE UNIQUE INDEX `customer_auth_users_email_unique` ON `customer_auth_users` (`email`);--> statement-breakpoint
+CREATE TABLE `customer_auth_verifications` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
 	`value` text NOT NULL,
@@ -56,8 +56,8 @@ CREATE TABLE `customer_auth_verification` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `customer_auth_verification_identifier_idx` ON `customer_auth_verification` (`identifier`);--> statement-breakpoint
-CREATE TABLE `staff_auth_account` (
+CREATE INDEX `customer_auth_verifications_identifier_idx` ON `customer_auth_verifications` (`identifier`);--> statement-breakpoint
+CREATE TABLE `staff_auth_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`account_id` text NOT NULL,
 	`provider_id` text NOT NULL,
@@ -71,11 +71,11 @@ CREATE TABLE `staff_auth_account` (
 	`password` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `staff_auth_user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `staff_auth_users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `staff_auth_account_userId_idx` ON `staff_auth_account` (`user_id`);--> statement-breakpoint
-CREATE TABLE `staff_auth_session` (
+CREATE INDEX `staff_auth_accounts_userId_idx` ON `staff_auth_accounts` (`user_id`);--> statement-breakpoint
+CREATE TABLE `staff_auth_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
 	`token` text NOT NULL,
@@ -84,12 +84,12 @@ CREATE TABLE `staff_auth_session` (
 	`ip_address` text,
 	`user_agent` text,
 	`user_id` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `staff_auth_user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `staff_auth_users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `staff_auth_session_token_unique` ON `staff_auth_session` (`token`);--> statement-breakpoint
-CREATE INDEX `staff_auth_session_userId_idx` ON `staff_auth_session` (`user_id`);--> statement-breakpoint
-CREATE TABLE `staff_auth_user` (
+CREATE UNIQUE INDEX `staff_auth_sessions_token_unique` ON `staff_auth_sessions` (`token`);--> statement-breakpoint
+CREATE INDEX `staff_auth_sessions_userId_idx` ON `staff_auth_sessions` (`user_id`);--> statement-breakpoint
+CREATE TABLE `staff_auth_users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`email` text NOT NULL,
@@ -99,8 +99,8 @@ CREATE TABLE `staff_auth_user` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `staff_auth_user_email_unique` ON `staff_auth_user` (`email`);--> statement-breakpoint
-CREATE TABLE `staff_auth_verification` (
+CREATE UNIQUE INDEX `staff_auth_users_email_unique` ON `staff_auth_users` (`email`);--> statement-breakpoint
+CREATE TABLE `staff_auth_verifications` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
 	`value` text NOT NULL,
@@ -109,6 +109,6 @@ CREATE TABLE `staff_auth_verification` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `staff_auth_verification_identifier_idx` ON `staff_auth_verification` (`identifier`);
+CREATE INDEX `staff_auth_verifications_identifier_idx` ON `staff_auth_verifications` (`identifier`);
 --> statement-breakpoint
 INSERT INTO `system_metadata` (`key`, `value`, `updated_at`) VALUES ('schema', 'bootstrap-1', unixepoch('subsecond') * 1000);

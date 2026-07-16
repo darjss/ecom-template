@@ -1,24 +1,10 @@
-import {
-  ApiErrorSchema,
-  HealthResponseSchema,
-  type ApiError,
-  type HealthResponse,
-} from "@ecom/contracts";
+import type { ClientError, HealthResponse } from "@ecom/contracts";
 import { queryOptions } from "@tanstack/solid-query";
-import * as v from "valibot";
+import { requestHealth } from "../request";
 
 export const healthQueryOptions = () =>
-  queryOptions<HealthResponse, ApiError>({
+  queryOptions<HealthResponse, ClientError>({
     queryKey: ["health"],
-    queryFn: async () => {
-      const response = await fetch("/api/health", {
-        headers: { accept: "application/json" },
-      });
-      const body: unknown = await response.json();
-      if (!response.ok) {
-        throw v.parse(ApiErrorSchema, body);
-      }
-      return v.parse(HealthResponseSchema, body);
-    },
+    queryFn: requestHealth,
     staleTime: 30_000,
   });

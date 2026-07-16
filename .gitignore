@@ -5,6 +5,7 @@ dist/
 .dev.vars
 .env
 .private/
+.delivery/
 coverage/
 worker-configuration.d.ts
 *.tsbuildinfo

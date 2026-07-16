@@ -13,5 +13,8 @@ const { title } = Astro.props;
     <meta name="robots" content="noindex" />
     <title>{title}</title>
   </head>
-  <body><slot /></body>
+  <body>
+    <a class="admin-skip-link" href="#admin-content">Үндсэн агуулга руу очих</a>
+    <slot />
+  </body>
 </html>

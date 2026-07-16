@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn"],
+  "jsPlugins": ["eslint-plugin-solid"],
   "categories": {
     "correctness": "error",
     "suspicious": "error",
@@ -8,12 +9,24 @@
   },
   "rules": {
     "no-await-in-loop": "off",
+    "curly": "error",
+    "eqeqeq": "error",
     "no-console": "error",
+    "no-duplicate-imports": "error",
     "no-debugger": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/no-floating-promises": "error",
-    "unicorn/no-array-for-each": "error"
+    "unicorn/no-array-for-each": "error",
+    "solid/components-return-once": "error",
+    "solid/no-destructure": "error",
+    "solid/reactivity": "error"
   },
+  "overrides": [
+    {
+      "files": ["packages/client/src/cart/**/*.tsx"],
+      "rules": { "solid/reactivity": "off" }
+    }
+  ],
   "ignorePatterns": ["**/.astro/**", "**/dist/**", "**/worker-configuration.d.ts"]
 }

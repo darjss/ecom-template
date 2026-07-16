@@ -1,9 +1,8 @@
 import { createStoreQueryClient, healthQueryOptions } from "@ecom/client";
-import { Button } from "@ecom/ui";
+import { Route, Router } from "@solidjs/router";
 import { QueryClientProvider, useQuery } from "@tanstack/solid-query";
-import { For, Show } from "solid-js";
-
-const navigation = ["Тойм", "Захиалга", "Бараа", "Агуулга"];
+import { Show } from "solid-js";
+export { StaffLoginForm } from "./StaffLoginForm";
 
 const Dashboard = () => {
   const health = useQuery(() => healthQueryOptions());
@@ -14,33 +13,27 @@ const Dashboard = () => {
           Өрнүүн 48
         </a>
         <nav>
-          <For each={navigation}>
-            {(item, index) => (
-              <a classList={{ active: index() === 0 }} href={`/admin?view=${index()}`}>
-                {item}
-              </a>
-            )}
-          </For>
+          <a class="active" aria-current="page" href="/admin">
+            Тойм
+          </a>
         </nav>
         <a class="store-link" href="/">
           Дэлгүүр рүү очих
         </a>
       </aside>
-      <main class="admin-main" tabindex="-1">
+      <main id="admin-content" class="admin-main" tabindex="-1">
         <header>
           <div>
             <p class="eyebrow">Өнөөдөр</p>
-            <h1>Дэлгүүрийн тойм</h1>
+            <h1>Дэлгүүрийн төлөв</h1>
           </div>
-          <Button>Шинэ бараа</Button>
         </header>
         <section class="attention" aria-labelledby="attention-title">
           <div>
-            <p class="eyebrow">Анхаарах зүйл</p>
-            <h2 id="attention-title">Өнөөдрийн ажил цэгцтэй байна</h2>
-            <p>Шинэ захиалга орж ирэхэд энд хамгийн түрүүнд харагдана.</p>
+            <p class="eyebrow">Bootstrap</p>
+            <h2 id="attention-title">Үйл ажиллагааны суурь бэлэн</h2>
+            <p>Худалдааны боломжууд дараагийн батлагдсан ажлуудаар нэмэгдэнэ.</p>
           </div>
-          <span class="status-dot">0 хүлээгдэж буй</span>
         </section>
         <section class="operations" aria-labelledby="operations-title">
           <div>
@@ -49,11 +42,7 @@ const Dashboard = () => {
           </div>
           <Show when={!health.isError} fallback={<span class="health unavailable">Сааталтай</span>}>
             <Show when={health.data} fallback={<span class="health pending">Шалгаж байна</span>}>
-              {(data) => (
-                <span class="health ready">
-                  {data().data.database === "connected" ? "Хэвийн" : "Сааталтай"}
-                </span>
-              )}
+              <span class="health ready">Хэвийн</span>
             </Show>
           </Show>
         </section>
@@ -62,8 +51,14 @@ const Dashboard = () => {
   );
 };
 
+const AdminRoutes = () => (
+  <Router>
+    <Route path="/*" component={Dashboard} />
+  </Router>
+);
+
 export const AdminApp = () => (
   <QueryClientProvider client={createStoreQueryClient()}>
-    <Dashboard />
+    <AdminRoutes />
   </QueryClientProvider>
 );

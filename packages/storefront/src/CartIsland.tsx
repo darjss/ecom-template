@@ -6,13 +6,25 @@ export type FeaturedItem = {
   readonly id: string;
   readonly title: string;
   readonly unitPriceMnt: number;
+  readonly storageKey: string;
 };
 
 const CartControls = (props: FeaturedItem) => {
   const cart = useCart();
   return (
     <div class="cart-controls" aria-live="polite">
-      <Button onClick={() => cart.addLine({ ...props, quantity: 1 })}>Сагсанд нэмэх</Button>
+      <Button
+        onClick={() =>
+          cart.addLine({
+            id: props.id,
+            title: props.title,
+            unitPriceMnt: props.unitPriceMnt,
+            quantity: 1,
+          })
+        }
+      >
+        Сагсанд нэмэх
+      </Button>
       <span class="cart-count">
         <Bag size={20} aria-hidden="true" />
         <Show when={cart.itemCount() > 0} fallback="Сагс хоосон">
@@ -20,7 +32,7 @@ const CartControls = (props: FeaturedItem) => {
         </Show>
       </span>
       <Show when={cart.itemCount() > 0}>
-        <Button tone="quiet" onClick={cart.clear}>
+        <Button variant="secondary" onClick={cart.clear}>
           Цэвэрлэх
         </Button>
       </Show>
@@ -29,7 +41,7 @@ const CartControls = (props: FeaturedItem) => {
 };
 
 export const CartIsland = (props: FeaturedItem) => (
-  <CartProvider>
+  <CartProvider storageKey={props.storageKey}>
     <CartControls {...props} />
   </CartProvider>
 );

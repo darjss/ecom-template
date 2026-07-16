@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
-export const customer_auth_user = sqliteTable("customer_auth_user", {
+export const customer_auth_users = sqliteTable("customer_auth_users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
@@ -16,8 +16,8 @@ export const customer_auth_user = sqliteTable("customer_auth_user", {
     .notNull(),
 });
 
-export const customer_auth_session = sqliteTable(
-  "customer_auth_session",
+export const customer_auth_sessions = sqliteTable(
+  "customer_auth_sessions",
   {
     id: text("id").primaryKey(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
@@ -32,20 +32,20 @@ export const customer_auth_session = sqliteTable(
     userAgent: text("user_agent"),
     userId: text("user_id")
       .notNull()
-      .references(() => customer_auth_user.id, { onDelete: "cascade" }),
+      .references(() => customer_auth_users.id, { onDelete: "cascade" }),
   },
-  (table) => [index("customer_auth_session_userId_idx").on(table.userId)],
+  (table) => [index("customer_auth_sessions_userId_idx").on(table.userId)],
 );
 
-export const customer_auth_account = sqliteTable(
-  "customer_auth_account",
+export const customer_auth_accounts = sqliteTable(
+  "customer_auth_accounts",
   {
     id: text("id").primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
       .notNull()
-      .references(() => customer_auth_user.id, { onDelete: "cascade" }),
+      .references(() => customer_auth_users.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -64,11 +64,11 @@ export const customer_auth_account = sqliteTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("customer_auth_account_userId_idx").on(table.userId)],
+  (table) => [index("customer_auth_accounts_userId_idx").on(table.userId)],
 );
 
-export const customer_auth_verification = sqliteTable(
-  "customer_auth_verification",
+export const customer_auth_verifications = sqliteTable(
+  "customer_auth_verifications",
   {
     id: text("id").primaryKey(),
     identifier: text("identifier").notNull(),
@@ -82,24 +82,24 @@ export const customer_auth_verification = sqliteTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("customer_auth_verification_identifier_idx").on(table.identifier)],
+  (table) => [index("customer_auth_verifications_identifier_idx").on(table.identifier)],
 );
 
-export const customer_auth_userRelations = relations(customer_auth_user, ({ many }) => ({
-  customer_auth_sessions: many(customer_auth_session),
-  customer_auth_accounts: many(customer_auth_account),
+export const customer_auth_usersRelations = relations(customer_auth_users, ({ many }) => ({
+  customer_auth_sessionss: many(customer_auth_sessions),
+  customer_auth_accountss: many(customer_auth_accounts),
 }));
 
-export const customer_auth_sessionRelations = relations(customer_auth_session, ({ one }) => ({
-  customer_auth_user: one(customer_auth_user, {
-    fields: [customer_auth_session.userId],
-    references: [customer_auth_user.id],
+export const customer_auth_sessionsRelations = relations(customer_auth_sessions, ({ one }) => ({
+  customer_auth_users: one(customer_auth_users, {
+    fields: [customer_auth_sessions.userId],
+    references: [customer_auth_users.id],
   }),
 }));
 
-export const customer_auth_accountRelations = relations(customer_auth_account, ({ one }) => ({
-  customer_auth_user: one(customer_auth_user, {
-    fields: [customer_auth_account.userId],
-    references: [customer_auth_user.id],
+export const customer_auth_accountsRelations = relations(customer_auth_accounts, ({ one }) => ({
+  customer_auth_users: one(customer_auth_users, {
+    fields: [customer_auth_accounts.userId],
+    references: [customer_auth_users.id],
   }),
 }));

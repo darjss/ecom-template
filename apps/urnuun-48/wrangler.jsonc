@@ -13,7 +13,7 @@
       "binding": "DB",
       "database_name": "urnuun-48-db",
       "database_id": "00000000-0000-0000-0000-000000000048",
-      "migrations_dir": "migrations",
+      "migrations_dir": "../../packages/kernel/migrations",
     },
   ],
   "kv_namespaces": [

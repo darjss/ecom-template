@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9da3be00-74d2-42da-a079-5e9a299547a4",
+  "id": "78bb99a7-dced-4888-82a1-c6d05e55d574",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "system_metadata": {
@@ -35,8 +35,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "customer_auth_account": {
-      "name": "customer_auth_account",
+    "customer_auth_accounts": {
+      "name": "customer_auth_accounts",
       "columns": {
         "id": {
           "name": "id",
@@ -132,17 +132,17 @@
         }
       },
       "indexes": {
-        "customer_auth_account_userId_idx": {
-          "name": "customer_auth_account_userId_idx",
+        "customer_auth_accounts_userId_idx": {
+          "name": "customer_auth_accounts_userId_idx",
           "columns": ["user_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "customer_auth_account_user_id_customer_auth_user_id_fk": {
-          "name": "customer_auth_account_user_id_customer_auth_user_id_fk",
-          "tableFrom": "customer_auth_account",
-          "tableTo": "customer_auth_user",
+        "customer_auth_accounts_user_id_customer_auth_users_id_fk": {
+          "name": "customer_auth_accounts_user_id_customer_auth_users_id_fk",
+          "tableFrom": "customer_auth_accounts",
+          "tableTo": "customer_auth_users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -153,8 +153,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "customer_auth_session": {
-      "name": "customer_auth_session",
+    "customer_auth_sessions": {
+      "name": "customer_auth_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -215,22 +215,22 @@
         }
       },
       "indexes": {
-        "customer_auth_session_token_unique": {
-          "name": "customer_auth_session_token_unique",
+        "customer_auth_sessions_token_unique": {
+          "name": "customer_auth_sessions_token_unique",
           "columns": ["token"],
           "isUnique": true
         },
-        "customer_auth_session_userId_idx": {
-          "name": "customer_auth_session_userId_idx",
+        "customer_auth_sessions_userId_idx": {
+          "name": "customer_auth_sessions_userId_idx",
           "columns": ["user_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "customer_auth_session_user_id_customer_auth_user_id_fk": {
-          "name": "customer_auth_session_user_id_customer_auth_user_id_fk",
-          "tableFrom": "customer_auth_session",
-          "tableTo": "customer_auth_user",
+        "customer_auth_sessions_user_id_customer_auth_users_id_fk": {
+          "name": "customer_auth_sessions_user_id_customer_auth_users_id_fk",
+          "tableFrom": "customer_auth_sessions",
+          "tableTo": "customer_auth_users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -241,8 +241,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "customer_auth_user": {
-      "name": "customer_auth_user",
+    "customer_auth_users": {
+      "name": "customer_auth_users",
       "columns": {
         "id": {
           "name": "id",
@@ -298,8 +298,8 @@
         }
       },
       "indexes": {
-        "customer_auth_user_email_unique": {
-          "name": "customer_auth_user_email_unique",
+        "customer_auth_users_email_unique": {
+          "name": "customer_auth_users_email_unique",
           "columns": ["email"],
           "isUnique": true
         }
@@ -309,8 +309,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "customer_auth_verification": {
-      "name": "customer_auth_verification",
+    "customer_auth_verifications": {
+      "name": "customer_auth_verifications",
       "columns": {
         "id": {
           "name": "id",
@@ -358,8 +358,8 @@
         }
       },
       "indexes": {
-        "customer_auth_verification_identifier_idx": {
-          "name": "customer_auth_verification_identifier_idx",
+        "customer_auth_verifications_identifier_idx": {
+          "name": "customer_auth_verifications_identifier_idx",
           "columns": ["identifier"],
           "isUnique": false
         }
@@ -369,8 +369,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "staff_auth_account": {
-      "name": "staff_auth_account",
+    "staff_auth_accounts": {
+      "name": "staff_auth_accounts",
       "columns": {
         "id": {
           "name": "id",
@@ -466,17 +466,17 @@
         }
       },
       "indexes": {
-        "staff_auth_account_userId_idx": {
-          "name": "staff_auth_account_userId_idx",
+        "staff_auth_accounts_userId_idx": {
+          "name": "staff_auth_accounts_userId_idx",
           "columns": ["user_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "staff_auth_account_user_id_staff_auth_user_id_fk": {
-          "name": "staff_auth_account_user_id_staff_auth_user_id_fk",
-          "tableFrom": "staff_auth_account",
-          "tableTo": "staff_auth_user",
+        "staff_auth_accounts_user_id_staff_auth_users_id_fk": {
+          "name": "staff_auth_accounts_user_id_staff_auth_users_id_fk",
+          "tableFrom": "staff_auth_accounts",
+          "tableTo": "staff_auth_users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -487,8 +487,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "staff_auth_session": {
-      "name": "staff_auth_session",
+    "staff_auth_sessions": {
+      "name": "staff_auth_sessions",
       "columns": {
         "id": {
           "name": "id",
@@ -549,22 +549,22 @@
         }
       },
       "indexes": {
-        "staff_auth_session_token_unique": {
-          "name": "staff_auth_session_token_unique",
+        "staff_auth_sessions_token_unique": {
+          "name": "staff_auth_sessions_token_unique",
           "columns": ["token"],
           "isUnique": true
         },
-        "staff_auth_session_userId_idx": {
-          "name": "staff_auth_session_userId_idx",
+        "staff_auth_sessions_userId_idx": {
+          "name": "staff_auth_sessions_userId_idx",
           "columns": ["user_id"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "staff_auth_session_user_id_staff_auth_user_id_fk": {
-          "name": "staff_auth_session_user_id_staff_auth_user_id_fk",
-          "tableFrom": "staff_auth_session",
-          "tableTo": "staff_auth_user",
+        "staff_auth_sessions_user_id_staff_auth_users_id_fk": {
+          "name": "staff_auth_sessions_user_id_staff_auth_users_id_fk",
+          "tableFrom": "staff_auth_sessions",
+          "tableTo": "staff_auth_users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -575,8 +575,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "staff_auth_user": {
-      "name": "staff_auth_user",
+    "staff_auth_users": {
+      "name": "staff_auth_users",
       "columns": {
         "id": {
           "name": "id",
@@ -632,8 +632,8 @@
         }
       },
       "indexes": {
-        "staff_auth_user_email_unique": {
-          "name": "staff_auth_user_email_unique",
+        "staff_auth_users_email_unique": {
+          "name": "staff_auth_users_email_unique",
           "columns": ["email"],
           "isUnique": true
         }
@@ -643,8 +643,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "staff_auth_verification": {
-      "name": "staff_auth_verification",
+    "staff_auth_verifications": {
+      "name": "staff_auth_verifications",
       "columns": {
         "id": {
           "name": "id",
@@ -692,8 +692,8 @@
         }
       },
       "indexes": {
-        "staff_auth_verification_identifier_idx": {
-          "name": "staff_auth_verification_identifier_idx",
+        "staff_auth_verifications_identifier_idx": {
+          "name": "staff_auth_verifications_identifier_idx",
           "columns": ["identifier"],
           "isUnique": false
         }

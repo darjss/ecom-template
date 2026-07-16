@@ -1,19 +1,14 @@
 ---
+import { applyPublicHtmlCache } from "@ecom/storefront";
 import { CartIsland } from "@ecom/storefront/cart";
 import StoreLayout from "../layouts/StoreLayout.astro";
 import { backend } from "../backend";
+import { storeDefinition } from "../profile/definition";
 
 export const prerender = false;
-Astro.response.headers.set(
-  "Cache-Control",
-  "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
-);
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
 const summary = await backend.storefront.readSummary();
-const featuredItem = {
-  id: "urnuun-canvas-market-bag",
-  title: "Өрнүүн даавуун цүнх",
-  unitPriceMnt: 38000
-};
+const featuredItem = storeDefinition.presentation.featuredItem;
 ---
 <StoreLayout title={`${summary.storeName} · Өдөр тутмын сонголт`} description="Өрнүүн 48-ийн удаан эдэлгээтэй өдөр тутмын сонголтууд">
   <header class="site-header">
@@ -43,7 +38,11 @@ const featuredItem = {
         <h2 id="featured-title">{featuredItem.title}</h2>
         <p>Зузаан хөвөн даавуу, мөрөнд эвтэйхэн урт бариул, хот доторх өдөр тутмын ачаанд таарсан хэмжээ.</p>
         <strong>{new Intl.NumberFormat("mn-MN").format(featuredItem.unitPriceMnt)} ₮</strong>
-        <CartIsland {...featuredItem} client:only="solid-js" />
+        <CartIsland
+          {...featuredItem}
+          storageKey={storeDefinition.cartStorageKey}
+          client:only="solid-js"
+        />
       </div>
     </section>
   </main>

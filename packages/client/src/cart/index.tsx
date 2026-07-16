@@ -24,9 +24,13 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue>();
 
-export const CartProvider: ParentComponent = (props) => {
+export type CartProviderProps = {
+  readonly storageKey: string;
+};
+
+export const CartProvider: ParentComponent<CartProviderProps> = (props) => {
   const [lines, setLines] = makePersisted(createSignal<CartLine[]>([]), {
-    name: "urnuun-48:cart:v1",
+    name: props.storageKey,
     serialize: (cartLines) => JSON.stringify({ lines: cartLines }),
     deserialize: deserializeCart,
   });
@@ -34,7 +38,9 @@ export const CartProvider: ParentComponent = (props) => {
   const addLine = (line: CartLine) => {
     setLines((current) => {
       const existing = current.find((candidate) => candidate.id === line.id);
-      if (!existing) return [...current, line];
+      if (!existing) {
+        return [...current, line];
+      }
       return current.map((candidate) =>
         candidate.id === line.id
           ? { ...candidate, quantity: candidate.quantity + line.quantity }
@@ -53,6 +59,8 @@ export const CartProvider: ParentComponent = (props) => {
 
 export const useCart = () => {
   const cart = useContext(CartContext);
-  if (!cart) throw new Error("useCart must be used inside CartProvider");
+  if (!cart) {
+    throw new Error("useCart must be used inside CartProvider");
+  }
   return cart;
 };

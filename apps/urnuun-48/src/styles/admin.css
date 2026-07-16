@@ -1,6 +1,56 @@
 body {
   background: oklch(96% 0.008 80);
 }
+.admin-skip-link {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  border-radius: 0.5rem;
+  padding: 0.7rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+}
+.admin-skip-link:focus {
+  transform: translateY(0);
+}
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+.login-panel {
+  width: min(100%, 31rem);
+  padding: clamp(2rem, 6vw, 4rem);
+  border: 1px solid oklch(24% 0.025 66 / 0.16);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.login-panel h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  letter-spacing: -0.05em;
+}
+.login-panel > p:not(.eyebrow) {
+  margin: 1.25rem 0 2rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.login-message {
+  min-height: 1.5rem;
+  margin: 1rem 0 0;
+  color: oklch(47% 0.13 30);
+  font-size: 0.875rem;
+}
+.store-link-back {
+  display: block;
+  width: max-content;
+  margin-top: 1.5rem;
+  color: var(--muted);
+  text-underline-offset: 0.25rem;
+}
 .admin-shell {
   min-height: 100vh;
   display: grid;

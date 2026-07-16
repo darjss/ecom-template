@@ -1,4 +1,4 @@
 import { createStoreBackend } from "@ecom/api";
-import { storeProfile } from "./profile/store";
+import { storeDefinition } from "./profile/definition";
 
-export const backend = createStoreBackend({ storeName: storeProfile.name });
+export const backend = createStoreBackend(storeDefinition.backend);

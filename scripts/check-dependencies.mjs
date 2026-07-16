@@ -39,7 +39,9 @@ const sourceRoots = ["apps", "packages"];
 for (const sourceRoot of sourceRoots) {
   const files = await readdir(sourceRoot, { recursive: true, withFileTypes: true });
   for (const file of files) {
-    if (!file.isFile() || !/\.(?:astro|ts|tsx)$/.test(file.name)) continue;
+    if (!file.isFile() || !/\.(?:astro|ts|tsx)$/.test(file.name)) {
+      continue;
+    }
     const path = join(file.parentPath, file.name);
     const source = await readFile(path, "utf8");
     if (/from\s+["']@ecom\/[^"']+\/src\//.test(source)) {

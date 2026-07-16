@@ -9,16 +9,16 @@ export const auth = betterAuth({
   database: drizzleAdapter(database, { provider: "sqlite" }),
   basePath: "/api/auth/staff",
   user: {
-    modelName: "staff_auth_user",
+    modelName: "staff_auth_users",
   },
   session: {
-    modelName: "staff_auth_session",
+    modelName: "staff_auth_sessions",
   },
   account: {
-    modelName: "staff_auth_account",
+    modelName: "staff_auth_accounts",
   },
   verification: {
-    modelName: "staff_auth_verification",
+    modelName: "staff_auth_verifications",
   },
   advanced: {
     cookiePrefix: "urnuun_staff",

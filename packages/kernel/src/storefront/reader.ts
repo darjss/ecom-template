@@ -5,13 +5,12 @@ export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
 };
 
-export const createStorefrontReader = (storeName: string): StorefrontReader => ({
+export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
   readSummary: async () => {
-    await readInfrastructureHealth();
-    return {
-      storeName,
-      location: "Улаанбаатар, 48-р дэлгүүр",
-      status: "open",
-    };
+    const health = await readInfrastructureHealth();
+    if (health.isErr()) {
+      throw new Error("Store infrastructure is unavailable");
+    }
+    return summary;
   },
 });

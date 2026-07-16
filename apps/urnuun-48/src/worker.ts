@@ -11,8 +11,21 @@ export class StoreWorkflow extends WorkflowEntrypoint<Env, { scheduledAt: string
 }
 
 export default {
-  fetch: handle,
-  scheduled(controller, _env, context) {
+  async fetch(request, environment, context) {
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
+      return backend.api.fetch(request);
+    }
+    if (
+      pathname.startsWith("/admin") &&
+      pathname !== "/admin/login" &&
+      !(await backend.hasStaffSession(request))
+    ) {
+      return Response.redirect(new URL("/admin/login", request.url), 303);
+    }
+    return handle(request, environment, context);
+  },
+  scheduled(controller, _environment, context) {
     context.waitUntil(backend.background.recordScheduledTick(new Date(controller.scheduledTime)));
   },
 } satisfies ExportedHandler<Env>;

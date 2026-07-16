@@ -1,8 +1,35 @@
+import { ClientErrorSchema } from "@ecom/contracts";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/solid-query";
 import { toast } from "solid-sonner";
+import * as v from "valibot";
 
-const presentGlobalError = (error: Error) => {
-  toast.error(error.message || "Холболт тасарлаа. Дахин оролдоно уу.");
+const presentGlobalError = (error: unknown) => {
+  const parsed = v.safeParse(ClientErrorSchema, error);
+  if (!parsed.success) {
+    toast.error("Тодорхойгүй алдаа гарлаа.");
+    return;
+  }
+  if (parsed.output.kind === "network") {
+    toast.error("Холболт тасарлаа. Дахин оролдоно уу.");
+    return;
+  }
+  if (parsed.output.kind === "contract") {
+    toast.error("Үйлчилгээний хариуг шалгаж чадсангүй.");
+    return;
+  }
+  if (parsed.output.error.code === "unauthorized") {
+    window.location.assign("/admin/login");
+    return;
+  }
+  if (parsed.output.error.code === "rate_limited") {
+    toast.error("Хэт олон хүсэлт илгээлээ. Түр хүлээнэ үү.");
+    return;
+  }
+  if (parsed.output.error.code === "unavailable") {
+    toast.error("Үйлчилгээ түр ажиллахгүй байна.");
+    return;
+  }
+  toast.error(parsed.output.error.message);
 };
 
 export const createStoreQueryClient = () =>
