@@ -25,8 +25,16 @@ export const staffMembers = sqliteTable(
       sql`${table.role} IS NULL OR ${table.role} IN ('owner', 'manager', 'staff')`,
     ),
     check(
-      "staff_members_active_role_check",
-      sql`${table.status} <> 'active' OR ${table.role} IS NOT NULL`,
+      "staff_members_id_check",
+      sql`length(${table.id}) = 32 AND substr(${table.id}, 1, 6) = 'staff_' AND substr(${table.id}, 7, 1) GLOB '[0-7]' AND substr(${table.id}, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check(
+      "staff_members_lifecycle_check",
+      sql`(${table.status} = 'pending' AND ${table.approvedAt} IS NULL AND ${table.revokedAt} IS NULL) OR (${table.status} = 'active' AND ${table.role} IS NOT NULL AND ${table.approvedAt} IS NOT NULL AND ${table.revokedAt} IS NULL) OR (${table.status} = 'revoked' AND ${table.approvedAt} IS NOT NULL AND ${table.revokedAt} IS NOT NULL)`,
+    ),
+    check(
+      "staff_members_lifecycle_order_check",
+      sql`${table.createdAt} <= ${table.updatedAt} AND (${table.approvedAt} IS NULL OR (${table.createdAt} <= ${table.approvedAt} AND ${table.approvedAt} <= ${table.updatedAt})) AND (${table.revokedAt} IS NULL OR (${table.approvedAt} <= ${table.revokedAt} AND ${table.revokedAt} <= ${table.updatedAt}))`,
     ),
   ],
 );

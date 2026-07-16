@@ -32,16 +32,48 @@ export const StaffIdSchema = v.pipe(v.string(), v.check(isStaffId, "Invalid Staf
 export const StaffRoleSchema = v.picklist(["owner", "manager", "staff"]);
 export const StaffStatusSchema = v.picklist(["pending", "active", "revoked"]);
 
-export const StaffMemberSchema = v.strictObject({
-  id: StaffIdSchema,
-  email: v.pipe(v.string(), v.email()),
-  status: StaffStatusSchema,
-  role: v.nullable(StaffRoleSchema),
-  createdAt: v.pipe(v.string(), v.isoTimestamp()),
-  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
-  approvedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
-  revokedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
-});
+const StaffTimestampSchema = v.pipe(v.string(), v.isoTimestamp());
+export const StaffMemberSchema = v.pipe(
+  v.variant("status", [
+    v.strictObject({
+      id: StaffIdSchema,
+      email: v.pipe(v.string(), v.email()),
+      status: v.literal("pending"),
+      role: v.nullable(StaffRoleSchema),
+      createdAt: StaffTimestampSchema,
+      updatedAt: StaffTimestampSchema,
+      approvedAt: v.null(),
+      revokedAt: v.null(),
+    }),
+    v.strictObject({
+      id: StaffIdSchema,
+      email: v.pipe(v.string(), v.email()),
+      status: v.literal("active"),
+      role: StaffRoleSchema,
+      createdAt: StaffTimestampSchema,
+      updatedAt: StaffTimestampSchema,
+      approvedAt: StaffTimestampSchema,
+      revokedAt: v.null(),
+    }),
+    v.strictObject({
+      id: StaffIdSchema,
+      email: v.pipe(v.string(), v.email()),
+      status: v.literal("revoked"),
+      role: v.nullable(StaffRoleSchema),
+      createdAt: StaffTimestampSchema,
+      updatedAt: StaffTimestampSchema,
+      approvedAt: StaffTimestampSchema,
+      revokedAt: StaffTimestampSchema,
+    }),
+  ]),
+  v.check((member) => {
+    const createdAt = Date.parse(member.createdAt);
+    const updatedAt = Date.parse(member.updatedAt);
+    const approvedAt = member.approvedAt === null ? createdAt : Date.parse(member.approvedAt);
+    const revokedAt = member.revokedAt === null ? approvedAt : Date.parse(member.revokedAt);
+    return createdAt <= approvedAt && approvedAt <= revokedAt && revokedAt <= updatedAt;
+  }, "Invalid Staff lifecycle timestamps"),
+);
 
 export const StaffListResponseSchema = v.strictObject({
   data: v.strictObject({ members: v.array(StaffMemberSchema) }),
