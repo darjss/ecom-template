@@ -103,6 +103,9 @@ body {
 .health.ready {
   background: oklch(88% 0.08 145);
 }
+.health.unavailable {
+  background: oklch(88% 0.08 35);
+}
 @media (max-width: 46rem) {
   .admin-shell {
     grid-template-columns: 1fr;

@@ -47,12 +47,14 @@ const Dashboard = () => {
             <p class="eyebrow">Систем</p>
             <h2 id="operations-title">Үйлчилгээний төлөв</h2>
           </div>
-          <Show when={health.data} fallback={<span class="health pending">Шалгаж байна</span>}>
-            {(data) => (
-              <span class="health ready">
-                {data().data.database === "connected" ? "Хэвийн" : "Сааталтай"}
-              </span>
-            )}
+          <Show when={!health.isError} fallback={<span class="health unavailable">Сааталтай</span>}>
+            <Show when={health.data} fallback={<span class="health pending">Шалгаж байна</span>}>
+              {(data) => (
+                <span class="health ready">
+                  {data().data.database === "connected" ? "Хэвийн" : "Сааталтай"}
+                </span>
+              )}
+            </Show>
           </Show>
         </section>
       </main>
