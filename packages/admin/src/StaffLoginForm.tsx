@@ -15,10 +15,21 @@ export const StaffLoginForm = () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ provider: value.provider, callbackURL: "/admin" }),
       });
-      const body: unknown = await response.json();
-      const parsed = v.safeParse(SocialSignInResponseSchema, body);
-      if (!response.ok || !parsed.success) {
+      const source = await response.text();
+      if (!response.ok || source.length === 0) {
         form.setFieldValue("message", "Google нэвтрэх тохиргоо одоогоор боломжгүй байна.");
+        return;
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(source);
+      } catch {
+        form.setFieldValue("message", "Нэвтрэх үйлчилгээний хариуг шалгаж чадсангүй.");
+        return;
+      }
+      const parsed = v.safeParse(SocialSignInResponseSchema, body);
+      if (!parsed.success) {
+        form.setFieldValue("message", "Нэвтрэх үйлчилгээний хариуг шалгаж чадсангүй.");
         return;
       }
       window.location.assign(parsed.output.url);
