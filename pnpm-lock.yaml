@@ -102,12 +102,12 @@ importers:
       '@ecom/client':
         specifier: workspace:*
         version: link:../client
+      '@ecom/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@ecom/ui':
         specifier: workspace:*
         version: link:../ui
-      '@solidjs/router':
-        specifier: 0.16.1
-        version: 0.16.1(solid-js@1.9.13)
       '@tanstack/solid-form':
         specifier: 1.33.2
         version: 1.33.2(solid-js@1.9.13)
@@ -2645,11 +2645,6 @@ packages:
     resolution: {integrity: sha512-ISSB5QX1qP2ynrheIpYwc4oKR5Ny4siNuUyf1qZniy+Il+p/PtDB0QK1Dnle8noiHpwRD3gpPdubOC3qI/Zamg==}
     peerDependencies:
       solid-js: ^1.6.12
-
-  '@solidjs/router@0.16.1':
-    resolution: {integrity: sha512-IhyjedgC6LRpw/8CPGGI89FrV+r0xTHzOl2c4CRyzYQ1bLepJxbVI1LLKvsavMWY5TRBRacV7hAeOhuTXkjiqg==}
-    peerDependencies:
-      solid-js: ^1.8.6
 
   '@speed-highlight/core@1.2.17':
     resolution: {integrity: sha512-Z92FwKpCtfaW1V0jTU/fh3QzYEZN8wDwrzRIBoADCJfn4mJCNcJN/XegifX7BDrQ8/h9Xh/JnbyMchL0FqXrkg==}
@@ -8084,10 +8079,6 @@ snapshots:
       solid-js: 1.9.13
 
   '@solid-primitives/utils@6.4.1(solid-js@1.9.13)':
-    dependencies:
-      solid-js: 1.9.13
-
-  '@solidjs/router@0.16.1(solid-js@1.9.13)':
     dependencies:
       solid-js: 1.9.13
 

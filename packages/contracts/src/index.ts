@@ -19,6 +19,57 @@ export const ApiErrorSchema = v.strictObject({
   }),
 });
 
+export const StaffRoleSchema = v.picklist(["owner", "manager", "staff"]);
+export const StaffStatusSchema = v.picklist(["pending", "active", "revoked"]);
+
+export const StaffMemberSchema = v.strictObject({
+  id: v.string(),
+  email: v.pipe(v.string(), v.email()),
+  status: StaffStatusSchema,
+  role: v.nullable(StaffRoleSchema),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+});
+
+export const StaffListResponseSchema = v.strictObject({
+  data: v.strictObject({ members: v.array(StaffMemberSchema) }),
+});
+
+export const StaffMutationInputSchema = v.strictObject({
+  role: StaffRoleSchema,
+});
+
+export const StaffMutationResponseSchema = v.strictObject({ data: StaffMemberSchema });
+
+export const StaffLifecycleApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.picklist([
+      "unauthorized",
+      "forbidden",
+      "not_found",
+      "validation",
+      "conflict",
+      "unavailable",
+    ]),
+    reason: v.optional(
+      v.picklist(["final_owner", "invalid_transition", "session_revocation_failed"]),
+    ),
+    message: v.string(),
+  }),
+});
+
+export const StaffClientErrorSchema = v.variant("kind", [
+  v.strictObject({ kind: v.literal("network"), message: v.string() }),
+  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
+  v.strictObject({ kind: v.literal("api"), error: StaffLifecycleApiErrorSchema.entries.error }),
+]);
+
+export const StaffSessionStateSchema = v.variant("kind", [
+  v.strictObject({ kind: v.literal("active"), role: StaffRoleSchema }),
+  v.strictObject({ kind: v.literal("awaiting_approval") }),
+  v.strictObject({ kind: v.literal("unauthorized") }),
+]);
+
 export const HealthApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.literal("unavailable"),
@@ -78,6 +129,13 @@ export const HealthClientErrorSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("api"), error: HealthApiErrorSchema.entries.error }),
 ]);
 
+export type StaffRole = v.InferOutput<typeof StaffRoleSchema>;
+export type StaffStatus = v.InferOutput<typeof StaffStatusSchema>;
+export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;
+export type StaffListResponse = v.InferOutput<typeof StaffListResponseSchema>;
+export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSchema>;
+export type StaffClientError = v.InferOutput<typeof StaffClientErrorSchema>;
+export type StaffSessionState = v.InferOutput<typeof StaffSessionStateSchema>;
 export type ApiError = v.InferOutput<typeof ApiErrorSchema>;
 export type HealthApiError = v.InferOutput<typeof HealthApiErrorSchema>;
 export type HealthResponse = v.InferOutput<typeof HealthResponseSchema>;

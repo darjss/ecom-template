@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -30,6 +31,7 @@ Commands:
   dev --store <slug>
   preview --store <slug>
   build --store <slug>
+  owner-add --store <slug> --email <email>
   create --slug <slug> --name <name>
   apply --manifest <path> --target <name>
   proof --manifest <path> --target <name>
@@ -86,6 +88,30 @@ const targetSlug = (app: string) => v.parse(StoreSlugSchema, app.slice("@shops/"
 const journalPath = (targetName: string) => join(".delivery", `${targetName}.journal.json`);
 const proofPath = (targetName: string) => join(".delivery", `${targetName}.proof.json`);
 const devProcessPath = (slug: string) => join(".delivery", `${slug}.dev.json`);
+
+const SqlEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
+
+const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+const addOwner = async () => {
+  const localStore = await resolveLocalStore(requireOption("--store"));
+  const email = v.parse(SqlEmailSchema, requireOption("--email"));
+  const now = Date.now();
+  const statement = `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, created_at, updated_at) VALUES (${sqlString(randomUUID())}, ${sqlString(email)}, NULL, 'active', 'owner', ${now}, ${now}) ON CONFLICT(normalized_email) DO UPDATE SET status = 'active', role = 'owner', updated_at = excluded.updated_at`;
+  await run("pnpm", [
+    "--filter",
+    `@shops/${localStore.slug}`,
+    "exec",
+    "wrangler",
+    "d1",
+    "execute",
+    "DB",
+    "--local",
+    "--command",
+    statement,
+  ]);
+  write(`Provisioned active Owner ${email} for ${localStore.slug}`);
+};
 
 const rejectStoreCreation = () => {
   v.parse(StoreSlugSchema, requireOption("--slug"));
@@ -248,6 +274,8 @@ try {
   } else if (command === "build") {
     const slug = v.parse(StoreSlugSchema, requireOption("--store"));
     await run("pnpm", ["--filter", `@shops/${slug}`, "build"]);
+  } else if (command === "owner-add") {
+    await addOwner();
   } else if (command === "create") {
     rejectStoreCreation();
   } else if (command === "apply") {
