@@ -17,6 +17,8 @@ const trackedMigrations = "packages/kernel/migrations";
 const authWriteCommand = "pnpm auth:generate";
 const migrationWriteCommand = "pnpm db:generate";
 
+export const isFatalGeneratedOutput = (output) => /(?:^|\n)(?:Error {2}|\w*Error:)/.test(output);
+
 const run = (args, label, temporaryRoot) => {
   const result = spawnSync("pnpm", args, {
     cwd: process.cwd(),
@@ -29,7 +31,7 @@ const run = (args, label, temporaryRoot) => {
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`
     .replaceAll(temporaryRoot, "<temporary directory>")
     .trim();
-  if (result.status !== 0 || /(?:^|\n)Error:/.test(output)) {
+  if (result.status !== 0 || isFatalGeneratedOutput(output)) {
     throw new Error(
       `${label} failed with exit code ${result.status}${output ? `\n${output}` : ""}`,
     );

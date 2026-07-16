@@ -13,13 +13,14 @@ const allowed = {
   delivery: new Set(),
 };
 
-const appCompositionPackages = new Set(["admin", "api", "storefront", "ui"]);
+const appCompositionPackages = new Set(["admin", "api", "integrations", "storefront", "ui"]);
 const browserPackages = new Set(["admin", "client", "contracts", "storefront", "ui"]);
 const forbiddenPackages = new Map([
   ["react", "React"],
   ["react-dom", "React"],
   ["lucide", "Lucide"],
   ["lucide-react", "Lucide"],
+  ["lucide-solid", "Lucide"],
   ["@polar-sh/sdk", "Polar"],
   ["@polar-sh/better-auth", "Polar"],
   ["@sinclair/typebox", "TypeBox"],
@@ -58,6 +59,28 @@ const forbiddenStack = (specifier) => {
 };
 
 const readManifest = async (path) => JSON.parse(await readFile(path, "utf8"));
+
+const checkExportTarget = (manifestPath, key, target) => {
+  if (typeof target === "string") {
+    if (target.includes("*")) {
+      fail(`${manifestPath}: export ${key} target ${target} contains a forbidden wildcard`);
+    }
+    return;
+  }
+  if (!target || typeof target !== "object" || Array.isArray(target)) {
+    fail(`${manifestPath}: export ${key} must target a string or explicit conditional object`);
+  }
+  const conditions = Object.entries(target);
+  if (conditions.length === 0) {
+    fail(`${manifestPath}: export ${key} has an empty conditional object`);
+  }
+  for (const [condition, conditionTarget] of conditions) {
+    if (condition.includes("*")) {
+      fail(`${manifestPath}: export ${key} condition ${condition} contains a forbidden wildcard`);
+    }
+    checkExportTarget(manifestPath, `${key} condition ${condition}`, conditionTarget);
+  }
+};
 
 const checkRemovedDependencies = (path, manifest) => {
   for (const [field, dependency] of dependencyEntries(manifest)) {
@@ -106,11 +129,10 @@ for (const packageName of packageNames) {
     fail(`${manifestPath}: source package must expose explicit exports`);
   }
   for (const [entrypoint, target] of Object.entries(manifest.exports ?? {})) {
-    if (entrypoint.includes("*") || typeof target !== "string" || target.includes("*")) {
-      fail(
-        `${manifestPath}: export ${entrypoint} must be an explicit public entrypoint; private src/* wildcards are forbidden`,
-      );
+    if (entrypoint.includes("*")) {
+      fail(`${manifestPath}: export key ${entrypoint} contains a forbidden wildcard`);
     }
+    checkExportTarget(manifestPath, entrypoint, target);
   }
 }
 
