@@ -31,6 +31,6 @@
     "@astrojs/check": "0.9.9",
     "eslint": "9.39.2",
     "eslint-plugin-astro": "1.6.0",
-    "typescript": "6.0.3"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }
