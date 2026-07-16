@@ -1,3 +1,4 @@
+import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import * as v from "valibot";
 
@@ -43,9 +44,7 @@ export const StaffLoginForm = () => {
         await form.handleSubmit();
       }}
     >
-      <button class="ui-button ui-button--primary" type="submit">
-        Google-ээр үргэлжлүүлэх
-      </button>
+      <Button type="submit">Google-ээр үргэлжлүүлэх</Button>
       <form.Subscribe selector={(state) => state.values.message}>
         {(message) => (
           <p class="login-message" role="status">

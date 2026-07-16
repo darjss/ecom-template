@@ -17,5 +17,25 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - name: Install frozen workspace
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint TypeScript and JavaScript
+        run: pnpm lint
+      - name: Lint Astro
+        run: pnpm lint:astro
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Check Astro
+        run: pnpm astro:check
+      - name: Check unused code and dependencies
+        run: pnpm knip
+      - name: Check workspace manifests
+        run: pnpm sherif
+      - name: Check dependency directions
+        run: pnpm deps:check
+      - name: Check generated drift
+        run: pnpm generated:check
+      - name: Build production Store
+        run: pnpm build

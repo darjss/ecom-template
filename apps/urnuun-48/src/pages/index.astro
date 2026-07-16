@@ -9,42 +9,59 @@ export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
 const summary = await storefront.readSummary();
 const featuredItem = storeDefinition.presentation.featuredItem;
+const categories = ["Хүнс", "Цэвэрлэгээ", "Цүнх, хадгалалт", "Бичиг хэрэг", "Багц"];
 ---
-<StoreLayout title={`${summary.storeName} · Өдөр тутмын сонголт`} description="Өрнүүн 48-ийн удаан эдэлгээтэй өдөр тутмын сонголтууд">
+<StoreLayout title={`${summary.storeName} · Өдөр бүрийн хэрэгцээ`} description="Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт">
+  <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
   <header class="site-header">
-    <a class="wordmark" href="/" aria-current="page" transition:name="wordmark">Өрнүүн 48</a>
+    <a class="wordmark" href="/" aria-current="page" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
     <nav aria-label="Үндсэн цэс"><a aria-current="page" href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
     <a class="admin-link" href="/admin">Удирдлага</a>
   </header>
   <main id="content">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="kicker">{summary.location}</p>
-        <h1>Хотын хэмнэлд<br />удаан хэрэглэгдэх зүйлс.</h1>
-        <p class="hero-note">Өдөр бүр барьж, өмсөж, гэртээ хэрэглэдэг зүйлсийг чанар болон хэрэгцээгээр нь сонгов.</p>
-        <a class="text-link" href="#featured">Энэ долоо хоногийн сонголт</a>
+    <section class="pantry" aria-labelledby="pantry-title">
+      <div class="pantry-beam">
+        <span>Ө48 Өдөр</span><b>Тавиур 01 · өдөр тутмын нөөц</b><span>УБ · 09:00–21:00</span>
       </div>
-      <div class="hero-art" aria-hidden="true">
-        <span>48</span>
-        <div class="sun"></div>
+      <div class="pantry-grid">
+        <aside class="pantry-categories" aria-label="Бүтээгдэхүүний ангилал">
+          <p>Тасалгаа</p>
+          <ol>
+            {categories.map((category, index) => <li><span>{String(index + 1).padStart(2, "0")}</span>{category}</li>)}
+          </ol>
+        </aside>
+        <div class="pantry-copy">
+          <p class="kicker">Өдөр бүрийн хэрэгцээг цэгцтэй</p>
+          <h1 id="pantry-title">Гэрийн<br /><span>тавиур.</span></h1>
+          <p>Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.</p>
+          <a href="#featured">Тавиур үзэх</a>
+        </div>
+        <div class="pantry-image">
+          <img src="/media/hero-pantry.webp" alt="Хүнс, гэр ахуйн бүтээгдэхүүн өрсөн Өрнүүн 48-ын цайвар модон тавиур" width="1000" height="1000" fetchpriority="high" />
+          <div class="shelf-marker" aria-hidden="true"><b>48</b><span>гэрийн нөөц</span></div>
+        </div>
+        <article class="bundle-bay">
+          <img src="/media/b01-cleaning-bundle.webp" alt="Угаалгын нунтаг болон аяга таваг угаагчийн цэвэрлэгээний хослол" width="1000" height="1000" loading="lazy" />
+          <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>15,900 ₮ · Бэлэн</span>
+        </article>
+        <div class="delivery-bay"><span>120,000 ₮</span><strong>дээш хүргэлт үнэгүй</strong><small>Улаанбаатар хотод</small></div>
       </div>
+      <div class="pantry-plinth"><span>01 Хүнс</span><span>02 Гэр ахуй</span><span>03 Жижиг бэлэг</span><b>ӨРНҮҮН / 48</b></div>
     </section>
     <section id="featured" class="featured" aria-labelledby="featured-title">
       <div class="product-visual" transition:name="featured-product">
-        <div class="bag-shape" aria-hidden="true"><span>Ө48</span></div>
+        <span class="bay-number">03 · Цүнх, хадгалалт</span>
+        <img src="/media/p07-tote-sand.webp" alt="Элсэн шаргал өнгийн энгийн даавуун цүнх" width="1000" height="1000" loading="lazy" />
       </div>
       <div class="product-copy">
-        <p class="kicker">Долоо хоногийн сонголт</p>
+        <p class="kicker">Өнөөдрийн сонголт</p>
         <h2 id="featured-title">{featuredItem.title}</h2>
         <p>Зузаан хөвөн даавуу, мөрөнд эвтэйхэн урт бариул, хот доторх өдөр тутмын ачаанд таарсан хэмжээ.</p>
         <strong>{new Intl.NumberFormat("mn-MN").format(featuredItem.unitPriceMnt)} ₮</strong>
-        <CartIsland
-          {...featuredItem}
-          storageKey={storeDefinition.cartStorageKey}
-          client:only="solid-js"
-        />
+        <p class="availability"><span></span>Бэлэн, захиалахад дахин шалгана</p>
+        <CartIsland {...featuredItem} storageKey={storeDefinition.cartStorageKey} client:only="solid-js" />
       </div>
     </section>
   </main>
-  <footer><span>Өрнүүн 48</span><span>Өдөр бүр 10:00–21:00</span></footer>
+  <footer><span>Өрнүүн 48</span><span>{summary.location}</span></footer>
 </StoreLayout>

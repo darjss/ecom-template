@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@ecom/client": "workspace:*",
+    "@ecom/ui": "workspace:*",
     "@solidjs/router": "0.16.1",
     "@tanstack/solid-form": "1.33.2",
     "@tanstack/solid-query": "5.101.2",

@@ -1,5 +1,5 @@
 import { CartProvider, useCart } from "@ecom/client/cart";
-import { Bag } from "@ecom/ui/icons";
+import { Bag, Button } from "@ecom/ui";
 import { Show } from "solid-js";
 
 export type FeaturedItem = {
@@ -13,8 +13,7 @@ const CartControls = (props: FeaturedItem) => {
   const cart = useCart();
   return (
     <div class="cart-controls" aria-live="polite">
-      <button
-        class="ui-button ui-button--primary"
+      <Button
         onClick={() =>
           cart.addLine({
             id: props.id,
@@ -25,7 +24,7 @@ const CartControls = (props: FeaturedItem) => {
         }
       >
         Сагсанд нэмэх
-      </button>
+      </Button>
       <span class="cart-count">
         <Bag size={20} aria-hidden="true" />
         <Show when={cart.itemCount() > 0} fallback="Сагс хоосон">
@@ -33,9 +32,9 @@ const CartControls = (props: FeaturedItem) => {
         </Show>
       </span>
       <Show when={cart.itemCount() > 0}>
-        <button class="ui-button ui-button--quiet" onClick={cart.clear}>
+        <Button variant="secondary" onClick={cart.clear}>
           Цэвэрлэх
-        </button>
+        </Button>
       </Show>
     </div>
   );

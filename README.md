@@ -11,7 +11,7 @@ Astro 7, Solid, Elysia, and Cloudflare Workers workspace for independently deplo
 - `packages/client`: Eden, TanStack, and persisted browser state
 - `packages/admin`: authenticated Solid Merchant Admin SPA
 - `packages/storefront`: default Storefront behavior
-- `packages/ui`: generated Zaidan primitives, Kobalte, Corvu, Solar Icons, and motion
+- `packages/ui`: generated Zaidan primitives, Kobalte, Solar Icons, and motion
 - `packages/integrations`: validated static provider selection
 - `packages/delivery`: Node-only delivery CLI
 
@@ -20,11 +20,10 @@ Astro 7, Solid, Elysia, and Cloudflare Workers workspace for independently deplo
 ```sh
 pnpm install --frozen-lockfile
 pnpm store:apply --manifest apps/urnuun-48/delivery.local.yml --target urnuun-local
-portless proxy start --port 1355 --https
 pnpm dev:stores
 ```
 
-Open `https://urnuun-48.shop.localhost:1355`. The local Worker state lives under `apps/urnuun-48/.wrangler`. Admin requests without a valid Staff session redirect to `/admin/login`.
+Portless renders `https://urnuun-48.shop.localhost` in the main checkout and prefixes linked worktrees with the sanitized final branch segment. Print the exact URL for this checkout with `pnpm store:delivery origin --store urnuun-48`. The local Worker state lives under `apps/urnuun-48/.wrangler`. Admin requests without a valid Staff session redirect to `/admin/login`.
 
 Run one Store explicitly with `pnpm dev:store --store urnuun-48`. Build it with `pnpm build:store --store urnuun-48`.
 
@@ -37,11 +36,12 @@ pnpm store:proof --manifest <path> --target <name>
 pnpm store:cleanup --manifest <path> --target <name>
 ```
 
-Local apply, proof, and cleanup are implemented. Remote mutation validates the complete target invocation, then fails clearly until reviewed provisioning work is added.
+`store:create` validates its complete invocation and then fails intentionally until delivery owns a Store-neutral skeleton. Local apply records the selected target, rendered origin, and commit. Proof accepts only the matching running checkout and commit, then records the verified health URL. Cleanup removes only that target's disposable local state and evidence. Remote apply validates committed canary structure before rejecting unavailable remote mutation.
 
 ## Verification
 
 ```sh
 pnpm check
 pnpm store:delivery validate --manifest apps/urnuun-48/delivery.local.yml
+pnpm store:delivery validate --manifest apps/urnuun-48/delivery.canary.yml
 ```

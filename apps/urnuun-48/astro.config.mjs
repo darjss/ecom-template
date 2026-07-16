@@ -14,5 +14,8 @@ export default defineConfig({
   fetchFile: null,
   vite: {
     plugins: [tailwindcss()],
+    resolve: {
+      dedupe: ["solid-js", "solid-js/store", "solid-js/web"],
+    },
   },
 });

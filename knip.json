@@ -5,10 +5,12 @@
       "entry": ["scripts/*.mjs"]
     },
     "apps/urnuun-48": {
-      "entry": ["src/pages/**/*.{astro,ts}"]
+      "entry": ["src/pages/**/*.{astro,ts}"],
+      "project": ["src/**/*.{astro,ts,tsx}"]
     },
     "packages/*": {
-      "entry": ["src/index.{ts,tsx}"]
+      "entry": ["src/index.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/kernel": {
       "entry": ["scripts/*.ts"]
@@ -24,8 +26,6 @@
     "es-toolkit",
     "evlog",
     "json-canonicalize",
-    "micromark",
-    "oxlint",
-    "solid-js"
+    "micromark"
   ]
 }
