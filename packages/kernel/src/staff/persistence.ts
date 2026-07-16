@@ -1,6 +1,8 @@
 import {
   createStaffId,
   StaffMemberSchema,
+  StaffRoleSchema,
+  StaffStatusSchema,
   type StaffId,
   type StaffMember,
   type StaffRole,
@@ -45,6 +47,30 @@ const projectStaff = (row: {
   authUserId: row.authUserId,
   sessionGeneration: row.sessionGeneration,
 });
+
+const ReturnedStaffRowSchema = v.strictObject({
+  id: v.string(),
+  normalizedEmail: v.string(),
+  authUserId: v.nullable(v.string()),
+  status: StaffStatusSchema,
+  role: v.nullable(StaffRoleSchema),
+  sessionGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  approvedAt: v.nullable(v.number()),
+  revokedAt: v.nullable(v.number()),
+});
+
+const projectReturnedStaff = (source: unknown) => {
+  const row = v.parse(ReturnedStaffRowSchema, source);
+  return projectStaff({
+    ...row,
+    createdAt: new Date(row.createdAt),
+    updatedAt: new Date(row.updatedAt),
+    approvedAt: row.approvedAt === null ? null : new Date(row.approvedAt),
+    revokedAt: row.revokedAt === null ? null : new Date(row.revokedAt),
+  });
+};
 
 const selection = {
   id: staffMembers.id,
@@ -110,6 +136,26 @@ const resolveApplicant = async (authUserId: string, email: string) => {
 export const staffQueries = {
   resolveApplicant,
 
+  async createActive(email: string, role: StaffRole) {
+    const now = new Date();
+    const rows = await database()
+      .insert(staffMembers)
+      .values({
+        id: createStaffId(),
+        normalizedEmail: normalizeEmail(email),
+        authUserId: null,
+        status: "active",
+        role,
+        createdAt: now,
+        updatedAt: now,
+        approvedAt: now,
+      })
+      .onConflictDoNothing({ target: staffMembers.normalizedEmail })
+      .returning(selection);
+    const row = rows.at(0);
+    return row ? projectStaff(row) : undefined;
+  },
+
   async resolveAuthUserApplicant(authUserId: string) {
     const users = await database()
       .select({ email: staff_auth_users.email, emailVerified: staff_auth_users.emailVerified })
@@ -167,12 +213,14 @@ export const staffQueries = {
   },
 
   async remove(id: StaffId) {
-    const before = await findById(id);
-    await env.DB.prepare(
-      "DELETE FROM staff_members WHERE id = ? AND NOT (status = 'active' AND role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
+    const result = await env.DB.prepare(
+      "DELETE FROM staff_members WHERE id = ? AND NOT (status = 'active' AND role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1) RETURNING id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt",
     )
       .bind(id)
-      .run();
-    return { before, after: await findById(id) };
+      .all();
+    const removed = result.results.at(0);
+    return removed
+      ? { removed: projectReturnedStaff(removed), current: undefined }
+      : { removed: undefined, current: await findById(id) };
   },
 };

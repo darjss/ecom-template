@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   HealthApiErrorSchema,
   HealthResponseSchema,
+  StaffCreateInputSchema,
   StaffIdSchema,
   StaffLifecycleApiErrorSchema,
   StaffListResponseSchema,
@@ -13,6 +14,7 @@ import {
 import {
   approveStaff,
   changeStaffRole,
+  createStaff,
   createStaffAuth,
   createStoreBackground,
   createStorefrontReader,
@@ -176,6 +178,20 @@ const createApi = (definition: StoreDefinition) =>
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffListResponseSchema, { data: { members: result.value } });
+    })
+    .post("/staff", async ({ body, request, status }) => {
+      const input = v.safeParse(StaffCreateInputSchema, body);
+      if (!input.success) {
+        return status(422, apiError("validation", "A valid Staff email and role are required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await createStaff(authorization.actor, input.output.email, input.output.role);
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffMutationResponseSchema, { data: result.value });
     })
     .post("/staff/:id/approve", async ({ body, params, request, status }) => {
       const input = v.safeParse(StaffMutationInputSchema, body);

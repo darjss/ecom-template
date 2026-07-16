@@ -4,6 +4,7 @@ import {
   StaffListResponseSchema,
   StaffMutationResponseSchema,
   type StaffClientError,
+  type StaffCreateInput,
   type StaffId,
   type StaffListResponse,
   type StaffMutationResponse,
@@ -34,6 +35,7 @@ export const requestStaffList = async (): Promise<StaffListResponse> => {
 };
 
 export type StaffMutation =
+  | ({ readonly kind: "create" } & StaffCreateInput)
   | { readonly kind: "approve"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "role"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "revoke"; readonly id: StaffId }
@@ -44,13 +46,15 @@ export const requestStaffMutation = async (
 ): Promise<StaffMutationResponse> => {
   const client = createApiClient();
   const response =
-    mutation.kind === "approve"
-      ? await client.api.staff({ id: mutation.id }).approve.post({ role: mutation.role })
-      : mutation.kind === "role"
-        ? await client.api.staff({ id: mutation.id }).role.patch({ role: mutation.role })
-        : mutation.kind === "revoke"
-          ? await client.api.staff({ id: mutation.id }).revoke.post()
-          : await client.api.staff({ id: mutation.id }).delete();
+    mutation.kind === "create"
+      ? await client.api.staff.post({ email: mutation.email, role: mutation.role })
+      : mutation.kind === "approve"
+        ? await client.api.staff({ id: mutation.id }).approve.post({ role: mutation.role })
+        : mutation.kind === "role"
+          ? await client.api.staff({ id: mutation.id }).role.patch({ role: mutation.role })
+          : mutation.kind === "revoke"
+            ? await client.api.staff({ id: mutation.id }).revoke.post()
+            : await client.api.staff({ id: mutation.id }).delete();
   if (response.error) {
     throw parseFailure(response.error.value);
   }

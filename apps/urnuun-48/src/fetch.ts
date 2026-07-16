@@ -63,6 +63,14 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
         const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
         return privateResponse(await handle(awaitingRequest, environment, context));
       }
+      if (staff.kind === "unavailable") {
+        return privateResponse(
+          Response.json(
+            { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
+            { status: 503 },
+          ),
+        );
+      }
       if (staff.kind !== "active") {
         return new Response(null, {
           status: 303,

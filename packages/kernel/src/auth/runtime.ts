@@ -106,35 +106,39 @@ export const createStaffAuth = (origin: string) => {
 };
 
 export const readStaffAuthSession = async (request: Request, origin: string) => {
-  const auth = createStaffAuth(origin);
-  if (!auth) {
+  try {
+    const auth = createStaffAuth(origin);
+    if (!auth) {
+      return { kind: "unavailable" as const };
+    }
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session || !session.user.emailVerified) {
+      return { kind: "unauthorized" as const };
+    }
+    const role = v.safeParse(StaffRoleSchema, session.session.role);
+    if (!role.success) {
+      await staffQueries.resolveApplicant(session.user.id, session.user.email);
+      await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
+      return { kind: "awaiting_approval" as const };
+    }
+    const generation = v.safeParse(
+      v.pipe(v.number(), v.integer(), v.minValue(0)),
+      session.session.generation,
+    );
+    if (
+      !generation.success ||
+      !(await staffQueries.hasCurrentSessionGeneration(session.user.id, generation.output))
+    ) {
+      await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
+      return { kind: "unauthorized" as const };
+    }
+    return {
+      kind: "active" as const,
+      actor: { authUserId: session.user.id, role: role.output },
+    };
+  } catch {
     return { kind: "unavailable" as const };
   }
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session || !session.user.emailVerified) {
-    return { kind: "unauthorized" as const };
-  }
-  const role = v.safeParse(StaffRoleSchema, session.session.role);
-  if (!role.success) {
-    await staffQueries.resolveApplicant(session.user.id, session.user.email);
-    await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
-    return { kind: "awaiting_approval" as const };
-  }
-  const generation = v.safeParse(
-    v.pipe(v.number(), v.integer(), v.minValue(0)),
-    session.session.generation,
-  );
-  if (
-    !generation.success ||
-    !(await staffQueries.hasCurrentSessionGeneration(session.user.id, generation.output))
-  ) {
-    await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
-    return { kind: "unauthorized" as const };
-  }
-  return {
-    kind: "active" as const,
-    actor: { authUserId: session.user.id, role: role.output },
-  };
 };
 
 export const revokeStaffUserSessions = async (origin: string, authUserId: string) => {

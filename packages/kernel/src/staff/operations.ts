@@ -75,6 +75,23 @@ export const listStaff = async (
   }
 };
 
+export const createStaff = async (
+  actor: StaffActor,
+  email: string,
+  role: StaffRole,
+): Promise<Result<StaffMember, StaffOperationFailure>> => {
+  const denied = requireOwner(actor);
+  if (denied) {
+    return denied;
+  }
+  try {
+    const member = await staffQueries.createActive(email, role);
+    return member ? Result.ok(publicMember(member)) : Result.err({ code: "invalid_transition" });
+  } catch {
+    return Result.err({ code: "infrastructure_unavailable" });
+  }
+};
+
 export const approveStaff = async (
   actor: StaffActor,
   origin: string,
@@ -90,7 +107,7 @@ export const approveStaff = async (
     if (!before) {
       return Result.err({ code: "not_found" });
     }
-    if (before.status === "active" && before.role !== role) {
+    if (before.status === "active") {
       return Result.err({ code: "invalid_transition" });
     }
     const member = await staffQueries.approve(id, role);
@@ -185,24 +202,22 @@ export const removeStaff = async (
     return denied;
   }
   try {
-    const before = (await staffQueries.list()).find((member) => member.id === id);
-    if (!before) {
-      return Result.err({ code: "not_found" });
-    }
-    if (before.status === "active") {
-      const revoked = await staffQueries.revoke(id);
-      if (!revoked || revoked.status !== "revoked") {
-        return Result.err({ code: before.role === "owner" ? "final_owner" : "invalid_transition" });
+    const { removed, current } = await staffQueries.remove(id);
+    if (!removed) {
+      if (!current) {
+        return Result.err({ code: "not_found" });
       }
+      return Result.err({
+        code:
+          current.status === "active" && current.role === "owner"
+            ? "final_owner"
+            : "invalid_transition",
+      });
     }
-    if (!(await revokeSessions(origin, before))) {
+    if (!(await revokeSessions(origin, removed))) {
       return Result.err({ code: "session_revocation_failed" });
     }
-    const removed = await staffQueries.remove(id);
-    if (removed.after) {
-      return Result.err({ code: "invalid_transition" });
-    }
-    return Result.ok(publicMember(before));
+    return Result.ok(publicMember(removed));
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }

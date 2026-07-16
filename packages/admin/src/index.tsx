@@ -141,6 +141,74 @@ const StaffRow = (props: { member: StaffMember }) => {
   );
 };
 
+const AddStaffForm = () => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(() => staffMutationOptions(queryClient));
+  const form = createForm(() => ({
+    defaultValues: { email: "", role: v.parse(StaffRoleSchema, "staff") },
+    onSubmit: async ({ value }) => {
+      await mutation.mutateAsync({ kind: "create", email: value.email, role: value.role });
+      form.reset();
+    },
+  }));
+
+  return (
+    <form
+      class="staff-add-form"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        await form.handleSubmit();
+      }}
+    >
+      <form.Field name="email">
+        {(field) => (
+          <label>
+            <span>Google и-мэйл</span>
+            <input
+              type="email"
+              autocomplete="email"
+              required
+              value={field().state.value}
+              onInput={(event) => field().handleChange(event.currentTarget.value)}
+              disabled={mutation.isPending}
+              placeholder="name@example.com"
+            />
+          </label>
+        )}
+      </form.Field>
+      <form.Field name="role">
+        {(field) => (
+          <label>
+            <span>Эрх</span>
+            <select
+              value={field().state.value}
+              onChange={(event) => {
+                const role = v.safeParse(StaffRoleSchema, event.currentTarget.value);
+                if (role.success) {
+                  field().handleChange(role.output);
+                }
+              }}
+              disabled={mutation.isPending}
+            >
+              <For each={Object.entries(roleLabels)}>
+                {([value, label]) => <option value={value}>{label}</option>}
+              </For>
+            </select>
+          </label>
+        )}
+      </form.Field>
+      <Button type="submit" disabled={mutation.isPending}>
+        {mutation.isPending ? "Нэмж байна…" : "Ажилтан нэмэх"}
+      </Button>
+      <Show when={mutation.isError}>
+        <p class="staff-add-error" role="alert">
+          Ажилтныг нэмэж чадсангүй. И-мэйл бүртгэлтэй эсэхийг шалгана уу.
+        </p>
+      </Show>
+    </form>
+  );
+};
+
 const StaffManagement = () => {
   const staff = useQuery(() => staffQueryOptions());
   return (
@@ -148,10 +216,11 @@ const StaffManagement = () => {
       <div class="section-heading">
         <div>
           <h2 id="staff-title">Ажилтны эрх</h2>
-          <p>Google хүсэлтийг зөвшөөрч, Store-ийн үүргийг удирдана.</p>
+          <p>Ажилтны Google и-мэйлийг урьдчилан нэмж эсвэл хүсэлтийг зөвшөөрч эрхийг удирдана.</p>
         </div>
         <span class="staff-count">{staff.data?.data.members.length ?? 0} бүртгэл</span>
       </div>
+      <AddStaffForm />
       <Show
         when={!staff.isPending}
         fallback={<p role="status">Ажилтны жагсаалтыг ачаалж байна…</p>}

@@ -4,6 +4,7 @@ export { readDatabaseHealth } from "./db/health";
 export {
   approveStaff,
   changeStaffRole,
+  createStaff,
   hasStaffCapability,
   listStaff,
   removeStaff,

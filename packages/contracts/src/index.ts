@@ -79,6 +79,11 @@ export const StaffListResponseSchema = v.strictObject({
   data: v.strictObject({ members: v.array(StaffMemberSchema) }),
 });
 
+export const StaffCreateInputSchema = v.strictObject({
+  email: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+  role: StaffRoleSchema,
+});
+
 export const StaffMutationInputSchema = v.strictObject({
   role: StaffRoleSchema,
 });
@@ -177,6 +182,7 @@ export type StaffId = v.InferOutput<typeof StaffIdSchema>;
 export type StaffRole = v.InferOutput<typeof StaffRoleSchema>;
 export type StaffStatus = v.InferOutput<typeof StaffStatusSchema>;
 export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;
+export type StaffCreateInput = v.InferOutput<typeof StaffCreateInputSchema>;
 export type StaffListResponse = v.InferOutput<typeof StaffListResponseSchema>;
 export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSchema>;
 export type StaffClientError = v.InferOutput<typeof StaffClientErrorSchema>;
