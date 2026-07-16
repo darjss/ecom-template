@@ -164,10 +164,10 @@ _Avoid_: Customer User
 ## Evidence and concurrency
 
 **Domain Event**:
-An immutable fact emitted after the shared kernel accepts a domain transition.
+An immutable domain fact accepted by the shared kernel. The system is not event sourced and has no generic Domain Event store; dedicated Financial and Inventory Entries preserve ledger facts, while compact Audit Events record only accepted consequential evidence.
 
 **Audit Event**:
 An immutable operator-readable record of who or what attempted or caused a consequential change and why.
 
 **Revision**:
-A monotonic aggregate version required by mutating commands to prevent lost updates.
+A monotonic version used only where an accepted feature contract explicitly requires one. Ordinary Catalog, settings, and typed CMS writes are last-write-wins; consequential transitions instead use atomic current-state predicates and retry idempotency.
