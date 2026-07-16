@@ -2,7 +2,6 @@ import { env } from "cloudflare:workers";
 import * as v from "valibot";
 
 const OriginSchema = v.pipe(v.string(), v.url());
-const LocalPort = "1355";
 
 export const resolveStoreRequestOrigin = (request: Request, storeSlug: string) => {
   const canonicalOrigin = v.safeParse(OriginSchema, env.PUBLIC_STORE_ORIGIN);
@@ -16,7 +15,7 @@ export const resolveStoreRequestOrigin = (request: Request, storeSlug: string) =
     return requestUrl.origin;
   }
 
-  if (requestUrl.protocol !== "https:" || requestUrl.port !== LocalPort) {
+  if (requestUrl.protocol !== "https:" || requestUrl.port !== "") {
     return undefined;
   }
 
