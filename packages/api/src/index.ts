@@ -2,15 +2,25 @@ import {
   ApiErrorSchema,
   HealthApiErrorSchema,
   HealthResponseSchema,
+  StaffLifecycleApiErrorSchema,
+  StaffListResponseSchema,
+  StaffMutationInputSchema,
+  StaffMutationResponseSchema,
   StoreDefinitionSchema,
   type StoreDefinition,
 } from "@ecom/contracts";
 import {
+  approveStaff,
+  changeStaffRole,
   createStaffAuth,
   createStoreBackground,
   createStorefrontReader,
+  listStaff,
   readDatabaseHealth,
-  staffQueries,
+  readStaffAuthSession,
+  removeStaff,
+  revokeStaff,
+  type StaffOperationFailure,
   type StoreBackground,
   type StorefrontReader,
 } from "@ecom/kernel";
@@ -30,6 +40,15 @@ const privateResponse = (response: Response) => {
   });
 };
 
+const apiError = (
+  code: "unauthorized" | "forbidden" | "not_found" | "validation" | "conflict" | "unavailable",
+  message: string,
+  reason?: "final_owner" | "invalid_transition" | "session_revocation_failed",
+) =>
+  v.parse(StaffLifecycleApiErrorSchema, {
+    error: { code, message, ...(reason ? { reason } : {}) },
+  });
+
 const unavailableAuthResponse = () =>
   Response.json(
     v.parse(ApiErrorSchema, {
@@ -46,27 +65,178 @@ const rejectedHostResponse = () =>
     { status: 421, headers: { "cache-control": "private, no-store" } },
   );
 
+const readActor = async (request: Request, definition: StoreDefinition) => {
+  const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
+  if (!origin) {
+    return { kind: "rejected_host" as const };
+  }
+  const session = await readStaffAuthSession(request, origin);
+  return session.kind === "active"
+    ? { kind: "active" as const, origin, actor: session.actor }
+    : session;
+};
+
+const mapFailure = (
+  failure: StaffOperationFailure,
+  status: (code: number, body: unknown) => unknown,
+) => {
+  if (failure.code === "forbidden") {
+    return status(403, apiError("forbidden", "Owner authority is required"));
+  }
+  if (failure.code === "not_found") {
+    return status(404, apiError("not_found", "Staff member was not found"));
+  }
+  if (failure.code === "final_owner") {
+    return status(409, apiError("conflict", "The final active Owner is protected", "final_owner"));
+  }
+  if (failure.code === "invalid_transition") {
+    return status(
+      409,
+      apiError("conflict", "The Staff lifecycle transition is not valid", "invalid_transition"),
+    );
+  }
+  if (failure.code === "session_revocation_failed") {
+    return status(
+      503,
+      apiError("unavailable", "Staff sessions could not be revoked", "session_revocation_failed"),
+    );
+  }
+  return status(503, apiError("unavailable", "Staff authority is unavailable"));
+};
+
+const authorizeRoute = async (
+  request: Request,
+  definition: StoreDefinition,
+  status: (code: number, body: unknown) => unknown,
+) => {
+  const state = await readActor(request, definition);
+  if (state.kind === "active") {
+    return { authorized: true as const, actor: state.actor, origin: state.origin };
+  }
+  if (state.kind === "awaiting_approval") {
+    return {
+      authorized: false as const,
+      response: status(403, apiError("forbidden", "Staff approval is pending")),
+    };
+  }
+  if (state.kind === "rejected_host") {
+    return {
+      authorized: false as const,
+      response: status(421, apiError("validation", "Request host is not accepted")),
+    };
+  }
+  if (state.kind === "unavailable") {
+    return {
+      authorized: false as const,
+      response: status(503, apiError("unavailable", "Authentication is not configured")),
+    };
+  }
+  return {
+    authorized: false as const,
+    response: status(401, apiError("unauthorized", "Staff authentication is required")),
+  };
+};
+
 const createApi = (definition: StoreDefinition) =>
   new Elysia({ aot: false, prefix: "/api" })
-    .all("/auth/staff/*", async ({ request }) => {
+    .onAfterHandle(({ responseValue, set }) => {
+      set.headers["cache-control"] = "private, no-store";
+      return responseValue;
+    })
+    .all("/auth/staff/*", async ({ body, request }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
       if (!origin) {
         return rejectedHostResponse();
       }
       const auth = createStaffAuth(origin);
-      return auth ? privateResponse(await auth.handler(request)) : unavailableAuthResponse();
+      if (!auth) {
+        return unavailableAuthResponse();
+      }
+      const authRequest =
+        request.bodyUsed && body !== undefined
+          ? new Request(request.url, {
+              method: request.method,
+              headers: request.headers,
+              body: JSON.stringify(body),
+            })
+          : request;
+      return privateResponse(await auth.handler(authRequest));
     })
-    .get("/health", async ({ set, status }) => {
-      set.headers["cache-control"] = "private, no-store";
+    .get("/staff", async ({ request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await listStaff(authorization.actor);
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffListResponseSchema, { data: { members: result.value } });
+    })
+    .post("/staff/:id/approve", async ({ body, params, request, status }) => {
+      const input = v.safeParse(StaffMutationInputSchema, body);
+      if (!input.success) {
+        return status(422, apiError("validation", "A valid Staff role is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await approveStaff(
+        authorization.actor,
+        authorization.origin,
+        params.id,
+        input.output.role,
+      );
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .patch("/staff/:id/role", async ({ body, params, request, status }) => {
+      const input = v.safeParse(StaffMutationInputSchema, body);
+      if (!input.success) {
+        return status(422, apiError("validation", "A valid Staff role is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await changeStaffRole(
+        authorization.actor,
+        authorization.origin,
+        params.id,
+        input.output.role,
+      );
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .post("/staff/:id/revoke", async ({ params, request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await revokeStaff(authorization.actor, authorization.origin, params.id);
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .delete("/staff/:id", async ({ params, request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await removeStaff(authorization.actor, authorization.origin, params.id);
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();
       if (databaseHealth.isErr()) {
         return status(
           503,
           v.parse(HealthApiErrorSchema, {
-            error: {
-              code: "unavailable",
-              message: "Store infrastructure is unavailable",
-            },
+            error: { code: "unavailable", message: "Store infrastructure is unavailable" },
           }),
         );
       }
@@ -89,21 +259,10 @@ export type StoreBackend = {
   readonly background: StoreBackground;
 };
 
-export const authorizeStaffRequest = async (request: Request, input: unknown) => {
+export const resolveStaffRequest = async (request: Request, input: unknown) => {
   const definition = v.parse(StoreDefinitionSchema, input);
   const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
-  if (!origin) {
-    return false;
-  }
-  const auth = createStaffAuth(origin);
-  if (!auth) {
-    return false;
-  }
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session || !session.user.emailVerified) {
-    return false;
-  }
-  return staffQueries.hasActiveAuthority(session.user.id, session.user.email.trim().toLowerCase());
+  return origin ? readStaffAuthSession(request, origin) : { kind: "unauthorized" as const };
 };
 
 export { resolveStoreRequestOrigin } from "./request-origin";
