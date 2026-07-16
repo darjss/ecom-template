@@ -8,7 +8,7 @@ The current repository demonstrates bootstrap infrastructure: D1 health, Staff a
 
 ### 1. Establish authority and language
 
-Locate the feature in the [contract index](contract-index.md), apply the [final scope reconciliation](../wayfinder/final-scope-reconciliation.md), and use terms from the [domain glossary](domain.md). Record the exact issue requirements and contract clauses the slice will prove. Stop if accepted contracts still conflict after reconciliation precedence.
+Locate the feature in the [contract index](contract-index.md), apply the current [ecommerce system specification](../specs/ecommerce-system.md), then apply the [final scope reconciliation](../wayfinder/final-scope-reconciliation.md) to decisions the specification does not replace. Use terms from the [domain glossary](domain.md). Record the exact issue requirements and contract clauses the slice will prove. Stop if accepted contracts still conflict after applying the full precedence order.
 
 The [bootstrap plan](../architecture/bootstrap-plan.md) navigates landed seams only. It is not domain authority.
 
@@ -91,12 +91,12 @@ Do not add tests, mocks, stubs, fake providers, or temporary source examples as 
 
 Copy this table into the implementation report and replace each placeholder with exact evidence. Remove rows that are genuinely not applicable and state why.
 
-| Requirement | Owning contract or issue clause | Changed artifact | Real proof command or observation | Outcome or blocker |
-| --- | --- | --- | --- | --- |
-| Runtime contract | `<link and clause>` | `<schema or entrypoint>` | `<parse/API evidence>` | `<pass/blocker>` |
-| Persistence and migration | `<link and clause>` | `<schema, migration, persistence>` | `<migration and D1 evidence>` | `<pass/blocker>` |
-| Kernel operation | `<link and clause>` | `<operation entrypoint>` | `<real API/CLI path>` | `<pass/blocker>` |
-| HTTP and typed client | `<link and clause>` | `<route, request, Query config>` | `<curl statuses/envelopes>` | `<pass/blocker>` |
-| Admin or Storefront behavior | `<link and clause>` | `<shared UI composition>` | `<browser path and viewport>` | `<pass/blocker>` |
-| Generated artifacts | `<owning configuration>` | `<generated paths>` | `<non-mutating drift command>` | `<pass/blocker>` |
-| Repository gates | [`package.json`](../../package.json) | `<affected workspace>` | `<exact plain-pnpm commands>` | `<pass/blocker>` |
+| Requirement                  | Owning contract or issue clause      | Changed artifact                   | Real proof command or observation | Outcome or blocker |
+| ---------------------------- | ------------------------------------ | ---------------------------------- | --------------------------------- | ------------------ |
+| Runtime contract             | `<link and clause>`                  | `<schema or entrypoint>`           | `<parse/API evidence>`            | `<pass/blocker>`   |
+| Persistence and migration    | `<link and clause>`                  | `<schema, migration, persistence>` | `<migration and D1 evidence>`     | `<pass/blocker>`   |
+| Kernel operation             | `<link and clause>`                  | `<operation entrypoint>`           | `<real API/CLI path>`             | `<pass/blocker>`   |
+| HTTP and typed client        | `<link and clause>`                  | `<route, request, Query config>`   | `<curl statuses/envelopes>`       | `<pass/blocker>`   |
+| Admin or Storefront behavior | `<link and clause>`                  | `<shared UI composition>`          | `<browser path and viewport>`     | `<pass/blocker>`   |
+| Generated artifacts          | `<owning configuration>`             | `<generated paths>`                | `<non-mutating drift command>`    | `<pass/blocker>`   |
+| Repository gates             | [`package.json`](../../package.json) | `<affected workspace>`             | `<exact plain-pnpm commands>`     | `<pass/blocker>`   |

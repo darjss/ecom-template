@@ -1,6 +1,6 @@
 # Coding standards
 
-This is the everyday coding contract. Architecture lives in the [final scope reconciliation](../wayfinder/final-scope-reconciliation.md); delivery details live in the accepted Wayfinder contracts.
+This is the everyday coding contract. Current implementation scope lives in the [ecommerce system specification](../specs/ecommerce-system.md); the [final scope reconciliation](../wayfinder/final-scope-reconciliation.md) and accepted Wayfinder contracts govern details the current specification does not replace.
 
 ## Cause-first
 

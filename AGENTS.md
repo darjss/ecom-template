@@ -1,6 +1,6 @@
 # Agent conventions
 
-Before coding, read [`docs/agents/coding-standards.md`](docs/agents/coding-standards.md), use the [`contract authority index`](docs/agents/contract-index.md) to find the governing feature contract, and follow the [`feature-slice guide`](docs/agents/feature-slice.md) when extending runtime behavior. For architecture, [`docs/wayfinder/final-scope-reconciliation.md`](docs/wayfinder/final-scope-reconciliation.md) overrides older artifacts.
+Before coding, read [`docs/agents/coding-standards.md`](docs/agents/coding-standards.md), use the [`contract authority index`](docs/agents/contract-index.md) to find the governing feature contract, and follow the [`feature-slice guide`](docs/agents/feature-slice.md) when extending runtime behavior. The current [`ecommerce system specification`](docs/specs/ecommerce-system.md) mirrors issue #33 and overrides conflicting older Wayfinder artifacts; the [`final scope reconciliation`](docs/wayfinder/final-scope-reconciliation.md) governs decisions the current specification does not replace.
 
 ## North star
 
