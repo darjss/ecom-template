@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { parse } from "yaml";
@@ -225,23 +226,25 @@ const addOwner = async () => {
     );
   }
   await verifyRemoteD1Resource(target.app, journal.resources.d1);
-  const remoteConfigPath = join(process.cwd(), ".delivery", ".owner-provisioning.wrangler.json");
-  await mkdir(".delivery", { recursive: true });
-  await writeFile(
-    remoteConfigPath,
-    JSON.stringify({
-      name: "owner-provisioning",
-      compatibility_date: "2026-07-08",
-      d1_databases: [
-        {
-          binding: "DB",
-          database_name: journal.resources.d1.name,
-          database_id: journal.resources.d1.databaseId,
-        },
-      ],
-    }),
-  );
+  const remoteConfigDirectory = await mkdtemp(join(tmpdir(), "ecom-owner-provisioning-"));
   try {
+    await chmod(remoteConfigDirectory, 0o700);
+    const remoteConfigPath = join(remoteConfigDirectory, "wrangler.json");
+    await writeFile(
+      remoteConfigPath,
+      JSON.stringify({
+        name: "owner-provisioning",
+        compatibility_date: "2026-07-08",
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: journal.resources.d1.name,
+            database_id: journal.resources.d1.databaseId,
+          },
+        ],
+      }),
+      { flag: "wx", mode: 0o600 },
+    );
     const statement = await createOwnerStatement(email);
     await run("pnpm", [
       "exec",
@@ -256,7 +259,7 @@ const addOwner = async () => {
       statement,
     ]);
   } finally {
-    await rm(remoteConfigPath, { force: true });
+    await rm(remoteConfigDirectory, { recursive: true, force: true });
   }
   write(`Provisioned active Owner ${email} for deployed target ${targetName}`);
 };
