@@ -1,10 +1,11 @@
 ---
 import { AdminApp } from "@ecom/admin";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import { storeDefinition } from "../../profile/definition";
 
 export const prerender = false;
 Astro.response.headers.set("Cache-Control", "private, no-store");
 ---
 <AdminLayout title="Өрнүүн 48 · Удирдлага">
-  <AdminApp client:only="solid-js" />
+  <AdminApp storeName={storeDefinition.profile.name} client:only="solid-js" />
 </AdminLayout>

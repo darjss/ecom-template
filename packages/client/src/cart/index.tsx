@@ -1,18 +1,18 @@
-import { CartSchema, type CartLine } from "@ecom/contracts";
+import { CartSchema, type Cart, type CartLine } from "@ecom/contracts";
 import { makePersisted } from "@solid-primitives/storage";
 import {
   createContext,
   createMemo,
-  createSignal,
   useContext,
   type Accessor,
   type ParentComponent,
 } from "solid-js";
+import { createStore } from "solid-js/store";
 import * as v from "valibot";
 
 const deserializeCart = (value: string) => {
   const parsed: unknown = JSON.parse(value);
-  return v.parse(CartSchema, parsed).lines;
+  return v.parse(CartSchema, parsed);
 };
 
 type CartContextValue = {
@@ -29,26 +29,22 @@ export type CartProviderProps = {
 };
 
 export const CartProvider: ParentComponent<CartProviderProps> = (props) => {
-  const [lines, setLines] = makePersisted(createSignal<CartLine[]>([]), {
+  const [cart, setCart] = makePersisted(createStore<Cart>({ lines: [] }), {
     name: props.storageKey,
-    serialize: (cartLines) => JSON.stringify({ lines: cartLines }),
+    serialize: JSON.stringify,
     deserialize: deserializeCart,
   });
-  const itemCount = createMemo(() => lines().reduce((total, line) => total + line.quantity, 0));
+  const lines = () => cart.lines;
+  const itemCount = createMemo(() => cart.lines.reduce((total, line) => total + line.quantity, 0));
   const addLine = (line: CartLine) => {
-    setLines((current) => {
-      const existing = current.find((candidate) => candidate.id === line.id);
-      if (!existing) {
-        return [...current, line];
-      }
-      return current.map((candidate) =>
-        candidate.id === line.id
-          ? { ...candidate, quantity: candidate.quantity + line.quantity }
-          : candidate,
-      );
-    });
+    const index = cart.lines.findIndex((candidate) => candidate.id === line.id);
+    if (index === -1) {
+      setCart("lines", cart.lines.length, line);
+      return;
+    }
+    setCart("lines", index, "quantity", (quantity) => quantity + line.quantity);
   };
-  const clear = () => setLines([]);
+  const clear = () => setCart("lines", []);
 
   return (
     <CartContext.Provider value={{ lines, itemCount, addLine, clear }}>

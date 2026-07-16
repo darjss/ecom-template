@@ -11,6 +11,7 @@ export default defineConfig({
     sessionKVBindingName: "EPHEMERAL_KV",
   }),
   integrations: [solid()],
+  fetchFile: null,
   vite: {
     plugins: [tailwindcss()],
   },

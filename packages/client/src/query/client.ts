@@ -3,6 +3,18 @@ import { MutationCache, QueryCache, QueryClient } from "@tanstack/solid-query";
 import { toast } from "solid-sonner";
 import * as v from "valibot";
 
+const retrySafeFailure = (failureCount: number, error: unknown) => {
+  if (failureCount >= 1) {
+    return false;
+  }
+  const parsed = v.safeParse(ClientErrorSchema, error);
+  return (
+    parsed.success &&
+    (parsed.output.kind === "network" ||
+      (parsed.output.kind === "api" && parsed.output.error.code === "unavailable"))
+  );
+};
+
 const presentGlobalError = (error: unknown) => {
   const parsed = v.safeParse(ClientErrorSchema, error);
   if (!parsed.success) {
@@ -38,7 +50,7 @@ export const createStoreQueryClient = () =>
     mutationCache: new MutationCache({ onError: presentGlobalError }),
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: retrySafeFailure,
         refetchOnWindowFocus: false,
       },
       mutations: {

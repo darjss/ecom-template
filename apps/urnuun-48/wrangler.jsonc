@@ -8,6 +8,9 @@
     "enabled": true,
     "head_sampling_rate": 1,
   },
+  "cache": {
+    "enabled": true,
+  },
   "d1_databases": [
     {
       "binding": "DB",

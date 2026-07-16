@@ -8,7 +8,7 @@
     "dev:direct": "astro dev --host 127.0.0.1 --port ${PORT:-4321}",
     "build": "astro build",
     "preview": "wrangler dev --config wrangler.jsonc --port 4321",
-    "bindings:generate": "wrangler types --config wrangler.jsonc worker-configuration.d.ts",
+    "bindings:generate": "wrangler types worker-configuration.d.ts --config wrangler.jsonc --env-file=.bindings.vars",
     "db:migrate:local": "wrangler d1 migrations apply urnuun-48-db --local --config wrangler.jsonc"
   },
   "dependencies": {
@@ -16,7 +16,6 @@
     "@astrojs/solid-js": "7.0.1",
     "@ecom/admin": "workspace:*",
     "@ecom/api": "workspace:*",
-    "@ecom/integrations": "workspace:*",
     "@ecom/storefront": "workspace:*",
     "@ecom/ui": "workspace:*",
     "@tailwindcss/vite": "4.3.2",

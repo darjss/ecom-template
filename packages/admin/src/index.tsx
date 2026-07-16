@@ -15,11 +15,15 @@ const HealthStatus = () => {
   );
 };
 
-const Dashboard = () => (
+export type AdminAppProps = {
+  storeName: string;
+};
+
+const Dashboard = (props: AdminAppProps) => (
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Үндсэн цэс">
       <a class="admin-brand" href="/">
-        Өрнүүн 48
+        {props.storeName}
       </a>
       <nav>
         <a class="active" aria-current="page" href="/admin">
@@ -55,15 +59,15 @@ const Dashboard = () => (
   </div>
 );
 
-const AdminRoutes = () => (
+const AdminRoutes = (props: AdminAppProps) => (
   <Router>
-    <Route path="/*" component={Dashboard} />
+    <Route path="/*" component={() => <Dashboard storeName={props.storeName} />} />
   </Router>
 );
 
-export const AdminApp = () => (
+export const AdminApp = (props: AdminAppProps) => (
   <QueryClientProvider client={createStoreQueryClient()}>
-    <AdminRoutes />
+    <AdminRoutes storeName={props.storeName} />
   </QueryClientProvider>
 );
 

@@ -19,6 +19,13 @@ export const ApiErrorSchema = v.strictObject({
   }),
 });
 
+export const HealthApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.literal("unavailable"),
+    message: v.string(),
+  }),
+});
+
 export const HealthResponseSchema = v.strictObject({
   data: v.strictObject({
     status: v.literal("ok"),
@@ -35,7 +42,6 @@ export const StoreDefinitionSchema = v.strictObject({
     slug: v.pipe(v.string(), v.regex(/^[a-z0-9-]+$/)),
     name: v.pipe(v.string(), v.minLength(1)),
     location: v.pipe(v.string(), v.minLength(1)),
-    origin: v.pipe(v.string(), v.url()),
     currency: v.literal("MNT"),
     locale: v.literal("mn-MN"),
   }),
@@ -68,8 +74,16 @@ export const ClientErrorSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("api"), error: ApiErrorSchema.entries.error }),
 ]);
 
+export const HealthClientErrorSchema = v.variant("kind", [
+  v.strictObject({ kind: v.literal("network"), message: v.string() }),
+  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
+  v.strictObject({ kind: v.literal("api"), error: HealthApiErrorSchema.entries.error }),
+]);
+
 export type ApiError = v.InferOutput<typeof ApiErrorSchema>;
+export type HealthApiError = v.InferOutput<typeof HealthApiErrorSchema>;
 export type HealthResponse = v.InferOutput<typeof HealthResponseSchema>;
+export type HealthClientError = v.InferOutput<typeof HealthClientErrorSchema>;
 export type StoreDefinition = v.InferOutput<typeof StoreDefinitionSchema>;
 export type StorefrontSummary = v.InferOutput<typeof StorefrontSummarySchema>;
 export type Cart = v.InferOutput<typeof CartSchema>;

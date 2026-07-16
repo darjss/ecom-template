@@ -3,5 +3,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/api.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "drizzle.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../../apps/urnuun-48/worker-configuration.d.ts"]
 }

@@ -2,12 +2,12 @@
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
 import { CartIsland } from "@ecom/storefront/cart";
 import StoreLayout from "../layouts/StoreLayout.astro";
-import { backend } from "../backend";
+import { storefront } from "../api";
 import { storeDefinition } from "../profile/definition";
 
 export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
-const summary = await backend.storefront.readSummary();
+const summary = await storefront.readSummary();
 const featuredItem = storeDefinition.presentation.featuredItem;
 ---
 <StoreLayout title={`${summary.storeName} · Өдөр тутмын сонголт`} description="Өрнүүн 48-ийн удаан эдэлгээтэй өдөр тутмын сонголтууд">
