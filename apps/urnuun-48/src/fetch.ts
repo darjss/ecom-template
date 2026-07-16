@@ -60,16 +60,8 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
         providers: storeDefinition.providers,
       });
       if (staff.kind === "awaiting_approval") {
-        if (pathname === "/admin/awaiting") {
-          return classifyResponse(request, await handle(request, environment, context));
-        }
-        return new Response(null, {
-          status: 303,
-          headers: {
-            location: new URL("/admin/awaiting", origin).toString(),
-            "cache-control": "private, no-store",
-          },
-        });
+        const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
+        return privateResponse(await handle(awaitingRequest, environment, context));
       }
       if (staff.kind !== "active") {
         return new Response(null, {
