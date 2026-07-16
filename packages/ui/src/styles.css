@@ -1,0 +1,72 @@
+:root {
+  --ink: oklch(24% 0.025 66);
+  --muted: oklch(48% 0.02 66);
+  --paper: oklch(97% 0.018 85);
+  --surface: oklch(92% 0.035 78);
+  --accent: oklch(58% 0.16 38);
+  --accent-ink: oklch(98% 0.01 75);
+  --focus: oklch(54% 0.17 250);
+  --radius: 1.15rem;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 20rem;
+}
+a {
+  color: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.ui-button {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1.1rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 160ms ease;
+}
+.ui-button--primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+.ui-button--quiet {
+  color: var(--ink);
+  background: var(--surface);
+}
+.ui-button:hover {
+  filter: brightness(0.96);
+}
+.ui-button:active {
+  transform: scale(0.97);
+}
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

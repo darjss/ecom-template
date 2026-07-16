@@ -1,0 +1,15 @@
+{
+  "name": "@ecom/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ecom/contracts": "workspace:*",
+    "@ecom/kernel": "workspace:*",
+    "elysia": "1.4.29",
+    "valibot": "1.4.2"
+  }
+}

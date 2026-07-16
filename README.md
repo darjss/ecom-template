@@ -1,56 +1,47 @@
-# saas-starter
+# Ecommerce template
 
-A SaaS starter template on Cloudflare Workers: Astro 7 SSR + SolidJS islands + Elysia API (typed end to end via Eden) + better-auth on D1 + Polar billing + Tailwind v4 with the Zaidan/Kobalte component registry.
+Astro 7, Solid, Elysia, and Cloudflare Workers workspace for independently deployed Stores. Өрнүүн 48 is the committed Reference Store.
 
-## Stack
+## Workspace
 
-- Astro 7 (`@astrojs/cloudflare` 14), SolidJS, Tailwind v4
-- Elysia mounted under `/api` via a catch-all endpoint, Eden treaty client in `src/lib/api.ts`
-- Drizzle on D1, KV for sessions + cache, better-auth (email/password, magic link, TOTP 2FA, Google, organizations, admin, SSO behind a flag)
-- Polar for billing via `@polar-sh/better-auth`, behind a thin `PaymentProvider` seam
-- TanStack solid-query, hand-rolled forms with valibot, solid-sonner toasts, lucide-solid icons (deep imports only)
-- Toolchain: pnpm + vite-plus (`vp lint`, `vp fmt`), `astro check` for types
+- `apps/urnuun-48`: minimal Store composition root
+- `packages/contracts`: browser-safe runtime contracts
+- `packages/kernel`: D1 persistence, migrations, Auth, and Store operations
+- `packages/api`: complete Elysia application
+- `packages/client`: Eden, TanStack, and persisted browser state
+- `packages/admin`: authenticated Solid Merchant Admin SPA
+- `packages/storefront`: default Storefront behavior
+- `packages/ui`: generated Zaidan primitives, Kobalte, Solar Icons, and motion
+- `packages/integrations`: validated static provider selection
+- `packages/delivery`: Node-only delivery CLI
 
-## Quickstart
+## Local development
 
-```bash
-pnpm install                 # also generates worker-configuration.d.ts
-cp .dev.vars.example .dev.vars   # fill secrets
-pnpm db:migrate:local
-pnpm seed                    # admin@example.com / password123
-pnpm dev                     # http://localhost:4321
+```sh
+pnpm install --frozen-lockfile
+pnpm store:apply --manifest apps/urnuun-48/delivery.local.yml --target urnuun-local
+pnpm dev:stores
 ```
 
-Verify: `curl localhost:4321/api/health`.
+Portless renders `https://urnuun-48.shop.localhost` in the main checkout and prefixes linked worktrees with the sanitized final branch segment. Print the exact URL for this checkout with `pnpm store:delivery origin --store urnuun-48`. The local Worker state lives under `apps/urnuun-48/.wrangler`. Admin requests without a valid Staff session redirect to `/admin/login`.
 
-Deploy: create the D1 database and two KV namespaces, fill the ids in `wrangler.jsonc`, `wrangler secret put` each secret from `.dev.vars.example`, then `pnpm deploy`.
+Run one Store explicitly with `pnpm dev:store --store urnuun-48`. Build it with `pnpm build:store --store urnuun-48`.
 
-Billing: follow `docs/agents/polar.md` (MCP-driven) or run `pnpm polar:setup` (SDK fallback).
+## Delivery shells
 
-## Swap points per project
+```sh
+pnpm store:create --slug another-store --name "Another Store"
+pnpm store:apply --manifest <path> --target <name>
+pnpm store:proof --manifest <path> --target <name>
+pnpm store:cleanup --manifest <path> --target <name>
+```
 
-- **Hero** — `src/components/marketing/Hero.tsx` is the landing hero island; replace this one file per project.
-- **Plans catalog** — `src/lib/plans.ts`; paid plans map to Polar products via `POLAR_PRODUCT_ID_<SLUG>` env vars (see `src/server/billing/polar.ts`).
-- **Payment provider** — implement `PaymentProvider` (`src/server/billing/provider.ts`) and swap the export in `src/server/billing/index.ts`.
-- **Edge cache map** — `src/lib/cache-config.ts`: route pattern → s-maxage. Only cached for GET + HTML + no session cookie; `/app` and `/api` are never cached.
-- **Email** — `src/server/lib/email.ts` logs to console; replace `sendEmail` with a real provider.
-- **SSO** — set `SSO_ENABLED=true` to enable the `@better-auth/sso` plugin; to move to WorkOS later, swap that one plugin entry in `src/server/lib/auth.ts`.
+`store:create` validates its complete invocation and then fails intentionally until delivery owns a Store-neutral skeleton. Local apply records the selected target, rendered origin, and commit. Proof accepts only the matching running checkout and commit, then records the verified health URL. Cleanup removes only that target's disposable local state and evidence. Remote apply validates committed canary structure before rejecting unavailable remote mutation.
 
-## Commands
+## Verification
 
-| Command | What |
-| --- | --- |
-| `pnpm dev` / `pnpm build` | dev server / production build |
-| `pnpm preview` | run the built worker in miniflare via `wrangler dev` |
-| `pnpm typecheck` / `pnpm lint` / `pnpm fmt` | astro check / oxlint / oxfmt |
-| `pnpm auth:generate` | regenerate better-auth Drizzle schema (uses `scripts/auth-schema.config.ts`) |
-| `pnpm db:generate` | drizzle-kit migration from schema changes |
-| `pnpm db:migrate:local` / `:remote` | apply migrations to D1 |
-| `pnpm seed` | seed local D1 with an admin user + demo project |
-| `pnpm polar:setup` | create Polar products from the plans catalog |
-
-## Notes
-
-- Astro 7's advanced routing (`src/fetch.ts`) was evaluated as the Elysia mount point but the dev server hangs with it on `@astrojs/cloudflare` 14.1.x (withastro/astro#17181), so the API mounts through `src/pages/api/[...slug].ts`. Switching later is a two-file change: add `src/fetch.ts`, delete the catch-all.
-- Elysia runs with `aot: false` (workerd forbids runtime codegen).
-- better-auth sessions live in KV with D1 fallback (`storeSessionInDatabase: true`) to avoid the KV-expiry logout issue (better-auth#4203).
+```sh
+pnpm check
+pnpm store:delivery validate --manifest apps/urnuun-48/delivery.local.yml
+pnpm store:delivery validate --manifest apps/urnuun-48/delivery.canary.yml
+```

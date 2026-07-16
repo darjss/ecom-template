@@ -1,0 +1,21 @@
+---
+import { AdminHealthStatus, StaffLoginForm } from "@ecom/admin";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+
+Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+<AdminLayout title="Ажилтны нэвтрэх · Өрнүүн 48">
+  <main id="admin-content" class="login-shell">
+    <section class="login-panel" aria-labelledby="login-title">
+      <p class="eyebrow">Өрнүүн 48 · Удирдлага</p>
+      <h1 id="login-title">Ажилтны нэвтрэх</h1>
+      <p>Зөвшөөрөгдсөн Google хаягаар нэвтэрсний дараа удирдлагын хэсэг нээгдэнэ.</p>
+      <StaffLoginForm client:only="solid-js" />
+      <div class="login-health">
+        <span>Системийн төлөв</span>
+        <AdminHealthStatus client:only="solid-js" />
+      </div>
+      <a class="store-link-back" href="/">Дэлгүүр рүү буцах</a>
+    </section>
+  </main>
+</AdminLayout>

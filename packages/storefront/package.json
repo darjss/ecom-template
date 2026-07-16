@@ -1,0 +1,18 @@
+{
+  "name": "@ecom/storefront",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cache": "./src/cache.ts",
+    "./cart": "./src/CartIsland.tsx"
+  },
+  "dependencies": {
+    "@ecom/client": "workspace:*",
+    "@ecom/contracts": "workspace:*",
+    "@ecom/ui": "workspace:*",
+    "micromark": "4.0.2",
+    "solid-js": "1.9.13"
+  }
+}

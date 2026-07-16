@@ -1,0 +1,13 @@
+{
+  "name": "@ecom/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "typeid-js": "1.2.0",
+    "valibot": "1.4.2"
+  }
+}

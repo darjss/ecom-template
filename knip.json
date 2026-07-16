@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"]
+    },
+    "apps/urnuun-48": {
+      "entry": ["src/pages/**/*.{astro,ts}"],
+      "project": ["src/**/*.{astro,ts,tsx}"]
+    },
+    "packages/*": {
+      "entry": ["src/index.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/integrations": {
+      "entry": [],
+      "project": []
+    },
+    "packages/kernel": {
+      "entry": ["scripts/*.ts"]
+    }
+  },
+  "ignoreDependencies": [
+    "@astrojs/check",
+    "@date-fns/tz",
+    "cloudflare",
+    "culori",
+    "date-fns",
+    "dismatch",
+    "es-toolkit",
+    "evlog",
+    "json-canonicalize",
+    "micromark"
+  ]
+}
