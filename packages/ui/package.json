@@ -13,6 +13,7 @@
     "@solar-icons/solid": "1.0.1",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "culori": "4.0.2",
     "motion": "12.42.2",
     "solid-js": "1.9.13",
     "tailwind-merge": "3.6.0"

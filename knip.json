@@ -33,9 +33,13 @@
     "class-variance-authority",
     "cloudflare",
     "clsx",
+    "culori",
     "date-fns",
+    "dismatch",
+    "es-toolkit",
     "evlog",
     "json-canonicalize",
+    "micromark",
     "solid-js",
     "tailwind-merge",
     "tailwindcss"

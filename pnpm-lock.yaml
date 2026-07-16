@@ -217,9 +217,15 @@ importers:
       better-result:
         specifier: 2.9.2
         version: 2.9.2
+      dismatch:
+        specifier: 2.6.0
+        version: 2.6.0
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@prisma/client@5.22.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.29.2)(pg@8.22.0)
+      es-toolkit:
+        specifier: 1.49.0
+        version: 1.49.0
       evlog:
         specifier: 2.21.0
         version: 2.21.0(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@0.2.7(@sinclair/typebox@0.34.52))(file-type@22.0.1)(openapi-types@12.1.3)(typescript@7.0.2))(h3@1.15.11)(ofetch@1.5.1)(vite@8.1.3(@types/node@24.0.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -242,6 +248,9 @@ importers:
       '@ecom/ui':
         specifier: workspace:*
         version: link:../ui
+      micromark:
+        specifier: 4.0.2
+        version: 4.0.2
       solid-js:
         specifier: 1.9.13
         version: 1.9.13
@@ -263,6 +272,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      culori:
+        specifier: 4.0.2
+        version: 4.0.2
       motion:
         specifier: 12.42.2
         version: 12.42.2
@@ -3587,6 +3599,10 @@ packages:
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
+  culori@4.0.2:
+    resolution: {integrity: sha512-1+BhOB8ahCn4O0cep0Sh2l9KCOfOdY+BXJnKMHFFzDEouSr/el18QwXEMRlOj9UY5nCeA8UN3a/82rUWRBeyBw==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
   date-fns@4.1.0:
     resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
 
@@ -3652,6 +3668,10 @@ packages:
   diff@8.0.4:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
+
+  dismatch@2.6.0:
+    resolution: {integrity: sha512-5u3Z5WLApiZ4p+hGPzhGPE+SteVbVkfk1zTChX5TBv6SXHbgjyUBWtz1TVA8HrgqKEsak+yW5i6gDFazB8bfYA==}
+    engines: {node: '>=18'}
 
   dom-serializer@2.0.0:
     resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
@@ -3915,6 +3935,9 @@ packages:
 
   es-module-lexer@2.3.0:
     resolution: {integrity: sha512-KLdwQm2NvGLDkQDCGvmiQrhkd0JbMzXthwQAUgWjQuQdBLFa3eiBP5arXZyA+f8x+x7OXgud6bq2rxjGtHV2tw==}
+
+  es-toolkit@1.49.0:
+    resolution: {integrity: sha512-G5iZ6Pc/FNRY/soKZHC+TxGDD83rHUDXxzaWhGCX44vAv/tMs56WMusnm/KMNK+luUPsgA9U28cGr4RDlSzL2g==}
 
   esbuild@0.18.20:
     resolution: {integrity: sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==}
@@ -9038,6 +9061,8 @@ snapshots:
 
   csstype@3.2.3: {}
 
+  culori@4.0.2: {}
+
   date-fns@4.1.0: {}
 
   debug@4.4.3:
@@ -9082,6 +9107,8 @@ snapshots:
   diff-sequences@27.5.1: {}
 
   diff@8.0.4: {}
+
+  dismatch@2.6.0: {}
 
   dom-serializer@2.0.0:
     dependencies:
@@ -9176,6 +9203,8 @@ snapshots:
   error-stack-parser-es@1.0.5: {}
 
   es-module-lexer@2.3.0: {}
+
+  es-toolkit@1.49.0: {}
 
   esbuild@0.18.20:
     optionalDependencies:
