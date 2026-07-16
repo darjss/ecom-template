@@ -1,5 +1,4 @@
 import { execFile, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -31,7 +30,7 @@ Commands:
   dev --store <slug>
   preview --store <slug>
   build --store <slug>
-  owner-add --store <slug> --email <email>
+  owner-add --store <slug> --email <email> (--local | --manifest <path> --target <name>)
   create --slug <slug> --name <name>
   apply --manifest <path> --target <name>
   proof --manifest <path> --target <name>
@@ -90,27 +89,71 @@ const proofPath = (targetName: string) => join(".delivery", `${targetName}.proof
 const devProcessPath = (slug: string) => join(".delivery", `${slug}.dev.json`);
 
 const SqlEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
+const StaffIdSchema = v.pipe(v.string(), v.regex(/^staff_[0-9a-hjkmnp-tv-z]{26}$/));
 
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 const addOwner = async () => {
-  const localStore = await resolveLocalStore(requireOption("--store"));
+  const slug = v.parse(StoreSlugSchema, requireOption("--store"));
   const email = v.parse(SqlEmailSchema, requireOption("--email"));
+  const { stdout: staffIdSource } = await execFileOutput("pnpm", ["--silent", "staff:id:create"]);
+  const staffId = v.parse(StaffIdSchema, staffIdSource.trim());
   const now = Date.now();
-  const statement = `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, created_at, updated_at) VALUES (${sqlString(randomUUID())}, ${sqlString(email)}, NULL, 'active', 'owner', ${now}, ${now}) ON CONFLICT(normalized_email) DO UPDATE SET status = 'active', role = 'owner', updated_at = excluded.updated_at`;
+  const statement = `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
+  if (args.includes("--local")) {
+    if (option("--manifest") || option("--target")) {
+      throw new Error("Owner provisioning accepts either --local or a manifest target, not both");
+    }
+    const localStore = await resolveLocalStore(slug);
+    await run("pnpm", [
+      "--filter",
+      `@shops/${localStore.slug}`,
+      "exec",
+      "wrangler",
+      "d1",
+      "execute",
+      "DB",
+      "--local",
+      "--command",
+      statement,
+    ]);
+    write(`Provisioned active Owner ${email} for local Store ${localStore.slug}`);
+    return;
+  }
+
+  const { targetName, target } = await readTarget();
+  if (target.kind === "local" || targetSlug(target.app) !== slug) {
+    throw new Error("Remote Owner target does not match the selected deployed Store");
+  }
+  let journalSource: string;
+  try {
+    journalSource = await readFile(journalPath(targetName), "utf8");
+  } catch {
+    throw new Error("Remote Owner target lacks a deployed delivery journal");
+  }
+  const journal = v.parse(DeliveryJournalSchema, JSON.parse(journalSource));
+  const commit = await readCommitIdentity();
+  if (
+    journal.target !== targetName ||
+    journal.app !== target.app ||
+    journal.commit !== commit ||
+    !journal.completedSteps.includes("remote-deploy")
+  ) {
+    throw new Error("Remote Owner target lacks a matching deployed delivery journal");
+  }
   await run("pnpm", [
     "--filter",
-    `@shops/${localStore.slug}`,
+    target.app,
     "exec",
     "wrangler",
     "d1",
     "execute",
-    "DB",
-    "--local",
+    `${target.resourcePrefix}-db`,
+    "--remote",
     "--command",
     statement,
   ]);
-  write(`Provisioned active Owner ${email} for ${localStore.slug}`);
+  write(`Provisioned active Owner ${email} for deployed target ${targetName}`);
 };
 
 const rejectStoreCreation = () => {
