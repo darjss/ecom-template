@@ -8,7 +8,10 @@ const execFileOutput = promisify(execFile);
 const PortlessOriginSchema = v.pipe(
   v.string(),
   v.url(),
-  v.check((value) => new URL(value).hostname.endsWith(".localhost")),
+  v.check((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.port === "" && url.hostname.endsWith(".localhost");
+  }),
 );
 const WorkerIdentitySchema = v.pipe(v.string(), v.trim(), v.minLength(1));
 const HostnameLabelSchema = v.pipe(v.string(), v.regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/));
@@ -45,6 +48,8 @@ const readWorktreeIdentity = async () => {
   return sanitizeHostnameLabel(branch.split("/").at(-1) ?? "");
 };
 
+export const parsePortlessOrigin = (input: unknown) => v.parse(PortlessOriginSchema, input);
+
 export const readCommitIdentity = async () => {
   const { stdout } = await execFileOutput("git", ["rev-parse", "HEAD"]);
   return v.parse(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)), stdout.trim());
@@ -55,6 +60,6 @@ export const resolveLocalStore = async (input: string) => {
   const identity = await readWorktreeIdentity();
   const name = identity ? `${identity}.${slug}.shop` : `${slug}.shop`;
   const { stdout } = await execFileOutput("portless", ["get", name, "--no-worktree"]);
-  const origin = v.parse(PortlessOriginSchema, stdout.trim());
+  const origin = parsePortlessOrigin(stdout.trim());
   return { slug, name, origin };
 };

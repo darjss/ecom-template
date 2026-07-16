@@ -11,7 +11,7 @@
     "dev:store": "tsx packages/delivery/src/cli.ts dev",
     "build": "pnpm build:store --store urnuun-48",
     "build:store": "tsx packages/delivery/src/cli.ts build",
-    "preview": "pnpm --filter @shops/urnuun-48 preview",
+    "preview": "tsx packages/delivery/src/cli.ts preview --store urnuun-48",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --threads=1 .",

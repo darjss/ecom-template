@@ -30,8 +30,6 @@ export const HealthResponseSchema = v.strictObject({
   data: v.strictObject({
     status: v.literal("ok"),
     database: v.literal("connected"),
-    ephemeralKv: v.literal("connected"),
-    media: v.literal("connected"),
     store: v.string(),
     checkedAt: v.string(),
   }),

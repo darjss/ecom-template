@@ -1,5 +1,5 @@
 import type { StorefrontSummary } from "@ecom/contracts";
-import { readInfrastructureHealth } from "../db/health";
+import { readDatabaseHealth } from "../db/health";
 
 export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
@@ -7,7 +7,7 @@ export type StorefrontReader = {
 
 export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
   readSummary: async () => {
-    const health = await readInfrastructureHealth();
+    const health = await readDatabaseHealth();
     if (health.isErr()) {
       throw new Error("Store infrastructure is unavailable");
     }

@@ -9,7 +9,7 @@ import {
   createStaffAuth,
   createStoreBackground,
   createStorefrontReader,
-  readInfrastructureHealth,
+  readDatabaseHealth,
   staffQueries,
   type StoreBackground,
   type StorefrontReader,
@@ -58,8 +58,8 @@ const createApi = (definition: StoreDefinition) =>
     })
     .get("/health", async ({ set, status }) => {
       set.headers["cache-control"] = "private, no-store";
-      const infrastructure = await readInfrastructureHealth();
-      if (infrastructure.isErr()) {
+      const databaseHealth = await readDatabaseHealth();
+      if (databaseHealth.isErr()) {
         return status(
           503,
           v.parse(HealthApiErrorSchema, {
@@ -70,7 +70,7 @@ const createApi = (definition: StoreDefinition) =>
           }),
         );
       }
-      const health = infrastructure.unwrap();
+      const health = databaseHealth.unwrap();
       return v.parse(HealthResponseSchema, {
         data: {
           status: "ok",

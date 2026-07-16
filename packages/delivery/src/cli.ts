@@ -13,7 +13,7 @@ import {
   StoreSlugSchema,
   type DeliveryManifest,
 } from "./index";
-import { readCommitIdentity, resolveLocalStore } from "./portless";
+import { parsePortlessOrigin, readCommitIdentity, resolveLocalStore } from "./portless";
 
 const execFileOutput = promisify(execFile);
 const write = (value: string) => process.stdout.write(`${value}\n`);
@@ -28,6 +28,7 @@ Commands:
   validate --manifest <path>
   origin --store <slug>
   dev --store <slug>
+  preview --store <slug>
   build --store <slug>
   create --slug <slug> --name <name>
   apply --manifest <path> --target <name>
@@ -193,38 +194,41 @@ const cleanupTarget = async () => {
   write(`Cleaned local target ${targetName}`);
 };
 
-const startStore = async () => {
+const StoreRunModeSchema = v.picklist(["dev", "preview"]);
+
+const serveStore = async () => {
+  const slug = v.parse(StoreSlugSchema, requireOption("--store"));
+  const mode = v.parse(StoreRunModeSchema, requireOption("--mode"));
+  const origin = parsePortlessOrigin(process.env.PORTLESS_URL);
+  const commit = await readCommitIdentity();
+  await mkdir(".delivery", { recursive: true });
+  const processRecord = v.parse(DevProcessRecordSchema, {
+    app: `@shops/${slug}`,
+    commit,
+    origin,
+    checkoutRoot: process.cwd(),
+    pid: process.ppid,
+  });
+  await writeFile(devProcessPath(slug), JSON.stringify(processRecord, null, 2));
+  await run("pnpm", ["--filter", `@shops/${slug}`, `${mode}:direct`]);
+};
+
+const startStore = async (mode: "dev" | "preview") => {
   const localStore = await resolveLocalStore(requireOption("--store"));
   const commit = await readCommitIdentity();
   write(`Starting ${localStore.origin} from ${process.cwd()} at ${commit}`);
-  const child = spawn(
-    "portless",
-    [localStore.name, "pnpm", "--filter", `@shops/${localStore.slug}`, "dev:direct"],
-    { env: process.env, stdio: "inherit" },
-  );
-  const exit = new Promise<void>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`portless exited with ${code ?? "no status"}`));
-      }
-    });
-  });
-  if (!child.pid) {
-    throw new Error("Portless did not expose its process identity");
-  }
-  await mkdir(".delivery", { recursive: true });
-  const processRecord = v.parse(DevProcessRecordSchema, {
-    app: `@shops/${localStore.slug}`,
-    commit,
-    origin: localStore.origin,
-    checkoutRoot: process.cwd(),
-    pid: child.pid,
-  });
-  await writeFile(devProcessPath(localStore.slug), JSON.stringify(processRecord, null, 2));
-  await exit;
+  await run("portless", [
+    localStore.name,
+    "node",
+    "--import",
+    "tsx",
+    "packages/delivery/src/cli.ts",
+    "serve",
+    "--store",
+    localStore.slug,
+    "--mode",
+    mode,
+  ]);
 };
 
 try {
@@ -236,7 +240,11 @@ try {
   } else if (command === "origin") {
     write((await resolveLocalStore(requireOption("--store"))).origin);
   } else if (command === "dev") {
-    await startStore();
+    await startStore("dev");
+  } else if (command === "preview") {
+    await startStore("preview");
+  } else if (command === "serve") {
+    await serveStore();
   } else if (command === "build") {
     const slug = v.parse(StoreSlugSchema, requireOption("--store"));
     await run("pnpm", ["--filter", `@shops/${slug}`, "build"]);

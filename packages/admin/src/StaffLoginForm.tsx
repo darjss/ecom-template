@@ -4,7 +4,11 @@ import * as v from "valibot";
 
 const SocialSignInResponseSchema = v.strictObject({
   redirect: v.boolean(),
-  url: v.pipe(v.string(), v.url()),
+  url: v.pipe(
+    v.string(),
+    v.url(),
+    v.check((url) => new URL(url).protocol === "https:"),
+  ),
 });
 
 export const StaffLoginForm = () => {
