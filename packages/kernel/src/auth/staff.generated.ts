@@ -34,6 +34,7 @@ export const staff_auth_sessions = sqliteTable(
       .notNull()
       .references(() => staff_auth_users.id, { onDelete: "cascade" }),
     role: text("role"),
+    generation: integer("generation"),
   },
   (table) => [index("staff_auth_sessions_userId_idx").on(table.userId)],
 );

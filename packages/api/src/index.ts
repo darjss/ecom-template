@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   HealthApiErrorSchema,
   HealthResponseSchema,
+  StaffIdSchema,
   StaffLifecycleApiErrorSchema,
   StaffListResponseSchema,
   StaffMutationInputSchema,
@@ -98,7 +99,11 @@ const mapFailure = (
   if (failure.code === "session_revocation_failed") {
     return status(
       503,
-      apiError("unavailable", "Staff sessions could not be revoked", "session_revocation_failed"),
+      apiError(
+        "unavailable",
+        "Staff authority changed, but disposable session cleanup is incomplete",
+        "session_revocation_failed",
+      ),
     );
   }
   return status(503, apiError("unavailable", "Staff authority is unavailable"));
@@ -174,8 +179,9 @@ const createApi = (definition: StoreDefinition) =>
     })
     .post("/staff/:id/approve", async ({ body, params, request, status }) => {
       const input = v.safeParse(StaffMutationInputSchema, body);
-      if (!input.success) {
-        return status(422, apiError("validation", "A valid Staff role is required"));
+      const id = v.safeParse(StaffIdSchema, params.id);
+      if (!input.success || !id.success) {
+        return status(422, apiError("validation", "A valid Staff ID and role are required"));
       }
       const authorization = await authorizeRoute(request, definition, status);
       if (!authorization.authorized) {
@@ -184,7 +190,7 @@ const createApi = (definition: StoreDefinition) =>
       const result = await approveStaff(
         authorization.actor,
         authorization.origin,
-        params.id,
+        id.output,
         input.output.role,
       );
       return result.isErr()
@@ -193,8 +199,9 @@ const createApi = (definition: StoreDefinition) =>
     })
     .patch("/staff/:id/role", async ({ body, params, request, status }) => {
       const input = v.safeParse(StaffMutationInputSchema, body);
-      if (!input.success) {
-        return status(422, apiError("validation", "A valid Staff role is required"));
+      const id = v.safeParse(StaffIdSchema, params.id);
+      if (!input.success || !id.success) {
+        return status(422, apiError("validation", "A valid Staff ID and role are required"));
       }
       const authorization = await authorizeRoute(request, definition, status);
       if (!authorization.authorized) {
@@ -203,7 +210,7 @@ const createApi = (definition: StoreDefinition) =>
       const result = await changeStaffRole(
         authorization.actor,
         authorization.origin,
-        params.id,
+        id.output,
         input.output.role,
       );
       return result.isErr()
@@ -211,21 +218,29 @@ const createApi = (definition: StoreDefinition) =>
         : v.parse(StaffMutationResponseSchema, { data: result.value });
     })
     .post("/staff/:id/revoke", async ({ params, request, status }) => {
+      const id = v.safeParse(StaffIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Staff ID is required"));
+      }
       const authorization = await authorizeRoute(request, definition, status);
       if (!authorization.authorized) {
         return authorization.response;
       }
-      const result = await revokeStaff(authorization.actor, authorization.origin, params.id);
+      const result = await revokeStaff(authorization.actor, authorization.origin, id.output);
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });
     })
     .delete("/staff/:id", async ({ params, request, status }) => {
+      const id = v.safeParse(StaffIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Staff ID is required"));
+      }
       const authorization = await authorizeRoute(request, definition, status);
       if (!authorization.authorized) {
         return authorization.response;
       }
-      const result = await removeStaff(authorization.actor, authorization.origin, params.id);
+      const result = await removeStaff(authorization.actor, authorization.origin, id.output);
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });

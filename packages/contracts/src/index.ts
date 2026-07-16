@@ -19,16 +19,28 @@ export const ApiErrorSchema = v.strictObject({
   }),
 });
 
+const isStaffId = (value: string) => {
+  try {
+    fromString(value, "staff");
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const StaffIdSchema = v.pipe(v.string(), v.check(isStaffId, "Invalid Staff ID"));
 export const StaffRoleSchema = v.picklist(["owner", "manager", "staff"]);
 export const StaffStatusSchema = v.picklist(["pending", "active", "revoked"]);
 
 export const StaffMemberSchema = v.strictObject({
-  id: v.string(),
+  id: StaffIdSchema,
   email: v.pipe(v.string(), v.email()),
   status: StaffStatusSchema,
   role: v.nullable(StaffRoleSchema),
-  createdAt: v.string(),
-  updatedAt: v.string(),
+  createdAt: v.pipe(v.string(), v.isoTimestamp()),
+  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
+  approvedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+  revokedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
 });
 
 export const StaffListResponseSchema = v.strictObject({
@@ -129,6 +141,7 @@ export const HealthClientErrorSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("api"), error: HealthApiErrorSchema.entries.error }),
 ]);
 
+export type StaffId = v.InferOutput<typeof StaffIdSchema>;
 export type StaffRole = v.InferOutput<typeof StaffRoleSchema>;
 export type StaffStatus = v.InferOutput<typeof StaffStatusSchema>;
 export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;
@@ -146,5 +159,7 @@ export type Cart = v.InferOutput<typeof CartSchema>;
 export type CartLine = v.InferOutput<typeof CartLineSchema>;
 export type ClientError = v.InferOutput<typeof ClientErrorSchema>;
 
+export const createStaffId = () => typeidUnboxed("staff");
+export const parseStaffId = (value: string) => fromString(value, "staff");
 export const createCatalogItemId = () => typeidUnboxed("product");
 export const parseCatalogItemId = (value: string) => fromString(value, "product");

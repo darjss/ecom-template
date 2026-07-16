@@ -73,6 +73,7 @@ export const createStaffAuth = (origin: string) => {
       cookieCache: { enabled: false },
       additionalFields: {
         role: { type: "string", required: false, input: false },
+        generation: { type: "number", required: false, input: false },
       },
     },
     databaseHooks: {
@@ -84,6 +85,7 @@ export const createStaffAuth = (origin: string) => {
               data: {
                 ...session,
                 role: applicant?.status === "active" ? applicant.role : null,
+                generation: applicant?.sessionGeneration ?? null,
               },
             };
           },
@@ -117,6 +119,17 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
     await staffQueries.resolveApplicant(session.user.id, session.user.email);
     await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
     return { kind: "awaiting_approval" as const };
+  }
+  const generation = v.safeParse(
+    v.pipe(v.number(), v.integer(), v.minValue(0)),
+    session.session.generation,
+  );
+  if (
+    !generation.success ||
+    !(await staffQueries.hasCurrentSessionGeneration(session.user.id, generation.output))
+  ) {
+    await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
+    return { kind: "unauthorized" as const };
   }
   return {
     kind: "active" as const,

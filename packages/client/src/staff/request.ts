@@ -4,6 +4,7 @@ import {
   StaffListResponseSchema,
   StaffMutationResponseSchema,
   type StaffClientError,
+  type StaffId,
   type StaffListResponse,
   type StaffMutationResponse,
   type StaffRole,
@@ -33,10 +34,10 @@ export const requestStaffList = async (): Promise<StaffListResponse> => {
 };
 
 export type StaffMutation =
-  | { readonly kind: "approve"; readonly id: string; readonly role: StaffRole }
-  | { readonly kind: "role"; readonly id: string; readonly role: StaffRole }
-  | { readonly kind: "revoke"; readonly id: string }
-  | { readonly kind: "remove"; readonly id: string };
+  | { readonly kind: "approve"; readonly id: StaffId; readonly role: StaffRole }
+  | { readonly kind: "role"; readonly id: StaffId; readonly role: StaffRole }
+  | { readonly kind: "revoke"; readonly id: StaffId }
+  | { readonly kind: "remove"; readonly id: StaffId };
 
 export const requestStaffMutation = async (
   mutation: StaffMutation,

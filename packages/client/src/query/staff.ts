@@ -16,4 +16,9 @@ export const staffMutationOptions = (queryClient: QueryClient) =>
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: staffQueryKey });
     },
+    onError: async (error) => {
+      if (error.kind === "api" && error.error.reason === "session_revocation_failed") {
+        await queryClient.invalidateQueries({ queryKey: staffQueryKey });
+      }
+    },
   });

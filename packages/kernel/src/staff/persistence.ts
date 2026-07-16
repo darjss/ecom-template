@@ -1,11 +1,22 @@
-import type { StaffMember, StaffRole, StaffStatus } from "@ecom/contracts";
+import {
+  createStaffId,
+  StaffMemberSchema,
+  type StaffId,
+  type StaffMember,
+  type StaffRole,
+  type StaffStatus,
+} from "@ecom/contracts";
+import * as v from "valibot";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { staff_auth_users } from "../auth/staff.generated";
 import { database } from "../db/database";
 import { staffMembers } from "../db/schema";
 
-export type StaffRecord = StaffMember & { readonly authUserId: string | null };
+export type StaffRecord = StaffMember & {
+  readonly authUserId: string | null;
+  readonly sessionGeneration: number;
+};
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -15,16 +26,24 @@ const projectStaff = (row: {
   authUserId: string | null;
   status: StaffStatus;
   role: StaffRole | null;
+  sessionGeneration: number;
   createdAt: Date;
   updatedAt: Date;
+  approvedAt: Date | null;
+  revokedAt: Date | null;
 }): StaffRecord => ({
-  id: row.id,
-  email: row.normalizedEmail,
+  ...v.parse(StaffMemberSchema, {
+    id: row.id,
+    email: row.normalizedEmail,
+    status: row.status,
+    role: row.role,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    approvedAt: row.approvedAt?.toISOString() ?? null,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+  }),
   authUserId: row.authUserId,
-  status: row.status,
-  role: row.role,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
+  sessionGeneration: row.sessionGeneration,
 });
 
 const selection = {
@@ -33,11 +52,14 @@ const selection = {
   authUserId: staffMembers.authUserId,
   status: staffMembers.status,
   role: staffMembers.role,
+  sessionGeneration: staffMembers.sessionGeneration,
   createdAt: staffMembers.createdAt,
   updatedAt: staffMembers.updatedAt,
+  approvedAt: staffMembers.approvedAt,
+  revokedAt: staffMembers.revokedAt,
 };
 
-const findById = async (id: string) => {
+const findById = async (id: StaffId) => {
   const rows = await database()
     .select(selection)
     .from(staffMembers)
@@ -53,7 +75,7 @@ const resolveApplicant = async (authUserId: string, email: string) => {
   await database()
     .insert(staffMembers)
     .values({
-      id: crypto.randomUUID(),
+      id: createStaffId(),
       normalizedEmail,
       authUserId,
       status: "pending",
@@ -106,34 +128,45 @@ export const staffQueries = {
     return rows.map(projectStaff);
   },
 
-  async approve(id: string, role: StaffRole) {
+  async hasCurrentSessionGeneration(authUserId: string, generation: number) {
+    const rows = await database()
+      .select({ sessionGeneration: staffMembers.sessionGeneration })
+      .from(staffMembers)
+      .where(eq(staffMembers.authUserId, authUserId))
+      .limit(1);
+    return rows.at(0)?.sessionGeneration === generation;
+  },
+
+  async approve(id: StaffId, role: StaffRole) {
+    const now = Date.now();
     await env.DB.prepare(
-      "UPDATE staff_members SET status = 'active', role = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'revoked')",
+      "UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ? AND status IN ('pending', 'revoked')",
     )
-      .bind(role, Date.now(), id)
+      .bind(role, now, now, id)
       .run();
     return findById(id);
   },
 
-  async changeRole(id: string, role: StaffRole) {
+  async changeRole(id: StaffId, role: StaffRole) {
     await env.DB.prepare(
-      "UPDATE staff_members SET role = ?, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND ? <> 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
+      "UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND ? <> 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
     )
       .bind(role, Date.now(), id, role)
       .run();
     return findById(id);
   },
 
-  async revoke(id: string) {
+  async revoke(id: StaffId) {
+    const now = Date.now();
     await env.DB.prepare(
-      "UPDATE staff_members SET status = 'revoked', updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
+      "UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
     )
-      .bind(Date.now(), id)
+      .bind(now, now, id)
       .run();
     return findById(id);
   },
 
-  async remove(id: string) {
+  async remove(id: StaffId) {
     const before = await findById(id);
     await env.DB.prepare(
       "DELETE FROM staff_members WHERE id = ? AND NOT (status = 'active' AND role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",

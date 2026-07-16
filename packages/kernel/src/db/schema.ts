@@ -12,8 +12,11 @@ export const staffMembers = sqliteTable(
     authUserId: text("auth_user_id").unique(),
     status: text("status", { enum: ["pending", "active", "revoked"] }).notNull(),
     role: text("role", { enum: ["owner", "manager", "staff"] }),
+    sessionGeneration: integer("session_generation").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     check("staff_members_status_check", sql`${table.status} IN ('pending', 'active', 'revoked')`),

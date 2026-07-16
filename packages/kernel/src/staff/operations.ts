@@ -1,4 +1,4 @@
-import type { StaffMember, StaffRole } from "@ecom/contracts";
+import type { StaffId, StaffMember, StaffRole } from "@ecom/contracts";
 import { Result } from "better-result";
 import { revokeStaffUserSessions } from "../auth/runtime";
 import { staffQueries, type StaffRecord } from "./persistence";
@@ -39,7 +39,11 @@ export type StaffOperationFailure = {
     | "infrastructure_unavailable";
 };
 
-const publicMember = ({ authUserId: _authUserId, ...member }: StaffRecord): StaffMember => member;
+const publicMember = ({
+  authUserId: _authUserId,
+  sessionGeneration: _sessionGeneration,
+  ...member
+}: StaffRecord): StaffMember => member;
 
 const requireOwner = (actor: StaffActor) =>
   hasStaffCapability(actor.role, "staff_auth")
@@ -74,7 +78,7 @@ export const listStaff = async (
 export const approveStaff = async (
   actor: StaffActor,
   origin: string,
-  id: string,
+  id: StaffId,
   role: StaffRole,
 ): Promise<Result<StaffMember, StaffOperationFailure>> => {
   const denied = requireOwner(actor);
@@ -105,7 +109,7 @@ export const approveStaff = async (
 export const changeStaffRole = async (
   actor: StaffActor,
   origin: string,
-  id: string,
+  id: StaffId,
   role: StaffRole,
 ): Promise<Result<StaffMember, StaffOperationFailure>> => {
   const denied = requireOwner(actor);
@@ -139,7 +143,7 @@ export const changeStaffRole = async (
 export const revokeStaff = async (
   actor: StaffActor,
   origin: string,
-  id: string,
+  id: StaffId,
 ): Promise<Result<StaffMember, StaffOperationFailure>> => {
   const denied = requireOwner(actor);
   if (denied) {
@@ -174,7 +178,7 @@ export const revokeStaff = async (
 export const removeStaff = async (
   actor: StaffActor,
   origin: string,
-  id: string,
+  id: StaffId,
 ): Promise<Result<StaffMember, StaffOperationFailure>> => {
   const denied = requireOwner(actor);
   if (denied) {
