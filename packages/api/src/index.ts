@@ -15,6 +15,16 @@ import {
 import { Elysia } from "elysia";
 import * as v from "valibot";
 
+const privateResponse = (response: Response) => {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "private, no-store");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
 const unavailableAuthResponse = () =>
   Response.json(
     v.parse(ApiErrorSchema, {
@@ -27,14 +37,14 @@ type AuthRuntimes = ReturnType<typeof createAuthRuntimes>;
 
 const createApi = (definition: StoreDefinition, auth: AuthRuntimes) =>
   new Elysia({ aot: false, prefix: "/api" })
-    .all("/auth/staff/*", ({ request }) =>
-      auth ? auth.staff.handler(request) : unavailableAuthResponse(),
+    .all("/auth/staff/*", async ({ request }) =>
+      auth ? privateResponse(await auth.staff.handler(request)) : unavailableAuthResponse(),
     )
-    .all("/auth/customer/*", ({ request }) =>
-      auth ? auth.customer.handler(request) : unavailableAuthResponse(),
+    .all("/auth/customer/*", async ({ request }) =>
+      auth ? privateResponse(await auth.customer.handler(request)) : unavailableAuthResponse(),
     )
     .get("/health", async ({ set, status }) => {
-      set.headers["cache-control"] = "no-store";
+      set.headers["cache-control"] = "private, no-store";
       const infrastructure = await readInfrastructureHealth();
       if (infrastructure.isErr()) {
         return status(

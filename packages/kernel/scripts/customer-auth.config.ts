@@ -8,6 +8,7 @@ const database = drizzle(new Database(":memory:"));
 export const auth = betterAuth({
   database: drizzleAdapter(database, { provider: "sqlite" }),
   basePath: "/api/auth/customer",
+  baseURL: "http://localhost",
   user: {
     modelName: "customer_auth_users",
   },

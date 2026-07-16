@@ -45,6 +45,6 @@
     "crons": ["17 2 * * *"],
   },
   "vars": {
-    "PUBLIC_STORE_ORIGIN": "http://urnuun-48.shop.localhost:4321",
+    "PUBLIC_STORE_ORIGIN": "https://urnuun-48.shop.localhost:1355",
   },
 }

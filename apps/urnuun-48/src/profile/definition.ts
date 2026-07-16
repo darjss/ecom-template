@@ -6,7 +6,7 @@ export const storeDefinition = {
       slug: "urnuun-48",
       name: "Өрнүүн 48",
       location: "Улаанбаатар, 48-р дэлгүүр",
-      origin: "http://urnuun-48.shop.localhost:4321",
+      origin: process.env.PUBLIC_STORE_ORIGIN,
       currency: "MNT",
       locale: "mn-MN",
     },
