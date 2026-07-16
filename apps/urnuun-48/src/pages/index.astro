@@ -4,6 +4,10 @@ import StoreLayout from "../layouts/StoreLayout.astro";
 import { backend } from "../backend";
 
 export const prerender = false;
+Astro.response.headers.set(
+  "Cache-Control",
+  "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+);
 const summary = await backend.storefront.readSummary();
 const featuredItem = {
   id: "urnuun-canvas-market-bag",
@@ -39,7 +43,7 @@ const featuredItem = {
         <h2 id="featured-title">{featuredItem.title}</h2>
         <p>Зузаан хөвөн даавуу, мөрөнд эвтэйхэн урт бариул, хот доторх өдөр тутмын ачаанд таарсан хэмжээ.</p>
         <strong>{new Intl.NumberFormat("mn-MN").format(featuredItem.unitPriceMnt)} ₮</strong>
-        <CartIsland {...featuredItem} client:load />
+        <CartIsland {...featuredItem} client:only="solid-js" />
       </div>
     </section>
   </main>

@@ -1,5 +1,10 @@
 ---
 import StoreLayout from "../layouts/StoreLayout.astro";
+
+Astro.response.headers.set(
+  "Cache-Control",
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=1800",
+);
 ---
 <StoreLayout title="Бидний тухай · Өрнүүн 48" description="Өрнүүн 48 дэлгүүрийн түүх">
   <header class="site-header">
