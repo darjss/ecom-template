@@ -12,6 +12,10 @@
       "entry": ["src/index.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx}"]
     },
+    "packages/integrations": {
+      "entry": [],
+      "project": []
+    },
     "packages/kernel": {
       "entry": ["scripts/*.ts"]
     }

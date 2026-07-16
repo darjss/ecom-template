@@ -86,7 +86,10 @@
   "overrides": [
     {
       "files": ["packages/client/src/cart/index.tsx"],
-      "rules": { "solid/reactivity": "off" }
+      "rules": {
+        "solid/no-proxy-apis": "off",
+        "solid/reactivity": "off"
+      }
     }
   ],
   "ignorePatterns": ["**/.astro/**", "**/dist/**", "**/worker-configuration.d.ts"]

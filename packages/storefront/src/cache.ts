@@ -1,4 +1,4 @@
-const PublicCacheTagSchema = /^[\x21-\x2b\x2d-\x7e]+$/;
+const PublicCacheTagSchema = /^[\x21-\x2B\x2D-\x7E]+$/;
 
 export const isPublicCacheTagHeader = (value: string) => {
   const tags = value.split(",");

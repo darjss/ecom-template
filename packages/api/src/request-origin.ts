@@ -25,7 +25,7 @@ export const resolveStoreRequestOrigin = (request: Request, storeSlug: string) =
     return requestUrl.origin;
   }
 
-  const worktreeSuffix = `-${localHostname}`;
+  const worktreeSuffix = `.${localHostname}`;
   if (!requestUrl.hostname.endsWith(worktreeSuffix)) {
     return undefined;
   }
