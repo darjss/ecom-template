@@ -1,10 +1,10 @@
 # Ecommerce workspace bootstrap plan
 
-**Status:** Review draft for issue #31
+**Status:** Landed historical execution plan — issue #31 closed by PR #34 at merge `f748ab739274ed57e57e115c081a3c68bc249733`
 
 ## Outcome
 
-Replace the SaaS starter with a pnpm monorepo that proves one production-shaped Өрнүүн 48 Store without implementing commerce features prematurely. Deleting most existing `src/` is expected. The useful result is a clean package graph, one real Astro/Elysia/Solid vertical slice, strict tooling, and a default UI foundation subsequent issues can extend.
+This plan records how the SaaS starter was replaced with a pnpm monorepo proving one production-shaped Өрнүүн 48 Store without implementing commerce features prematurely. It is historical execution guidance for the landed bootstrap seams, not current domain authority. The result is a clean package graph, one real Astro/Elysia/Solid vertical slice, strict tooling, and a default UI foundation subsequent issues can extend.
 
 ## Workspace
 
