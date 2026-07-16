@@ -1,10 +1,13 @@
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { parse } from "yaml";
 import * as v from "valibot";
 import {
+  D1DatabaseIdSchema,
+  D1DatabaseNameSchema,
   DeliveryJournalSchema,
   DeliveryManifestSchema,
   DevProcessRecordSchema,
@@ -12,6 +15,7 @@ import {
   StoreNameSchema,
   StoreSlugSchema,
   type DeliveryManifest,
+  type DeliveryJournal,
 } from "./index";
 import { parsePortlessOrigin, readCommitIdentity, resolveLocalStore } from "./portless";
 
@@ -67,20 +71,28 @@ const run = (
     });
   });
 
-const readManifest = async (): Promise<DeliveryManifest> => {
+type ManifestInput = {
+  readonly manifest: DeliveryManifest;
+  readonly digest: string;
+};
+
+const readManifest = async (): Promise<ManifestInput> => {
   const source = await readFile(requireOption("--manifest"), "utf8");
   const parsed: unknown = parse(source);
-  return v.parse(DeliveryManifestSchema, parsed);
+  return {
+    manifest: v.parse(DeliveryManifestSchema, parsed),
+    digest: createHash("sha256").update(source).digest("hex"),
+  };
 };
 
 const readTarget = async () => {
-  const manifest = await readManifest();
+  const { manifest, digest } = await readManifest();
   const targetName = requireOption("--target");
   const target = manifest.targets[targetName];
   if (!target) {
     throw new Error(`Unknown target: ${targetName}`);
   }
-  return { targetName, target };
+  return { targetName, target, manifestDigest: digest };
 };
 
 const targetSlug = (app: string) => v.parse(StoreSlugSchema, app.slice("@shops/".length));
@@ -90,21 +102,93 @@ const devProcessPath = (slug: string) => join(".delivery", `${slug}.dev.json`);
 
 const SqlEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
 const StaffIdSchema = v.pipe(v.string(), v.regex(/^staff_[0-9a-hjkmnp-tv-z]{26}$/));
+const WranglerConfigSchema = v.object({
+  d1_databases: v.array(
+    v.object({
+      binding: v.string(),
+      database_name: D1DatabaseNameSchema,
+      database_id: D1DatabaseIdSchema,
+    }),
+  ),
+});
+const RemoteD1ListSchema = v.array(
+  v.object({ uuid: D1DatabaseIdSchema, name: v.pipe(v.string(), v.minLength(1)) }),
+);
 
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`;
+const hasCanonicalStaffIdSql =
+  "length(staff_members.id) = 32 AND substr(staff_members.id, 1, 6) = 'staff_' AND substr(staff_members.id, 7, 1) GLOB '[0-7]' AND substr(staff_members.id, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'";
+
+const createOwnerStatement = async (email: string) => {
+  const { stdout: staffIdSource } = await execFileOutput("pnpm", ["--silent", "staff:id:create"]);
+  const staffId = v.parse(StaffIdSchema, staffIdSource.trim());
+  const now = Date.now();
+  return `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET id = CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE excluded.id END, status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
+};
+
+const readAppD1Resource = async (slug: string) => {
+  const source = await readFile(join("apps", slug, "wrangler.jsonc"), "utf8");
+  const parsed: unknown = parse(source);
+  const config = v.parse(WranglerConfigSchema, parsed);
+  const resources = config.d1_databases.filter(({ binding }) => binding === "DB");
+  if (resources.length !== 1) {
+    throw new Error(`Store ${slug} must declare exactly one DB binding`);
+  }
+  const resource = resources.at(0);
+  if (!resource) {
+    throw new Error(`Store ${slug} has no DB binding`);
+  }
+  return { name: resource.database_name, databaseId: resource.database_id };
+};
+
+const readDeliveryJournal = async (targetName: string) => {
+  let source: string;
+  try {
+    source = await readFile(journalPath(targetName), "utf8");
+  } catch {
+    throw new Error("Remote Owner target lacks a deployed delivery journal");
+  }
+  const parsed: unknown = JSON.parse(source);
+  const result = v.safeParse(DeliveryJournalSchema, parsed);
+  if (!result.success) {
+    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
+  }
+  return result.output;
+};
+
+const verifyRemoteD1Resource = async (
+  app: string,
+  recorded: DeliveryJournal["resources"]["d1"],
+) => {
+  const { stdout } = await execFileOutput("pnpm", [
+    "--filter",
+    app,
+    "exec",
+    "wrangler",
+    "d1",
+    "list",
+    "--json",
+  ]);
+  const parsed: unknown = JSON.parse(stdout);
+  const resources = v.parse(RemoteD1ListSchema, parsed);
+  const candidates = resources.filter(
+    ({ name, uuid }) => name === recorded.name || uuid === recorded.databaseId,
+  );
+  const verified = candidates.length === 1 ? candidates.at(0) : undefined;
+  if (!verified || verified.name !== recorded.name || verified.uuid !== recorded.databaseId) {
+    throw new Error("Remote D1 identity does not match the recorded delivery resource");
+  }
+};
 
 const addOwner = async () => {
   const slug = v.parse(StoreSlugSchema, requireOption("--store"));
   const email = v.parse(SqlEmailSchema, requireOption("--email"));
-  const { stdout: staffIdSource } = await execFileOutput("pnpm", ["--silent", "staff:id:create"]);
-  const staffId = v.parse(StaffIdSchema, staffIdSource.trim());
-  const now = Date.now();
-  const statement = `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
   if (args.includes("--local")) {
     if (option("--manifest") || option("--target")) {
       throw new Error("Owner provisioning accepts either --local or a manifest target, not both");
     }
     const localStore = await resolveLocalStore(slug);
+    const statement = await createOwnerStatement(email);
     await run("pnpm", [
       "--filter",
       `@shops/${localStore.slug}`,
@@ -121,38 +205,59 @@ const addOwner = async () => {
     return;
   }
 
-  const { targetName, target } = await readTarget();
+  const { targetName, target, manifestDigest } = await readTarget();
   if (target.kind === "local" || targetSlug(target.app) !== slug) {
     throw new Error("Remote Owner target does not match the selected deployed Store");
   }
-  let journalSource: string;
-  try {
-    journalSource = await readFile(journalPath(targetName), "utf8");
-  } catch {
-    throw new Error("Remote Owner target lacks a deployed delivery journal");
-  }
-  const journal = v.parse(DeliveryJournalSchema, JSON.parse(journalSource));
+  const journal = await readDeliveryJournal(targetName);
   const commit = await readCommitIdentity();
+  const expectedD1Name = `${target.resourcePrefix}-db`;
   if (
     journal.target !== targetName ||
     journal.app !== target.app ||
     journal.commit !== commit ||
+    journal.manifestDigest !== manifestDigest ||
+    journal.resources.d1.name !== expectedD1Name ||
     !journal.completedSteps.includes("remote-deploy")
   ) {
-    throw new Error("Remote Owner target lacks a matching deployed delivery journal");
+    throw new Error(
+      "Remote Owner target does not match the journal target, app, manifest, commit, or D1 name",
+    );
   }
-  await run("pnpm", [
-    "--filter",
-    target.app,
-    "exec",
-    "wrangler",
-    "d1",
-    "execute",
-    `${target.resourcePrefix}-db`,
-    "--remote",
-    "--command",
-    statement,
-  ]);
+  await verifyRemoteD1Resource(target.app, journal.resources.d1);
+  const remoteConfigPath = join(process.cwd(), ".delivery", ".owner-provisioning.wrangler.json");
+  await mkdir(".delivery", { recursive: true });
+  await writeFile(
+    remoteConfigPath,
+    JSON.stringify({
+      name: "owner-provisioning",
+      compatibility_date: "2026-07-08",
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: journal.resources.d1.name,
+          database_id: journal.resources.d1.databaseId,
+        },
+      ],
+    }),
+  );
+  try {
+    const statement = await createOwnerStatement(email);
+    await run("pnpm", [
+      "exec",
+      "wrangler",
+      "d1",
+      "execute",
+      "DB",
+      "--config",
+      remoteConfigPath,
+      "--remote",
+      "--command",
+      statement,
+    ]);
+  } finally {
+    await rm(remoteConfigPath, { force: true });
+  }
   write(`Provisioned active Owner ${email} for deployed target ${targetName}`);
 };
 
@@ -165,7 +270,7 @@ const rejectStoreCreation = () => {
 };
 
 const applyTarget = async () => {
-  const { targetName, target } = await readTarget();
+  const { targetName, target, manifestDigest } = await readTarget();
   if (target.kind !== "local") {
     throw new Error(`Remote apply is intentionally unavailable for ${target.kind}`);
   }
@@ -174,11 +279,13 @@ const applyTarget = async () => {
   await run("pnpm", ["--filter", target.app, "db:migrate:local"]);
   await mkdir(".delivery", { recursive: true });
   const journal = v.parse(DeliveryJournalSchema, {
-    schemaVersion: 1,
+    schemaVersion: 2,
     target: targetName,
     app: target.app,
     commit,
+    manifestDigest,
     origin: localStore.origin,
+    resources: { d1: await readAppD1Resource(localStore.slug) },
     completedSteps: ["local-migrations"],
     updatedAt: new Date().toISOString(),
   });
@@ -218,7 +325,7 @@ const verifyRouteIdentity = async (
 };
 
 const proofTarget = async () => {
-  const { targetName, target } = await readTarget();
+  const { targetName, target, manifestDigest } = await readTarget();
   if (target.kind !== "local") {
     throw new Error("Remote proof requires deployed infrastructure");
   }
@@ -226,13 +333,19 @@ const proofTarget = async () => {
   const journal = v.parse(DeliveryJournalSchema, JSON.parse(journalSource));
   const commit = await readCommitIdentity();
   const localStore = await resolveLocalStore(targetSlug(target.app));
+  const d1 = await readAppD1Resource(localStore.slug);
   if (
     journal.target !== targetName ||
     journal.app !== target.app ||
     journal.commit !== commit ||
-    journal.origin !== localStore.origin
+    journal.manifestDigest !== manifestDigest ||
+    journal.origin !== localStore.origin ||
+    journal.resources.d1.name !== d1.name ||
+    journal.resources.d1.databaseId !== d1.databaseId
   ) {
-    throw new Error("Local apply journal does not match the selected target, checkout, and commit");
+    throw new Error(
+      "Local apply journal does not match the selected target, checkout, manifest, and D1 resource",
+    );
   }
   const pid = await readRouteProcess(localStore.origin);
   await verifyRouteIdentity(localStore.slug, target.app, localStore.origin, pid, commit);
@@ -304,7 +417,7 @@ try {
   if (!command || command === "--help" || command === "help") {
     write(help);
   } else if (command === "validate") {
-    const manifest = await readManifest();
+    const { manifest } = await readManifest();
     write(`Valid manifest with ${Object.keys(manifest.targets).length} target(s)`);
   } else if (command === "origin") {
     write((await resolveLocalStore(requireOption("--store"))).origin);

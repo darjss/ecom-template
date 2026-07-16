@@ -3,6 +3,12 @@ import * as v from "valibot";
 export const StoreSlugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
 export const StoreNameSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
 export const CommitIdentitySchema = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/));
+export const ManifestDigestSchema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/));
+export const D1DatabaseNameSchema = v.pipe(v.string(), v.regex(/^[a-z0-9-]+-db$/));
+export const D1DatabaseIdSchema = v.pipe(
+  v.string(),
+  v.regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+);
 
 export const DeploymentTargetSchema = v.strictObject({
   kind: v.picklist(["local", "prospect-demo", "canary", "production"]),
@@ -18,12 +24,19 @@ export const DeliveryManifestSchema = v.strictObject({
 });
 
 export const DeliveryJournalSchema = v.strictObject({
-  schemaVersion: v.literal(1),
+  schemaVersion: v.literal(2),
   target: v.string(),
   app: v.string(),
   commit: CommitIdentitySchema,
+  manifestDigest: ManifestDigestSchema,
   origin: v.pipe(v.string(), v.url()),
-  completedSteps: v.array(v.string()),
+  resources: v.strictObject({
+    d1: v.strictObject({
+      name: D1DatabaseNameSchema,
+      databaseId: D1DatabaseIdSchema,
+    }),
+  }),
+  completedSteps: v.array(v.picklist(["local-migrations", "remote-deploy"])),
   updatedAt: v.pipe(v.string(), v.isoTimestamp()),
 });
 
