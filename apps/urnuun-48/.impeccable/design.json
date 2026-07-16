@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-16T12:43:23Z",
+  "title": "Design System: Өрнүүн 48",
+  "extensions": {
+    "colorMeta": {
+      "pantry-ink": {
+        "role": "neutral",
+        "displayName": "Pantry Ink",
+        "canonical": "oklch(24% 0.025 48)",
+        "tonalRamp": [
+          "oklch(15% 0.025 48)",
+          "oklch(25% 0.025 48)",
+          "oklch(35% 0.025 48)",
+          "oklch(45% 0.025 48)",
+          "oklch(58% 0.025 48)",
+          "oklch(70% 0.025 48)",
+          "oklch(84% 0.025 48)",
+          "oklch(95% 0.025 48)"
+        ]
+      },
+      "clear-ground": {
+        "role": "neutral",
+        "displayName": "Clear Ground",
+        "canonical": "oklch(98% 0.006 80)",
+        "tonalRamp": [
+          "oklch(15% 0.006 80)",
+          "oklch(25% 0.006 80)",
+          "oklch(35% 0.006 80)",
+          "oklch(48% 0.006 80)",
+          "oklch(60% 0.006 80)",
+          "oklch(72% 0.006 80)",
+          "oklch(85% 0.006 80)",
+          "oklch(98% 0.006 80)"
+        ]
+      },
+      "clean-paper": {
+        "role": "neutral",
+        "displayName": "Clean Paper",
+        "canonical": "oklch(99% 0.004 80)",
+        "tonalRamp": [
+          "oklch(15% 0.004 80)",
+          "oklch(25% 0.004 80)",
+          "oklch(35% 0.004 80)",
+          "oklch(48% 0.004 80)",
+          "oklch(60% 0.004 80)",
+          "oklch(72% 0.004 80)",
+          "oklch(85% 0.004 80)",
+          "oklch(99% 0.004 80)"
+        ]
+      },
+      "tomato": {
+        "role": "primary",
+        "displayName": "Tomato",
+        "canonical": "oklch(55% 0.19 33)",
+        "tonalRamp": [
+          "oklch(15% 0.19 33)",
+          "oklch(25% 0.19 33)",
+          "oklch(35% 0.19 33)",
+          "oklch(45% 0.19 33)",
+          "oklch(55% 0.19 33)",
+          "oklch(68% 0.16 33)",
+          "oklch(82% 0.1 33)",
+          "oklch(95% 0.04 33)"
+        ]
+      },
+      "tomato-deep": {
+        "role": "primary",
+        "displayName": "Tomato Deep",
+        "canonical": "oklch(45% 0.17 31)",
+        "tonalRamp": [
+          "oklch(15% 0.17 31)",
+          "oklch(25% 0.17 31)",
+          "oklch(35% 0.17 31)",
+          "oklch(45% 0.17 31)",
+          "oklch(56% 0.17 31)",
+          "oklch(68% 0.14 31)",
+          "oklch(82% 0.09 31)",
+          "oklch(95% 0.04 31)"
+        ]
+      },
+      "butter": {
+        "role": "secondary",
+        "displayName": "Butter",
+        "canonical": "oklch(88% 0.14 88)",
+        "tonalRamp": [
+          "oklch(15% 0.14 88)",
+          "oklch(25% 0.14 88)",
+          "oklch(35% 0.14 88)",
+          "oklch(48% 0.14 88)",
+          "oklch(60% 0.14 88)",
+          "oklch(72% 0.14 88)",
+          "oklch(88% 0.14 88)",
+          "oklch(95% 0.07 88)"
+        ]
+      },
+      "leaf": {
+        "role": "tertiary",
+        "displayName": "Leaf",
+        "canonical": "oklch(57% 0.13 135)",
+        "tonalRamp": [
+          "oklch(15% 0.13 135)",
+          "oklch(25% 0.13 135)",
+          "oklch(35% 0.13 135)",
+          "oklch(45% 0.13 135)",
+          "oklch(57% 0.13 135)",
+          "oklch(68% 0.11 135)",
+          "oklch(82% 0.07 135)",
+          "oklch(95% 0.03 135)"
+        ]
+      },
+      "trust-navy": {
+        "role": "secondary",
+        "displayName": "Trust Navy",
+        "canonical": "oklch(31% 0.07 249)",
+        "tonalRamp": [
+          "oklch(15% 0.07 249)",
+          "oklch(25% 0.07 249)",
+          "oklch(35% 0.07 249)",
+          "oklch(45% 0.07 249)",
+          "oklch(58% 0.07 249)",
+          "oklch(70% 0.06 249)",
+          "oklch(84% 0.04 249)",
+          "oklch(95% 0.02 249)"
+        ]
+      },
+      "birch": {
+        "role": "neutral",
+        "displayName": "Pale Birch",
+        "canonical": "oklch(70% 0.075 72)",
+        "tonalRamp": [
+          "oklch(15% 0.075 72)",
+          "oklch(25% 0.075 72)",
+          "oklch(35% 0.075 72)",
+          "oklch(45% 0.075 72)",
+          "oklch(58% 0.075 72)",
+          "oklch(70% 0.075 72)",
+          "oklch(84% 0.06 72)",
+          "oklch(95% 0.03 72)"
+        ]
+      },
+      "birch-shadow": {
+        "role": "neutral",
+        "displayName": "Birch Shadow",
+        "canonical": "oklch(57% 0.075 65)",
+        "tonalRamp": [
+          "oklch(15% 0.075 65)",
+          "oklch(25% 0.075 65)",
+          "oklch(35% 0.075 65)",
+          "oklch(45% 0.075 65)",
+          "oklch(57% 0.075 65)",
+          "oklch(70% 0.065 65)",
+          "oklch(84% 0.045 65)",
+          "oklch(95% 0.02 65)"
+        ]
+      },
+      "shelf-line": {
+        "role": "neutral",
+        "displayName": "Shelf Line",
+        "canonical": "oklch(84% 0.035 76)",
+        "tonalRamp": [
+          "oklch(15% 0.035 76)",
+          "oklch(25% 0.035 76)",
+          "oklch(35% 0.035 76)",
+          "oklch(48% 0.035 76)",
+          "oklch(60% 0.035 76)",
+          "oklch(72% 0.035 76)",
+          "oklch(84% 0.035 76)",
+          "oklch(95% 0.02 76)"
+        ]
+      },
+      "focus-blue": {
+        "role": "tertiary",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(54% 0.17 250)",
+        "tonalRamp": [
+          "oklch(15% 0.17 250)",
+          "oklch(25% 0.17 250)",
+          "oklch(35% 0.17 250)",
+          "oklch(45% 0.17 250)",
+          "oklch(54% 0.17 250)",
+          "oklch(68% 0.14 250)",
+          "oklch(82% 0.09 250)",
+          "oklch(95% 0.04 250)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Pantry Display",
+        "purpose": "The Home statement and major Product or Collection titles."
+      },
+      "body": {
+        "displayName": "Household Body",
+        "purpose": "Plain Mongolian product, delivery, policy, and checkout copy."
+      },
+      "label": {
+        "displayName": "Shelf Label",
+        "purpose": "Controls, prices, status, and literal shelf coordinates."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shelf-rail",
+        "value": "inset 0 2px oklch(84% 0.055 79), 0 5px 0 oklch(57% 0.075 65)",
+        "purpose": "Horizontal pantry beams and plinths only."
+      },
+      {
+        "name": "overlay",
+        "value": "0 14px 40px oklch(20% 0.03 48 / 20%)",
+        "purpose": "Cart sheet, dialog, and popover."
+      },
+      {
+        "name": "sticky-purchase",
+        "value": "0 8px 30px oklch(25% 0.03 48 / 16%)",
+        "purpose": "Compact mobile purchase bar only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Cart feedback, sheets, and image/price continuity."
+      },
+      {
+        "name": "press",
+        "value": "140ms",
+        "purpose": "Pointer press feedback on direct actions."
+      },
+      {
+        "name": "local-continuity",
+        "value": "200ms",
+        "purpose": "Variant image/price crossfade and occasional local transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "560px"
+      },
+      {
+        "name": "compact",
+        "value": "900px"
+      },
+      {
+        "name": "wide",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tomato Purchase Button",
+      "kind": "button",
+      "refersTo": "button-tomato",
+      "description": "The one dominant purchase action in a region.",
+      "html": "<button class=\"ds-u48-buy\" type=\"button\">Сагсанд нэмэх</button>",
+      "css": ".ds-u48-buy { min-height: 48px; border: 0; border-radius: 8px; padding: 12px 18px; background: oklch(55% 0.19 33); color: oklch(99% 0.004 80); font: 700 13px/1.3 Arial, 'Noto Sans', system-ui, sans-serif; cursor: pointer; transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 160ms ease; } .ds-u48-buy:hover { background: oklch(45% 0.17 31); } .ds-u48-buy:active { transform: scale(.97); } .ds-u48-buy:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Butter Merchandising Button",
+      "kind": "button",
+      "refersTo": "button-butter",
+      "description": "A single secondary emphasis against Tomato or Navy.",
+      "html": "<button class=\"ds-u48-butter\" type=\"button\">Тавиур үзэх</button>",
+      "css": ".ds-u48-butter { min-height: 48px; border: 0; border-radius: 8px; padding: 12px 18px; background: oklch(88% 0.14 88); color: oklch(24% 0.025 48); font: 700 13px/1.3 Arial, 'Noto Sans', system-ui, sans-serif; cursor: pointer; } .ds-u48-butter:hover { filter: brightness(.96); } .ds-u48-butter:active { transform: scale(.97); } .ds-u48-butter:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Store Search",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "The conventional header search that remains larger than decorative navigation.",
+      "html": "<label class=\"ds-u48-search\"><span>Бүтээгдэхүүн хайх</span><input placeholder=\"Будаа, угаалгын нунтаг, WF29…\"></label>",
+      "css": ".ds-u48-search { display: grid; gap: 7px; color: oklch(24% 0.025 48); font: 700 13px/1.3 Arial, 'Noto Sans', system-ui, sans-serif; } .ds-u48-search input { min-height: 50px; border: 1px solid oklch(84% 0.035 76); border-radius: 8px; padding: 12px 16px; background: oklch(99% 0.004 80); color: oklch(24% 0.025 48); font: 400 16px/1.5 Arial, 'Noto Sans', system-ui, sans-serif; } .ds-u48-search input:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Availability",
+      "kind": "chip",
+      "refersTo": "availability",
+      "description": "Explicit fresh availability with a redundant Leaf marker.",
+      "html": "<span class=\"ds-u48-stock\"><span aria-hidden=\"true\"></span>Бэлэн, захиалахад дахин шалгана</span>",
+      "css": ".ds-u48-stock { display: inline-flex; align-items: center; gap: 8px; border: 1px solid oklch(84% 0.035 76); border-radius: 999px; padding: 7px 10px; background: oklch(99% 0.004 80); color: oklch(24% 0.025 48); font: 700 13px/1.3 Arial, 'Noto Sans', system-ui, sans-serif; } .ds-u48-stock > span { width: 8px; height: 8px; border-radius: 50%; background: oklch(57% 0.13 135); }"
+    },
+    {
+      "name": "Pantry Shelf Bay",
+      "kind": "custom",
+      "refersTo": "shelf-bay",
+      "description": "One physical merchandising compartment, square and rail-bound.",
+      "html": "<article class=\"ds-u48-bay\"><span>Тасалгаа 05</span><strong>Цэвэрлэгээний хослол</strong><small>15,900 ₮ · Бэлэн</small></article>",
+      "css": ".ds-u48-bay { display: flex; min-height: 180px; flex-direction: column; justify-content: end; border: 10px solid oklch(70% 0.075 72); border-radius: 0; padding: 18px; background: oklch(88% 0.14 88); color: oklch(24% 0.025 48); box-shadow: inset 0 0 0 1px oklch(57% 0.075 65); font-family: Arial, 'Noto Sans', system-ui, sans-serif; } .ds-u48-bay span { color: oklch(45% 0.17 31); font-size: 11px; font-weight: 700; } .ds-u48-bay strong { margin-top: 6px; font-size: 18px; } .ds-u48-bay small { margin-top: 6px; font-size: 13px; }"
+    },
+    {
+      "name": "Restock Product Row",
+      "kind": "custom",
+      "refersTo": "shelf-bay",
+      "description": "Direction C density for Search and repeat purchase, not the Home hero.",
+      "html": "<article class=\"ds-u48-row\"><span class=\"ds-u48-thumb\" aria-hidden=\"true\"></span><div><strong>Өглөөний цагаан будаа, 1 кг</strong><small><i></i>Бэлэн</small></div><b>5,400 ₮</b><button type=\"button\" aria-label=\"Сагсанд нэмэх\">+</button></article>",
+      "css": ".ds-u48-row { display: grid; grid-template-columns: 58px minmax(0,1fr) auto 44px; gap: 14px; align-items: center; min-height: 78px; border-bottom: 1px solid oklch(84% 0.035 76); padding: 10px 0; color: oklch(24% 0.025 48); font-family: Arial, 'Noto Sans', system-ui, sans-serif; } .ds-u48-thumb { width: 58px; height: 58px; border: 8px solid oklch(70% 0.075 72); background: oklch(99% 0.004 80); } .ds-u48-row div { display: grid; gap: 6px; } .ds-u48-row strong { font-size: 15px; } .ds-u48-row small { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; } .ds-u48-row small i { width: 7px; height: 7px; border-radius: 50%; background: oklch(57% 0.13 135); } .ds-u48-row > b { font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; } .ds-u48-row button { width: 44px; height: 44px; border: 0; border-radius: 8px; background: oklch(55% 0.19 33); color: oklch(99% 0.004 80); font-size: 22px; cursor: pointer; } .ds-u48-row button:hover { background: oklch(45% 0.17 31); } .ds-u48-row button:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Apartment Pantry Shelf",
+    "overview": "Өрнүүн 48 is a bright, fictional Ulaanbaatar household Store organized with the physical clarity of a well-kept apartment pantry. This direction advances the founder-accepted Pantry shelf prototype: the page ground moves closer to neutral, birch and photography carry warmth, compartments breathe, literal timber framing is concentrated in merchandising, typography is less cramped, and the conventional Search/Cart header remains visible.",
+    "keyCharacteristics": [
+      "Pale birch structure concentrated in the Home hero and merchandising shelves.",
+      "Near-neutral page ground with warmth supplied by wood and sunlit product photography.",
+      "Tomato actions, butter signals, leaf availability, and navy trust information.",
+      "Square shelf geometry paired with compact rounded controls.",
+      "Large, tightly composed Mongolian display type without cramped letterforms.",
+      "Restock-list density for Search; generous product imagery for discovery."
+    ],
+    "rules": [
+      {
+        "name": "The Shelf Concentration Rule",
+        "body": "Use the physical shelf metaphor strongly once, then echo it through rails, numbering, and alignment. Do not box every section in timber.",
+        "section": "overview"
+      },
+      {
+        "name": "The Warmth Has a Source Rule",
+        "body": "Warmth comes from birch, sunlight, tomato, and butter—not a beige wash over every surface.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal Discipline Rule",
+        "body": "Tomato means action, Butter means emphasis, Leaf means availability, and Navy means trust or consequential information. Do not swap these roles for novelty.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Shelf Label Rule",
+        "body": "Numbering and compact uppercase marks belong to physical shelf coordinates. Do not place a tracked uppercase eyebrow above every heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Price Rhythm Rule",
+        "body": "MNT amounts use tabular figures, remain on one line, and carry stronger weight than adjacent status metadata.",
+        "section": "typography"
+      },
+      {
+        "name": "The Physical-Only-Where-Physical Rule",
+        "body": "A shelf rail may cast a shelf shadow. A Product row, form field, policy block, or status message may not imitate furniture.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Direction A's pantry shelf as the identity source and Direction C's row rhythm for Search and repeat purchase.",
+      "Do concentrate birch framing in the Home hero and selected merchandising shelves.",
+      "Do keep the page ground near-neutral and let bright kitchen photography carry warmth.",
+      "Do keep Search and Cart conventional, visible, and easy to reach on every viewport.",
+      "Do use semantic Mongolian HTML for every Product name, SKU, price, status, and control; imagery never carries commerce truth.",
+      "Do pair availability color with explicit text and recheck live truth before enabling purchase.",
+      "Do crop generated product imagery consistently, favoring bright daylight, clear silhouettes, and blank fictional packaging.",
+      "Do reduce mobile composition to readable bays and compact rows rather than shrinking the desktop cabinet.",
+      "Do use 120–220ms ease-out feedback, Astro route continuity, and immediate reduced-motion alternatives."
+    ],
+    "donts": [
+      "Don't turn the accepted pantry direction into a generic Shopify-style theme where only red, cream, and a logo distinguish the Store.",
+      "Don't create Shadcn-style card grids dressed up as commerce; the shelf is a composition, not a collection of rounded cards.",
+      "Don't let the shelf metaphor hide products, prices, search, or purchasing behind novelty.",
+      "Don't tint the entire application cream or beige; use Clear Ground outside physical birch regions.",
+      "Don't repeat timber borders, inset shadows, shelf numbers, or uppercase labels on every section.",
+      "Don't use the prototype's -0.055em to -0.08em heading spacing; never tighten display text beyond -0.04em.",
+      "Don't make Tomato, Butter, Leaf, and Navy interchangeable decorative accents.",
+      "Don't put readable brand copy, prices, SKUs, barcodes, QR codes, or authoritative status inside generated images.",
+      "Don't animate keyboard actions, quantity truth, payment truth, or unavailable states.",
+      "Don't copy Direction B's room photography into every route or Direction C's operational density into discovery-led Home merchandising."
+    ]
+  }
+}
