@@ -6,7 +6,7 @@ This contract defines the shared Store backend module, its Elysia/Eden HTTP inte
 
 ## Decision
 
-Every generated Store Worker initializes one deep shared backend module. The module captures its repository-owned Store Profile, fixed Worker bindings, and statically chosen external adapters once and returns three entrypoints:
+Every generated Store Worker initializes one deep shared backend module. The module captures its repository-owned Store Profile and statically chosen external adapters once and returns three entrypoints. Server modules read fixed Worker bindings directly from `cloudflare:workers`; bindings are not part of the module interface:
 
 ```ts
 export interface StoreBackend {
@@ -59,38 +59,23 @@ The accepted design is the first option, with named route families composed priv
 
 ## Composition and static identity
 
-A generated app owns the composition root:
+A generated app owns a minimal composition root:
 
 ```ts
-import { env } from "cloudflare:workers";
-import { createStoreBackend } from "@store/kernel";
+import { createStoreBackend } from "@shops/api";
+import { qpay, telegram } from "./integrations";
 import { storeProfile } from "./store-profile";
-import { paymentAdapter, telegramAdapter } from "./store-adapters";
 
 export const store = createStoreBackend({
   profile: storeProfile,
-  deployment: {
-    purpose: "production",
-    canonicalOrigin: "https://example.mn",
-    allowedHosts: ["example.mn"],
-  },
-  bindings: {
-    database: env.DB,
-    sessions: env.SESSIONS,
-    media: env.MEDIA,
-    workflow: env.COMMERCE_WORKFLOW,
-    smsGateway: env.SMS_GATEWAY,
-  },
-  adapters: {
-    automatedPayment: paymentAdapter,
-    telegram: telegramAdapter,
-  },
+  automatedPayment: qpay,
+  telegram,
 });
 
 export type StoreApi = typeof store.api;
 ```
 
-The example is illustrative rather than an SDK layer. Production types remain closed and versioned. The factory validates that Profile capabilities, adapter kinds, deployment purpose, and required bindings agree. Demo-only functionality fails closed in canary and Production.
+The app does not construct Drizzle, inject resource wrappers, or pass D1, KV, R2, Workflow, Queue, Email, or Service Bindings through operations. The owning server module imports canonical bindings such as `env.DB`, `env.EPHEMERAL_KV`, and `env.MEDIA` directly. Generated Wrangler types and delivery proof establish that required bindings exist. The composition function validates Profile capabilities, selected adapter kinds, and deployment purpose. Demo-only functionality fails closed in canary and Production.
 
 Bank transfer and cash on delivery are kernel behavior, not adapters. Real external variation justifies static seams for the selected automated-payment provider, the private SMS Gateway, and optional Telegram integration. D1, KV, R2, Drizzle repositories, cache policy, and commerce behavior do not receive speculative adapter interfaces.
 
@@ -154,8 +139,8 @@ Queries use `GET`, except bounded batch or quote operations whose structured inp
 ### Public catalog and availability
 
 ```text
-GET  /api/catalog/search
-POST /api/catalog/availability
+GET /api/catalog/search
+GET /api/catalog/availability?variantIds=<id>,<id>
 ```
 
 Public catalog JSON is added only for a real browser consumer. Astro SSR reads catalog and CMS presentation through `storefront`, not through duplicate HTTP routes.
@@ -173,7 +158,7 @@ GET /api/catalog/search?q=<term>&category=<slug>&collection=<slug>&page=<n>&limi
 - Unknown query parameters fail validation.
 - Search returns the accepted match source, field, confidence, and ambiguity metadata.
 
-Availability accepts at most 50 requested selections in one body. Each selection is a Variant or Bundle TypeID plus a positive requested quantity and a caller correlation key. The response returns only whether that requested selection is currently sellable and the server check time. It never exposes raw inventory quantity. Availability is advisory; Checkout revalidates and reserves all commercial truth atomically.
+Availability accepts at most 50 unique Variant TypeIDs in one query, deduplicates them, and returns current sellability plus the server check time. Bundle presentation resolves component demand through its published read model rather than introducing a second availability protocol. The endpoint never exposes raw inventory quantity. Availability is advisory; Checkout revalidates requested quantity and reserves all commercial truth atomically.
 
 Search and live availability remain `private, no-store` under the accepted current contracts. A future stock-free public catalog response may use semantic edge tags when a demonstrated browser consumer needs it.
 
@@ -246,7 +231,6 @@ PUT  /api/admin/discounts/:discountId
 POST /api/admin/discounts/:discountId/activate
 POST /api/admin/discounts/:discountId/deactivate
 POST /api/admin/inventory/:variantId/adjust
-POST /api/admin/orders/:orderId/accept-cod
 POST /api/admin/orders/:orderId/cancel
 POST /api/admin/orders/:orderId/complete
 POST /api/admin/fulfillments/:fulfillmentId/start
@@ -266,8 +250,6 @@ POST /api/admin/staff/:staffId/approve
 POST /api/admin/staff/:staffId/change-role
 POST /api/admin/staff/:staffId/revoke
 DELETE /api/admin/staff/:staffId
-POST /api/admin/telegram/enrollment
-DELETE /api/admin/telegram/enrollment
 ```
 
 Static intention-revealing paths preserve narrow Eden inputs and errors. The command boundary still checks current state and rejects a Delivery transition on Pickup or the inverse.
@@ -327,9 +309,7 @@ Cron accepts only configured bounded reconciliation/expiry work. It cannot carry
 
 ## Schema and validation ownership
 
-Elysia route modules own TypeBox schemas for HTTP params, query, headers, bodies, bounded arrays/strings, and response status shapes. Unknown input keys fail. TypeBox adapts transport data; it does not become a second commerce model.
-
-Valibot owns complete shared documents and values used outside HTTP: TanStack Form inputs, CMS/Theme documents, Personalization, immutable JSON snapshots, normalization, and persistence read validation. A complete document has one canonical Valibot definition rather than manually duplicated TypeBox and Valibot schemas.
+Valibot owns every executable runtime contract: HTTP params, query, headers, bodies, status-specific responses, TanStack Form inputs, CMS/Theme documents, Personalization, immutable snapshots, normalization, and persistence reads. Unknown keys fail. One canonical schema is inferred into its TypeScript type and reused wherever the same value crosses runtimes; the project does not maintain a parallel TypeBox model.
 
 Application TypeIDs serialize as canonical plain strings. Every external and persistence value is parsed with `fromString(value, expectedPrefix)` before entering typed application code. Wrong-prefix, malformed, or non-canonical IDs fail validation. Store identity is not encoded in an ID. No unchecked cast or type assertion bridges this seam.
 
@@ -386,6 +366,8 @@ export const createBrowserApi = (origin: string) =>
 ```
 
 The browser initializes this with `window.location.origin`. There is no Store header and no server-side localhost fallback. Astro SSR uses `store.storefront` instead. TanStack Query passes its abort signal through Eden for search and other replaceable reads.
+
+Feature files export reusable `queryOptions` and mutation configurations using current Solid Query `useQuery`, `useMutation`, and `useQueries` APIs. The shared request boundary parses Eden success and error values with their Valibot schemas and preserves each route's exact tagged error union in Query's `isError` state. Common network, service, rate-limit, expired-session, and contract failures receive global behavior. Domain failures requiring richer presentation remain local. Results are not serialized over HTTP or placed inside Query data.
 
 Mutations invalidate shared query keys after success; clients do not patch server truth directly. Credential forms remain outside local draft persistence.
 

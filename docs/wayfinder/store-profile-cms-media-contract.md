@@ -30,6 +30,8 @@ The Profile contains no Cloudflare resource IDs, domain, merchant copy, contacts
 
 A Store Profile cannot redefine schema, commerce behavior, API semantics, authorization, pricing, inventory, checkout, Payment, Order, Fulfillment, migration ordering, or cache safety. Merchant content and Theme publication never require deployment. Storefront code, the Theme token schema and compiler, approved font catalog, capability ceiling, provider wiring, and other build-owned configuration do require deployment.
 
+Storefront customization uses route-level Astro presentation replacement. A Store may replace Home, listing/search, Product, Cart, Checkout, policy, or other route composition while importing the shared presentation readers and interaction modules. Shared packages retain DTOs, availability, Cart, Checkout, query/form behavior, error handling, navigation safety, SEO facts, and accessibility behavior. V1 has no generic slot registry, arbitrary override map, Store subclass, or per-component extension framework.
+
 ## Draft and publish
 
 Each CMS aggregate has one current Published revision used by the public storefront and at most one server-persisted Draft revision. Unsaved edits remain browser-local under the approved versioned local-draft and reconciliation contract, layered over the current server Draft or Published base. Preview renders local or server-Draft values against the real app-owned storefront.
@@ -130,6 +132,8 @@ The asset split is:
 - inline in cached HTML: published color, radius, typography, and shadow variables;
 - immutable R2 objects: approved font files, images, textures, and other media;
 - deployed CSS: component structure, Tailwind mappings, layout, responsive behavior, and animations.
+
+The shared Storefront supplies a production-capable default and a consistent ambient motion layer across routes. Astro View Transitions preserve navigation continuity and shared visual elements; Motion handles Cart and local interaction feedback. Store route replacements retain reduced-motion behavior and must not delay input, obscure information, or convert commercial truth into animation state. Solar Icons for Solid is the controlled icon family; Store code does not mix arbitrary icon systems.
 
 The app exposes a small repository-approved font catalog. The published Theme stores only `bodyFontId` and `headingFontId`. Applying a complete preset may change its default font pairing; editing colors alone does not alter typography, and Admin may select heading and body fonts independently from the same catalog. Selecting an existing font requires only Theme publication. Adding a font requires a repository change and deployment.
 

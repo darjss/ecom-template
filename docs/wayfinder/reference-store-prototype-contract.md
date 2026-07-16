@@ -85,4 +85,6 @@ Each scenario resets clean resources and invokes ordinary shared-kernel commands
 
 The founder reviewed the live Portless prototype, rejected the first generic composition, accepted the revised physical pantry-cabinet direction, and requested closure on 2026-07-14. The accepted revision makes timber beams, numbered compartments, category, product, Bundle, delivery, and Store-number bays the dominant composition while preserving familiar commerce controls.
 
+Production implementation keeps the physical Pantry Shelf identity while adding the accepted shared Storefront behavior: Astro View Transitions on every route, persisted header and mobile navigation where correct, shared product imagery, a Motion-driven Cart, interaction feedback, Solar Icons, and reduced-motion alternatives. Motion is intentionally present and nonintrusive rather than removed in the name of avoiding animation noise.
+
 No agent-browser run occurred because the orchestrator did not grant the sole browser lease. Build, targeted TypeScript and lint checks, SSR curl proof, `/api/health`, media inspection, and founder visual review passed. Downstream implementation must repeat mobile, desktop, keyboard, zoom, reduced-motion, console, and overflow proof against production code rather than treating this throwaway prototype as that proof.

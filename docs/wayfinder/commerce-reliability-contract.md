@@ -37,83 +37,63 @@ Order-creating keys live with their Orders. Provider transaction references and 
 
 ## Explicit full-stack errors
 
-Use `better-result` for expected domain, authorization, provider, and infrastructure outcomes inside application modules. Error unions are narrow, tagged, serializable data. Do not erase them into a global domain `ApiError`.
+Use `better-result` for expected domain, authorization, provider, and infrastructure outcomes inside kernel and integration operations. Error unions are narrow tagged data. Do not erase them into a global domain `ApiError`, serialize Result containers over HTTP, or require generator composition.
 
-```ts
-import { Result, type SerializedResult } from "better-result";
-
-export type PlaceOrderError =
-  | { _tag: "CheckoutChanged"; currentTotalMnt: number }
-  | { _tag: "OutOfStock"; variantIds: string[] }
-  | { _tag: "AuthenticationRequired" }
-  | { _tag: "PermissionDenied"; permission: string };
-
-export type PlaceOrderResponse = SerializedResult<OrderDto, PlaceOrderError>;
-
-export const placeOrderResponse = async (
-  input: PlaceOrderInput,
-): Promise<PlaceOrderResponse> => Result.serialize(await placeOrder(input));
-```
-
-Elysia response schemas describe every serialized success and error variant so Eden carries the route-specific union. `Result.deserialize` reconstructs the Result container on the client; response schemas validate the payload because deserialization validates only the outer Result shape.
-
-Unexpected network failures, malformed responses, and unhandled server failures use one generic thrown `InfrastructureFailure`. Those failures enter TanStack Query's `isError` state. Expected domain and auth failures remain typed Result data.
-
-```ts
-export class InfrastructureFailure extends Error {
-  readonly _tag = "InfrastructureFailure";
-
-  constructor(
-    readonly kind: "network" | "server" | "invalid_response",
-    readonly status?: number,
-  ) {
-    super("The service is temporarily unavailable");
-    this.name = "InfrastructureFailure";
-  }
-}
-```
-
-Generators are optional. Ordinary `await`, explicit narrowing, chaining, or `Result.gen` may be used according to which is clearest. In an async generator, `Result.await` bridges a `Promise<Result<T, E>>`:
+Ordinary `await`, explicit narrowing, and fluent Result transformations are the normal style:
 
 ```ts
 export const prepareOrder = async (
   input: PlaceOrderInput,
-): Promise<Result<OrderDraft, PrepareOrderError>> =>
-  Result.gen(async function* () {
-    const cart = yield* Result.await(validateCart(input));
-    const demand = yield* Result.await(resolveInventoryDemand(cart));
-    return Result.ok({ cart, demand });
+): Promise<Result<OrderDraft, PrepareOrderError>> => {
+  const cart = await validateCart(input);
+
+  if (cart.isErr()) {
+    return Result.err(cart.error);
+  }
+
+  return (await resolveInventoryDemand(cart.value)).map((demand) => ({
+    cart: cart.value,
+    demand,
+  }));
+};
+```
+
+The HTTP adapter maps the Result once to a meaningful status, a route-specific success DTO, or the closed `ApiErrorEnvelope`. Valibot schemas validate every request, success DTO, and route-specific error detail. Eden preserves the route union. `Result.serialize`, `Result.deserialize`, an all-200 RPC convention, and Result instances inside Query data are excluded.
+
+### Typed TanStack Query failures
+
+The shared browser request boundary converts fetch rejection to a tagged network failure, parses successful and unsuccessful bodies with their Valibot contract, and throws only the declared query failure union. Reusable `queryOptions` and mutation configuration files state the exact route error type because TypeScript cannot infer thrown types from an async function.
+
+```ts
+export type ProductQueryError =
+  | ProductNotFound
+  | ProductUnavailable
+  | NetworkUnavailable
+  | ServiceUnavailable;
+
+export const productQuery = (productId: ProductId) =>
+  queryOptions<ProductDto, ProductQueryError>({
+    queryKey: ["catalog", "product", productId],
+    queryFn: () => requestProduct(productId),
   });
 ```
 
+`useQuery(() => productQuery(productId()))` therefore exposes typed `isError` and `error`. Ordinary endpoints do not require one custom hook each. Hooks remain appropriate only when they compose reactive state or several queries.
+
+The global Query and Mutation caches handle only common cross-interface behavior:
+
+- network and temporary service failures receive the shared toast and limited safe retry policy;
+- rate limits receive bounded retry presentation;
+- an expired Staff session redirects once to Staff login;
+- an unexpected response-contract failure receives generic presentation and diagnostic reporting.
+
+Domain errors that need more than a common toast remain local to their query or mutation interface. Examples include changed Checkout, stock, price, Discount, Payment, Fulfillment, publication, cancellation, and route-specific not-found presentation. Query metadata may opt a request into local presentation and prevent duplicate global UI.
+
+Expected tagged query failures may remain plain validated data; they do not need class instances merely to enter TanStack Query's error channel. Unexpected programmer defects and unknown thrown values are not relabeled as expected domain failures.
+
 ### Typed staff authorization
 
-Elysia's auth plugin returns typed `AuthenticationRequired` and `PermissionDenied` bodies for 401 and 403 responses. A shared staff request adapter converts those responses to `Result.err(AuthError)` and throws only generic infrastructure failures. Staff query helpers mark queries with `meta.auth = "staff"`.
-
-The global Query and Mutation caches observe successful Result data. `AuthenticationRequired` redirects once to staff login; `PermissionDenied` shows the shared permission response. Domain errors remain available to the calling interface. Generic infrastructure errors receive the global server-error presentation and limited retry policy.
-
-```ts
-export const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onSuccess: (data, query) => handleStaffAuthResult(data, query.meta),
-    onError: reportInfrastructureFailure,
-  }),
-  mutationCache: new MutationCache({
-    onSuccess: (data, _variables, _context, mutation) =>
-      handleStaffAuthResult(data, mutation.meta),
-    onError: reportInfrastructureFailure,
-  }),
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error) =>
-        error instanceof InfrastructureFailure &&
-        error.kind !== "invalid_response" &&
-        failureCount < 2,
-    },
-    mutations: { retry: false },
-  },
-});
-```
+Elysia returns route-typed `AuthenticationRequired` and `PermissionDenied` envelopes for `401` and `403`. Staff query configurations include the appropriate metadata. The global cache handles the common expired-session redirect; permission or domain responses requiring richer presentation remain local. Authorization is still enforced by the kernel operation rather than the browser response path.
 
 ## Cloudflare background execution
 
@@ -289,6 +269,6 @@ Implementation tickets must prove these behaviors against real local or sandbox 
 - COD placement consumes inventory immediately;
 - notification failure does not alter commerce state and can be retried;
 - reconciliation repairs a missed Workflow handoff;
-- typed domain and auth Results reach the Solid client unchanged while unexpected 500/network failures use global Query error handling.
+- route-specific domain, auth, network, and service failures reach typed TanStack Query `isError` states; common failures receive global handling while rich domain failures remain local.
 
 Follow the repository proof policy: use the actual browser, curl, Wrangler, and TypeScript CLI harnesses; do not introduce unit/integration tests, mocks, or fake provider behavior. Missing credentials must be reported as blocked rather than simulated as green.

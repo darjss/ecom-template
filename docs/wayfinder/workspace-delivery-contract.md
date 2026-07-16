@@ -9,7 +9,7 @@ There is no fleet product. The repository contains several independently deploya
 ## Deliberate simplifications
 
 - One pnpm workspace and lockfile are the source release. Shared packages are consumed from workspace source; v1 does not publish or independently version internal packages.
-- One Store app produces one Worker deployment with its own D1, session KV, cache KV, R2, secrets, cache namespace, and optional domain.
+- One Store app produces one Worker deployment with its own D1, one `EPHEMERAL_KV` namespace, R2, secrets, cache namespace, and optional domain.
 - One small manifest-driven command provisions or updates one Deployment Target and journals completed steps. There is no central runtime control plane, deployment database, release service, queue, agent daemon, or cross-Store coordinator.
 - Selective delivery means passing explicit target names. There is no changed-app inference, desired-state reconciler, fleet dashboard, rollout percentage, release train, or automatic convergence policy.
 - The fictional Reference Store is the only committed baseline and the only synthetic canary. Real prospect identity and deployment manifests remain private.
@@ -19,31 +19,42 @@ There is no fleet product. The repository contains several independently deploya
 
 ## Workspace ownership
 
-The production workspace begins with only boundaries that isolate distinct runtime concerns:
+The production workspace uses nine boundaries with distinct runtime ownership:
 
 ```text
 apps/
-  urnuun-48/            fictional Reference Store app
+  urnuun-48/            fictional Reference Store and synthetic canary
   <merchant-slug>/      one generated app per Store
 packages/
-  kernel/               commerce, API, auth, schema, migrations, Admin behavior
-  ui/                   shared accessible UI primitives and tokens
-  delivery/             Node-only manifest, Wrangler, journal, and proof CLI
+  contracts/            Valibot schemas, DTOs, tagged errors, IDs, and pure shared values
+  kernel/               commerce operations, Drizzle schema, migrations, queries, and background work
+  api/                  complete Store-local Elysia app and thin HTTP adapters
+  client/               Eden, TanStack Query/Form configuration, browser state, and request handling
+  admin/                shared Solid Merchant Admin SPA
+  storefront/           shared Astro/Solid commerce presentation and route readers
+  ui/                   Zaidan-based accessible primitives, tokens, icons, and motion
+  integrations/         Byl, direct QPay, SMS, Telegram, and other accepted external adapters
+  delivery/             Node-only manifest, Wrangler, journal, migration, and proof CLI
 ```
 
-The root owns `pnpm-workspace.yaml`, the single lockfile, pinned tool versions, Vite Plus task configuration, and thin convenience scripts. A new package is added only when an actual runtime or ownership boundary cannot remain clear inside these three packages.
+The root owns `pnpm-workspace.yaml`, the single lockfile, pinned tool versions, Vite Plus task configuration, CI, and thin convenience scripts. These nine packages are the approved bootstrap baseline. A tenth package requires a demonstrated runtime or ownership seam rather than size alone.
 
 ### Dependency rules
 
-- `apps/*` may depend on `@shops/kernel` and `@shops/ui` through `workspace:*`.
-- `@shops/kernel` may depend on `@shops/ui` only for shared Admin presentation. Commerce and persistence modules must not import an app.
-- `@shops/ui` has no dependency on the kernel or an app.
-- `@shops/delivery` is Node-only and must never enter a Worker bundle. Apps invoke it through root tasks rather than importing it at runtime.
-- Apps never copy shared schema, migrations, API routes, Admin behavior, checkout behavior, or commerce commands.
-- Internal packages use named exports with explicit public entry points. Importing another package's private source path is rejected by workspace checks.
-- Store identity is captured from the app's build-owned Store Profile and deployment configuration. It never comes from a caller-controlled header or runtime Store lookup.
+- Apps are minimal composition roots. They may import the shared packages through `workspace:*`, select static integrations, own Store Profile and deployment identity, and replace Storefront route presentation.
+- `contracts` is Worker-agnostic and has no dependency on another internal package.
+- `kernel` depends on `contracts`; it does not import apps, `api`, `client`, `admin`, `storefront`, `ui`, `integrations`, or `delivery`.
+- `api` depends on `contracts` and `kernel`. Its complete Elysia app is the sole Eden type source.
+- `client` depends on `contracts` and may have a type-only dependency on `api` for Eden inference.
+- `admin` and `storefront` depend on `client`, `contracts`, and `ui`; they do not reach into kernel persistence or HTTP route implementations.
+- `ui` owns presentation primitives and has no commerce dependency.
+- `integrations` depends on the pure provider interfaces and values in `contracts`; `kernel` never imports concrete providers.
+- `delivery` is Node-only and must never enter a Worker bundle.
+- Apps never copy shared schema, migrations, API routes, Admin behavior, query/form behavior, checkout behavior, or commerce operations.
+- Internal packages use named exports and explicit package entrypoints. Private cross-package source imports, dependency cycles, and forbidden directions fail CI.
+- Store identity comes from the app's build-owned Store Profile and deployment configuration. It never comes from a caller-controlled header or runtime Store lookup.
 
-Each app owns its Store Profile, Astro storefront composition, static assets, Store-specific seed input, direct integration composition, and deployment identity. Shared packages own all protected commerce truth and cache-safety behavior described in #5.
+Each app owns its Store Profile, route-level Astro Storefront presentation, static assets, Store-specific seed input, static integration selection, and deployment identity. Shared packages own behavior, state, API communication, queries, forms, accessibility, commercial truth, and cache safety. There is no generic slot registry, override framework, Store subclass, or copied backend.
 
 ## Generated Store apps
 
@@ -53,7 +64,7 @@ Generation is a bootstrap operation, not inheritance:
 
 - the generated app becomes ordinary reviewed source;
 - rerunning the generator never overwrites or merges an existing app;
-- merchant storefront work edits app-owned Astro and Solid files directly;
+- merchant storefront work replaces app-owned Astro route presentation while reusing shared readers, DTOs, availability, Cart, Checkout, navigation safety, and accessibility behavior;
 - upgrading shared behavior changes workspace package source, not generated copies;
 - there is no template patch engine, Store subclass, override registry, or code-generation lifecycle.
 
@@ -103,12 +114,14 @@ An app directly imports the accepted integration modules in a typed composition 
 
 Requirements use fixed categories:
 
-- D1, session KV, cache KV, and media R2 bindings;
-- optional private Service Bindings already accepted by the Store;
+- `DB`, `EPHEMERAL_KV`, and `MEDIA` bindings;
+- named Workflow, Queue, Email, and private Service Bindings only when an accepted module uses them;
 - public runtime values;
 - secret names.
 
-Binding names are stable across every app. Secret values are entered with Wrangler or CI secret bindings and never pass through the manifest or journal. Apply verifies required secret names before deployment and pauses with an `awaiting-secrets` result that lists exact missing names.
+Binding names are stable across every app. Server modules import bindings directly from `cloudflare:workers`; apps and operations do not construct, inject, or repeatedly pass database, KV, R2, Workflow, Queue, Email, or Service Binding objects. Static provider selection remains a real composition seam and is not a binding factory.
+
+Secret values are entered with Wrangler or CI secret bindings and never pass through the manifest or journal. Apply verifies required secret names before deployment and pauses with an `awaiting-secrets` result that lists exact missing names.
 
 A known integration translates provider evidence into the shared kernel's canonical Payment, notification, or delivery interfaces. It does not own Order or inventory truth. If an accepted future integration genuinely needs persistence, its schema becomes part of the one reviewed kernel migration stream at that time; v1 does not assemble independent adapter migration streams.
 
@@ -122,7 +135,7 @@ The initial task surface is intentionally small:
 
 - `pnpm dev:stores` — ensure the shared Portless proxy and run all Store dev tasks;
 - `pnpm dev:store -- <slug>` — run one app through Portless;
-- `pnpm check` — typecheck and lint the workspace;
+- `pnpm check` — format check, Oxlint, Astro ESLint, TypeScript/Astro checks, Knip, dependency rules, and build;
 - `pnpm build:store -- <slug>` — build one app and its workspace dependencies;
 - `pnpm store:create -- ...` — bootstrap one app;
 - `pnpm store:apply -- --manifest <path> --target <name>` — provision or update one target;
@@ -131,7 +144,13 @@ The initial task surface is intentionally small:
 
 Build and check tasks may use content caching with declared inputs and outputs. Dev servers and every task that reads or mutates Cloudflare, D1, secrets, journals, or live proof are never cached. Package scripts remain thin; delivery sequencing lives in the typed delivery CLI rather than shell pipelines.
 
-The workspace pins pnpm, Node, Vite Plus, Wrangler, Astro, and migration tooling versions. Remote apply requires a clean checkout and records the exact commit and lockfile digest. Production apply additionally requires an explicit typed target confirmation. It does not require tags, changelogs, artifact registries, or a release branch.
+The workspace pins pnpm, Node, Vite Plus, Wrangler, Astro, TypeScript, and migration tooling versions. TypeScript 7 is the canonical compiler. The TypeScript 6 compatibility package remains installed under the `typescript` name only while Astro's programmatic checker stack requires the older compiler API; TypeScript 7 is installed under an explicit alias and invoked deliberately.
+
+Oxfmt owns formatting. Oxlint starts from `npx @letstri/oxlint-config init`, then incorporates the applicable general Antfu rules and `eslint-plugin-solid` through native rules or Oxlint's JS-plugin support. Because Oxlint cannot currently parse `.astro`, a narrow Antfu/`eslint-plugin-astro` ESLint pass runs only on Astro files. Biome and a second general ESLint pass are excluded. Knip finds dead files, exports, and dependencies. Sherif checks workspace manifest consistency. Dependency-direction checks enforce the graph above. CI runs format, lint, typecheck, Knip, Sherif, dependency checks, and build with no generated drift.
+
+The bootstrap installs the approved dependency baseline instead of leaving feature agents to choose foundational libraries ad hoc. In addition to the accepted framework, Cloudflare, auth, database, UI, query, form, date, motion, icon, logging, and validation packages, this baseline includes `better-result`, `dismatch`, `es-toolkit`, `@solid-primitives/storage`, `json-canonicalize`, `culori`, and `micromark`. Installing a baseline dependency does not justify using it outside its owning need: canonical JSON belongs to idempotency hashing, Culori to the Theme compiler, and Micromark to the constrained CMS renderer. Major additions or competing libraries require an explicit reviewed decision.
+
+Remote apply requires a clean checkout and records the exact commit and lockfile digest. Production apply additionally requires an explicit typed target confirmation. It does not require tags, changelogs, artifact registries, or a release branch.
 
 ## One resumable apply workflow
 
@@ -140,19 +159,18 @@ The workspace pins pnpm, Node, Vite Plus, Wrangler, Astro, and migration tooling
 1. validate manifest, target kind, app, clean source, tool versions, and static integration requirements;
 2. build the selected app and record source and build digests;
 3. create or verify the target D1 database;
-4. create or verify session KV;
-5. create or verify cache KV;
-6. create or verify media R2;
-7. render ignored Wrangler configuration from manifest plus verified resource IDs;
-8. generate binding types and run the selected app's typecheck;
-9. verify required secret names;
-10. list pending migrations and record the current D1 Time Travel bookmark;
-11. apply the shared migrations;
-12. apply the idempotent Store seed when the target has not been seeded;
-13. deploy the Worker by content digest;
-14. prove the workers.dev deployment and required bindings;
-15. attach configured routes, then prove the canonical URL;
-16. mark the journal `ready` with commit, migration, deployment, and proof evidence.
+4. create or verify `EPHEMERAL_KV`;
+5. create or verify media R2;
+6. render ignored Wrangler configuration from manifest plus verified resource IDs;
+7. generate binding types and run the selected app's typecheck;
+8. verify required secret names;
+9. list pending migrations and record the current D1 Time Travel bookmark;
+10. apply the shared migrations;
+11. apply the idempotent Store seed when the target has not been seeded;
+12. deploy the Worker by content digest;
+13. prove the workers.dev deployment and required bindings;
+14. attach configured routes, then prove the canonical URL;
+15. mark the journal `ready` with commit, migration, deployment, and proof evidence.
 
 Steps that do not apply, such as remote resource creation for `local` or route attachment without routes, are recorded as skipped with a reason. The journal is a small versioned JSON document beside the target's ignored delivery state. Every successful external response is durably written before the next step begins.
 

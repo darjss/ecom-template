@@ -88,9 +88,54 @@ Cloudflare's CDN/Workers Cache owns public storefront caching. D1 owns commerce 
 
 Provisioning, Wrangler templates, generated binding types, delivery journals, `store:doctor`, cleanup, and live proof create and verify one KV resource. This supersedes the `session KV` plus `cache KV` clauses in the provisioning and operations contracts.
 
+## Bootstrap architecture and package ownership
+
+Issue #31 establishes the approved nine-package workspace:
+
+```text
+apps/urnuun-48
+packages/contracts
+packages/kernel
+packages/api
+packages/client
+packages/admin
+packages/storefront
+packages/ui
+packages/integrations
+packages/delivery
+```
+
+Store apps are minimal composition roots. Shared packages own runtime contracts, commerce and persistence, the complete Elysia app, Eden and TanStack configuration, browser state, forms, the Solid Admin SPA, the production-capable default Storefront, accessible UI primitives, provider implementations, and Node-only delivery behavior. A Store app owns its Store Profile, deployment identity, static integration selection, assets, seed input, and route-level Storefront presentation. There is no generic slot registry, override framework, Store subclass, copied backend, or Store-local fork of commerce behavior.
+
+`kernel` is organized by commerce feature and may be the largest package. Drizzle schema and migrations remain there. Only persistence modules access raw tables; feature operations consume cohesive feature query objects; routes invoke operations; cross-feature backend work calls operations directly rather than HTTP. Avoid MVC layers, generic repositories, command buses, and catch-all service/helper directories.
+
+Worker bindings use stable names and are imported directly through `import { env } from "cloudflare:workers"` by their owning server modules. Do not construct or inject D1, KV, R2, Workflow, Queue, Email, or Service Binding wrappers through application layers. Static provider selection remains a real seam because accepted implementations vary.
+
+## Current typed data and error flow
+
+Valibot owns HTTP and shared executable runtime contracts. Drizzle owns relational persistence. Browser DTOs are deliberate contract projections rather than exported rows.
+
+Kernel and integration operations use Better Result for expected tagged failures, with ordinary `await`, explicit narrowing, and fluent transformations. Elysia maps the Result once to meaningful status-specific success and `ApiErrorEnvelope` responses. The wire protocol does not serialize Better Result.
+
+The client uses current Solid Query `useQuery`, `useMutation`, and `useQueries` APIs with reusable `queryOptions` and mutation configuration files. The shared request boundary validates success and failure bodies and throws the exact tagged route error union, making Query `isError` typed. Common network, service, rate-limit, expired-session, and contract failures receive global Query behavior. Domain failures requiring richer than a common toast remain with the consuming query or mutation interface. Result containers do not live inside Query data.
+
+TanStack Query owns remote state; TanStack Form owns editable form state; the URL owns shareable navigation and filter state; native Solid stores and context own Cart, session, and transient UI state. Persist the Cart and compatible drafts with Solid Primitives storage. Mutations invalidate authoritative queries rather than manually editing cache truth.
+
+## Bootstrap dependency and tooling baseline
+
+The bootstrap installs the important approved dependencies rather than inviting later agents to choose competing foundations. This includes Better Result, TypeID, Evlog, date-fns with timezone support, Motion, Solar Icons for Solid, `es-toolkit`, `dismatch`, `@solid-primitives/storage`, `json-canonicalize`, Culori, and Micromark alongside the accepted Astro, Solid, Elysia/Eden, Drizzle, Better Auth, Valibot, TanStack, Zaidan, Kobalte, Corvu, and Tailwind stack. Canonical JSON is owned by idempotency hashing, Culori by the Theme compiler, and Micromark by constrained CMS rendering. Major additions require explicit review; do not add competing utility, validation, state, icon, date, logging, animation, or pattern-matching systems ad hoc.
+
+TypeScript 7 is canonical. A side-by-side TypeScript 6 compatibility package exists only while Astro's programmatic language tooling requires the old API. Oxfmt owns formatting. Oxlint begins with Letstri's initializer and incorporates applicable Antfu general and Solid rules. A narrow Antfu ESLint pass handles only `.astro` until Oxlint supports that parser. Biome and a duplicate general ESLint pass are excluded. Knip, Sherif, dependency-direction checks, format, lint, TypeScript/Astro checks, and build run in CI.
+
+## Default presentation and motion
+
+Өрнүүн 48 remains the fictional Reference Store. Shared `storefront` and `admin` packages provide polished, functional defaults that a Store may ship unchanged. Store-specific Astro routes may replace presentation while preserving shared readers, DTOs, availability, Cart, Checkout, navigation safety, forms, errors, and accessibility behavior.
+
+Solar Icons replaces Lucide under a controlled family policy. Storefront navigation uses a consistent ambient layer of Astro View Transition motion. Persist continuity elements where correct, use shared product imagery and Motion-driven interaction feedback, and animate header, mobile navigation, Cart, search, variants, add-to-cart, and Checkout without delaying input or obscuring information. Reduced-motion behavior removes spatial movement while preserving state feedback.
+
 ## Proportional operations and launch proof
 
-Keep Cloudflare-native logs, D1 metrics and Time Travel, account notifications, compact Admin attention states, the five human runbooks, a separate privacy-first PostHog project per Production Store, the seven-event allowlist, and masked sampled session replay. Session replay remains easy-to-operate product evidence and retains all accepted privacy boundaries: no network capture, no identification, masked input, redacted query strings, and no recording on Checkout, auth, tracking, or Admin.
+Keep Cloudflare-native logs, D1 metrics and Time Travel, account notifications, compact Admin attention states, the five human runbooks, a separate privacy-first PostHog project per Production Store, the seven-event allowlist, and masked sampled session replay. Restricted server-side Evlog events for Customer Auth, Checkout, Order, Payment, and support diagnosis may include the full normalized customer phone because it is the practical support lookup identifier. Phone never enters PostHog, URLs, public errors, browser logs, or indiscriminate request logging. Session replay remains easy-to-operate product evidence and retains all accepted privacy boundaries: no network capture, no identification, masked input, redacted query strings, and no recording on Checkout, auth, tracking, or Admin.
 
 Reduce ceremony as follows.
 
@@ -131,7 +176,7 @@ The following final decisions resolve stale clauses in earlier artifacts:
 - COD placement performs its accepted immediate inventory effect and creates an Awaiting Confirmation cash Payment. There is no `AcceptCodOrder` command, route, or Canary Scenario. Authorized cash collection uses the ordinary Payment confirmation command. The Reference Store COD scenario proves OTP-backed placement, immediate inventory consumption, and later cash confirmation instead.
 - Live availability uses `GET /api/catalog/availability?variantIds=...`, is batched, and is `private, no-store`.
 - Public search uses one `CatalogItemSearchResult` discriminated by `kind: product | bundle`. Published Products and Bundles share one FTS projection and endpoint. A Variant SKU resolves to its Product; a Bundle SKU resolves to its Bundle. Category and Collection shortcuts remain separate result kinds, not separate indexes.
-- Elysia HTTP uses route-specific success DTOs and one closed `ApiErrorEnvelope` with meaningful HTTP status codes. Internal kernel operations may use typed Results, but the HTTP adapter maps them once. Serialized Result containers, client `Result.deserialize`, and a second transport-level `InfrastructureFailure` hierarchy are not part of the wire protocol.
+- Elysia HTTP uses route-specific success DTOs and one closed `ApiErrorEnvelope` with meaningful HTTP status codes. Internal kernel operations may use typed Results, but the HTTP adapter maps them once. Serialized Result containers, client `Result.deserialize`, Result instances inside Query data, and a second transport-level `InfrastructureFailure` hierarchy are not part of the wire protocol. Route-specific tagged failures enter typed Query `isError` states instead.
 - Customer OTP has one policy: five-minute single-use code; replacement invalidates the previous code; five verification attempts; 30-second resend cooldown; at most five sends per normalized phone per day; and at most ten sends per IP per 15 minutes. All counters use the prefixed `EPHEMERAL_KV` namespace. Earlier overlapping hourly phone/IP windows are removed.
 - Ordinary Catalog, settings, and typed CMS Draft writes are last-write-wins. General aggregate Revision columns and expected-Revision HTTP contracts are absent. Consequential state transitions retain atomic current-state predicates and idempotency where retries occur.
 - Cloudflare Workflow may coordinate payment expiry, provider inspection, notifications, and repair, but D1 remains the only commerce truth. The accepted schema has no generic job table, outbox, notification-delivery table, or Failed Notifications subsystem.
