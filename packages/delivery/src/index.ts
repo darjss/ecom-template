@@ -9,6 +9,10 @@ export const D1DatabaseIdSchema = v.pipe(
   v.string(),
   v.regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
 );
+export const DeliveryStaffIdSchema = v.pipe(
+  v.string(),
+  v.regex(/^staff_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/),
+);
 
 export const DeploymentTargetSchema = v.strictObject({
   kind: v.picklist(["local", "prospect-demo", "canary", "production"]),

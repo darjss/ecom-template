@@ -4,13 +4,15 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { parse } from "yaml";
+import { parse as parseJsonc, type ParseError } from "jsonc-parser";
+import { parse as parseYaml } from "yaml";
 import * as v from "valibot";
 import {
   D1DatabaseIdSchema,
   D1DatabaseNameSchema,
   DeliveryJournalSchema,
   DeliveryManifestSchema,
+  DeliveryStaffIdSchema,
   DevProcessRecordSchema,
   ProofRecordSchema,
   StoreNameSchema,
@@ -79,7 +81,7 @@ type ManifestInput = {
 
 const readManifest = async (): Promise<ManifestInput> => {
   const source = await readFile(requireOption("--manifest"), "utf8");
-  const parsed: unknown = parse(source);
+  const parsed: unknown = parseYaml(source);
   return {
     manifest: v.parse(DeliveryManifestSchema, parsed),
     digest: createHash("sha256").update(source).digest("hex"),
@@ -102,7 +104,6 @@ const proofPath = (targetName: string) => join(".delivery", `${targetName}.proof
 const devProcessPath = (slug: string) => join(".delivery", `${slug}.dev.json`);
 
 const SqlEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
-const StaffIdSchema = v.pipe(v.string(), v.regex(/^staff_[0-9a-hjkmnp-tv-z]{26}$/));
 const WranglerConfigSchema = v.object({
   d1_databases: v.array(
     v.object({
@@ -122,14 +123,18 @@ const hasCanonicalStaffIdSql =
 
 const createOwnerStatement = async (email: string) => {
   const { stdout: staffIdSource } = await execFileOutput("pnpm", ["--silent", "staff:id:create"]);
-  const staffId = v.parse(StaffIdSchema, staffIdSource.trim());
+  const staffId = v.parse(DeliveryStaffIdSchema, staffIdSource.trim());
   const now = Date.now();
   return `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET id = CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE excluded.id END, status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
 };
 
 const readAppD1Resource = async (slug: string) => {
   const source = await readFile(join("apps", slug, "wrangler.jsonc"), "utf8");
-  const parsed: unknown = parse(source);
+  const errors: ParseError[] = [];
+  const parsed: unknown = parseJsonc(source, errors, { allowTrailingComma: true });
+  if (errors.length > 0) {
+    throw new Error(`Store ${slug} has invalid Wrangler JSONC`);
+  }
   const config = v.parse(WranglerConfigSchema, parsed);
   const resources = config.d1_databases.filter(({ binding }) => binding === "DB");
   if (resources.length !== 1) {
@@ -344,7 +349,8 @@ const proofTarget = async () => {
     journal.manifestDigest !== manifestDigest ||
     journal.origin !== localStore.origin ||
     journal.resources.d1.name !== d1.name ||
-    journal.resources.d1.databaseId !== d1.databaseId
+    journal.resources.d1.databaseId !== d1.databaseId ||
+    !journal.completedSteps.includes("local-migrations")
   ) {
     throw new Error(
       "Local apply journal does not match the selected target, checkout, manifest, and D1 resource",
