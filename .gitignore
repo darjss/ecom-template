@@ -7,3 +7,4 @@ dist/
 .private/
 coverage/
 worker-configuration.d.ts
+*.tsbuildinfo
