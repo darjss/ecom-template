@@ -103,21 +103,14 @@ export const approveStaff = async (
     return denied;
   }
   try {
-    const before = (await staffQueries.list()).find((member) => member.id === id);
-    if (!before) {
-      return Result.err({ code: "not_found" });
+    const { changed, current } = await staffQueries.approve(id, role);
+    if (!changed) {
+      return Result.err({ code: current ? "invalid_transition" : "not_found" });
     }
-    if (before.status === "active") {
-      return Result.err({ code: "invalid_transition" });
-    }
-    const member = await staffQueries.approve(id, role);
-    if (!member || member.status !== "active" || member.role !== role) {
-      return Result.err({ code: "invalid_transition" });
-    }
-    if (!(await revokeSessions(origin, member))) {
+    if (!(await revokeSessions(origin, changed))) {
       return Result.err({ code: "session_revocation_failed" });
     }
-    return Result.ok(publicMember(member));
+    return Result.ok(publicMember(changed));
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }
@@ -134,24 +127,29 @@ export const changeStaffRole = async (
     return denied;
   }
   try {
-    const before = (await staffQueries.list()).find((member) => member.id === id);
+    const before = await staffQueries.findById(id);
     if (!before) {
       return Result.err({ code: "not_found" });
     }
-    if (before.status !== "active") {
+    if (before.status !== "active" || before.role === role) {
       return Result.err({ code: "invalid_transition" });
     }
-    const member = await staffQueries.changeRole(id, role);
-    if (!member) {
-      return Result.err({ code: "not_found" });
+    const { changed, current } = await staffQueries.changeRole(id, role);
+    if (!changed) {
+      if (!current) {
+        return Result.err({ code: "not_found" });
+      }
+      return Result.err({
+        code:
+          current.status === "active" && current.role !== role
+            ? "final_owner"
+            : "invalid_transition",
+      });
     }
-    if (member.role !== role) {
-      return Result.err({ code: "final_owner" });
-    }
-    if (!(await revokeSessions(origin, member))) {
+    if (!(await revokeSessions(origin, changed))) {
       return Result.err({ code: "session_revocation_failed" });
     }
-    return Result.ok(publicMember(member));
+    return Result.ok(publicMember(changed));
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }
@@ -167,26 +165,22 @@ export const revokeStaff = async (
     return denied;
   }
   try {
-    const before = (await staffQueries.list()).find((member) => member.id === id);
-    if (!before) {
-      return Result.err({ code: "not_found" });
-    }
-    const member = await staffQueries.revoke(id);
-    if (!member) {
-      return Result.err({ code: "not_found" });
-    }
-    if (member.status !== "revoked") {
+    const { changed, current } = await staffQueries.revoke(id);
+    if (!changed) {
+      if (!current) {
+        return Result.err({ code: "not_found" });
+      }
       return Result.err({
         code:
-          before.status === "active" && before.role === "owner"
+          current.status === "active" && current.role === "owner"
             ? "final_owner"
             : "invalid_transition",
       });
     }
-    if (!(await revokeSessions(origin, member))) {
+    if (!(await revokeSessions(origin, changed))) {
       return Result.err({ code: "session_revocation_failed" });
     }
-    return Result.ok(publicMember(member));
+    return Result.ok(publicMember(changed));
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }

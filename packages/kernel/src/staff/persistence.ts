@@ -95,45 +95,112 @@ const findById = async (id: StaffId) => {
   return row ? projectStaff(row) : undefined;
 };
 
+const attemptDatabase = async <T>(query: PromiseLike<T>) => {
+  try {
+    return { success: true as const, value: await query };
+  } catch {
+    return { success: false as const };
+  }
+};
+
+const findByAuthUserId = async (authUserId: string) => {
+  const attempt = await attemptDatabase(
+    database()
+      .select(selection)
+      .from(staffMembers)
+      .where(eq(staffMembers.authUserId, authUserId))
+      .limit(1),
+  );
+  if (!attempt.success) {
+    return attempt;
+  }
+  const row = attempt.value.at(0);
+  return { success: true as const, value: row ? projectStaff(row) : undefined };
+};
+
+const findByNormalizedEmail = async (normalizedEmail: string) => {
+  const attempt = await attemptDatabase(
+    database()
+      .select(selection)
+      .from(staffMembers)
+      .where(eq(staffMembers.normalizedEmail, normalizedEmail))
+      .limit(1),
+  );
+  if (!attempt.success) {
+    return attempt;
+  }
+  const row = attempt.value.at(0);
+  return { success: true as const, value: row ? projectStaff(row) : undefined };
+};
+
 const resolveApplicant = async (authUserId: string, email: string) => {
   const normalizedEmail = normalizeEmail(email);
+  const linkedAttempt = await findByAuthUserId(authUserId);
+  if (!linkedAttempt.success) {
+    return { kind: "infrastructure_unavailable" } as const;
+  }
+  const linked = linkedAttempt.value;
+  if (linked) {
+    return linked.email === normalizedEmail
+      ? ({ kind: "resolved", member: linked } as const)
+      : ({ kind: "identity_conflict" } as const);
+  }
+
   const now = new Date();
-  await database()
-    .insert(staffMembers)
-    .values({
-      id: createStaffId(),
-      normalizedEmail,
-      authUserId,
-      status: "pending",
-      role: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing({ target: staffMembers.normalizedEmail });
-  await database()
-    .update(staffMembers)
-    .set({ authUserId, updatedAt: now })
-    .where(
-      and(
-        eq(staffMembers.normalizedEmail, normalizedEmail),
-        or(isNull(staffMembers.authUserId), eq(staffMembers.authUserId, authUserId)),
+  const insertAttempt = await attemptDatabase(
+    database()
+      .insert(staffMembers)
+      .values({
+        id: createStaffId(),
+        normalizedEmail,
+        authUserId,
+        status: "pending",
+        role: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing(),
+  );
+  if (!insertAttempt.success) {
+    return { kind: "infrastructure_unavailable" } as const;
+  }
+  const updateAttempt = await attemptDatabase(
+    database()
+      .update(staffMembers)
+      .set({ authUserId, updatedAt: now })
+      .where(
+        and(
+          eq(staffMembers.normalizedEmail, normalizedEmail),
+          or(isNull(staffMembers.authUserId), eq(staffMembers.authUserId, authUserId)),
+        ),
       ),
-    );
-  const rows = await database()
-    .select(selection)
-    .from(staffMembers)
-    .where(
-      and(
-        eq(staffMembers.normalizedEmail, normalizedEmail),
-        eq(staffMembers.authUserId, authUserId),
-      ),
-    )
-    .limit(1);
-  const row = rows.at(0);
-  return row ? projectStaff(row) : undefined;
+  );
+  if (!updateAttempt.success) {
+    return { kind: "infrastructure_unavailable" } as const;
+  }
+
+  const resolvedAttempt = await findByAuthUserId(authUserId);
+  if (!resolvedAttempt.success) {
+    return { kind: "infrastructure_unavailable" } as const;
+  }
+  const resolved = resolvedAttempt.value;
+  if (resolved) {
+    return resolved.email === normalizedEmail
+      ? ({ kind: "resolved", member: resolved } as const)
+      : ({ kind: "identity_conflict" } as const);
+  }
+  const emailOwnerAttempt = await findByNormalizedEmail(normalizedEmail);
+  if (!emailOwnerAttempt.success) {
+    return { kind: "infrastructure_unavailable" } as const;
+  }
+  if (emailOwnerAttempt.value) {
+    return { kind: "identity_conflict" } as const;
+  }
+  throw new Error("Applicant resolution did not produce a Staff record");
 };
 
 export const staffQueries = {
+  findById,
   resolveApplicant,
 
   async createActive(email: string, role: StaffRole) {
@@ -157,13 +224,20 @@ export const staffQueries = {
   },
 
   async resolveAuthUserApplicant(authUserId: string) {
-    const users = await database()
-      .select({ email: staff_auth_users.email, emailVerified: staff_auth_users.emailVerified })
-      .from(staff_auth_users)
-      .where(eq(staff_auth_users.id, authUserId))
-      .limit(1);
-    const user = users.at(0);
-    return user?.emailVerified ? resolveApplicant(authUserId, user.email) : undefined;
+    const attempt = await attemptDatabase(
+      database()
+        .select({ email: staff_auth_users.email, emailVerified: staff_auth_users.emailVerified })
+        .from(staff_auth_users)
+        .where(eq(staff_auth_users.id, authUserId))
+        .limit(1),
+    );
+    if (!attempt.success) {
+      return { kind: "infrastructure_unavailable" } as const;
+    }
+    const user = attempt.value.at(0);
+    return user?.emailVerified
+      ? resolveApplicant(authUserId, user.email)
+      : ({ kind: "unverified" } as const);
   },
 
   async list() {
@@ -174,42 +248,58 @@ export const staffQueries = {
     return rows.map(projectStaff);
   },
 
-  async hasCurrentSessionGeneration(authUserId: string, generation: number) {
+  async readCurrentSessionAuthority(authUserId: string, email: string, generation: number) {
     const rows = await database()
-      .select({ sessionGeneration: staffMembers.sessionGeneration })
+      .select({
+        normalizedEmail: staffMembers.normalizedEmail,
+        sessionGeneration: staffMembers.sessionGeneration,
+      })
       .from(staffMembers)
       .where(eq(staffMembers.authUserId, authUserId))
       .limit(1);
-    return rows.at(0)?.sessionGeneration === generation;
+    const member = rows.at(0);
+    if (member && member.normalizedEmail !== normalizeEmail(email)) {
+      return "identity_conflict" as const;
+    }
+    return member?.sessionGeneration === generation ? ("current" as const) : ("stale" as const);
   },
 
   async approve(id: StaffId, role: StaffRole) {
     const now = Date.now();
-    await env.DB.prepare(
-      "UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ? AND status IN ('pending', 'revoked')",
+    const result = await env.DB.prepare(
+      "UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE id = ? AND status = 'pending' RETURNING id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt",
     )
       .bind(role, now, now, id)
-      .run();
-    return findById(id);
+      .all();
+    const changed = result.results.at(0);
+    return changed
+      ? { changed: projectReturnedStaff(changed), current: undefined }
+      : { changed: undefined, current: await findById(id) };
   },
 
   async changeRole(id: StaffId, role: StaffRole) {
-    await env.DB.prepare(
-      "UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND ? <> 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
+    const result = await env.DB.prepare(
+      "UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE id = ? AND status = 'active' AND role <> ? AND NOT (role = 'owner' AND ? <> 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1) RETURNING id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt",
     )
-      .bind(role, Date.now(), id, role)
-      .run();
-    return findById(id);
+      .bind(role, Date.now(), id, role, role)
+      .all();
+    const changed = result.results.at(0);
+    return changed
+      ? { changed: projectReturnedStaff(changed), current: undefined }
+      : { changed: undefined, current: await findById(id) };
   },
 
   async revoke(id: StaffId) {
     const now = Date.now();
-    await env.DB.prepare(
-      "UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)",
+    const result = await env.DB.prepare(
+      "UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE id = ? AND status = 'active' AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1) RETURNING id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt",
     )
       .bind(now, now, id)
-      .run();
-    return findById(id);
+      .all();
+    const changed = result.results.at(0);
+    return changed
+      ? { changed: projectReturnedStaff(changed), current: undefined }
+      : { changed: undefined, current: await findById(id) };
   },
 
   async remove(id: StaffId) {
