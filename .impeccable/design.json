@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-16T12:43:23Z",
+  "title": "Design System: Bespoke Commerce System",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(24% 0.025 66)",
+        "tonalRamp": [
+          "oklch(15% 0.025 66)",
+          "oklch(25% 0.025 66)",
+          "oklch(35% 0.025 66)",
+          "oklch(45% 0.025 66)",
+          "oklch(58% 0.025 66)",
+          "oklch(70% 0.025 66)",
+          "oklch(84% 0.025 66)",
+          "oklch(95% 0.025 66)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(48% 0.02 66)",
+        "tonalRamp": [
+          "oklch(15% 0.02 66)",
+          "oklch(25% 0.02 66)",
+          "oklch(35% 0.02 66)",
+          "oklch(48% 0.02 66)",
+          "oklch(58% 0.02 66)",
+          "oklch(70% 0.02 66)",
+          "oklch(84% 0.02 66)",
+          "oklch(95% 0.02 66)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(97% 0.018 85)",
+        "tonalRamp": [
+          "oklch(15% 0.018 85)",
+          "oklch(25% 0.018 85)",
+          "oklch(35% 0.018 85)",
+          "oklch(48% 0.018 85)",
+          "oklch(60% 0.018 85)",
+          "oklch(72% 0.018 85)",
+          "oklch(85% 0.018 85)",
+          "oklch(97% 0.018 85)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Quiet Surface",
+        "canonical": "oklch(92% 0.035 78)",
+        "tonalRamp": [
+          "oklch(15% 0.035 78)",
+          "oklch(25% 0.035 78)",
+          "oklch(35% 0.035 78)",
+          "oklch(48% 0.035 78)",
+          "oklch(60% 0.035 78)",
+          "oklch(72% 0.035 78)",
+          "oklch(84% 0.035 78)",
+          "oklch(95% 0.035 78)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Commerce Accent",
+        "canonical": "oklch(58% 0.16 38)",
+        "tonalRamp": [
+          "oklch(15% 0.16 38)",
+          "oklch(25% 0.16 38)",
+          "oklch(35% 0.16 38)",
+          "oklch(45% 0.16 38)",
+          "oklch(58% 0.16 38)",
+          "oklch(70% 0.14 38)",
+          "oklch(84% 0.09 38)",
+          "oklch(95% 0.04 38)"
+        ]
+      },
+      "accent-ink": {
+        "role": "neutral",
+        "displayName": "Accent Ink",
+        "canonical": "oklch(98% 0.01 75)",
+        "tonalRamp": [
+          "oklch(15% 0.01 75)",
+          "oklch(25% 0.01 75)",
+          "oklch(35% 0.01 75)",
+          "oklch(48% 0.01 75)",
+          "oklch(60% 0.01 75)",
+          "oklch(72% 0.01 75)",
+          "oklch(85% 0.01 75)",
+          "oklch(98% 0.01 75)"
+        ]
+      },
+      "focus": {
+        "role": "tertiary",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(54% 0.17 250)",
+        "tonalRamp": [
+          "oklch(15% 0.17 250)",
+          "oklch(25% 0.17 250)",
+          "oklch(35% 0.17 250)",
+          "oklch(45% 0.17 250)",
+          "oklch(54% 0.17 250)",
+          "oklch(68% 0.14 250)",
+          "oklch(82% 0.09 250)",
+          "oklch(95% 0.04 250)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Rare Storefront statements and primary route titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Mongolian prose, instructions, and supporting commercial copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Controls, prices, status, and compact metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 14px 40px oklch(20% 0.02 66 / 18%)",
+        "purpose": "Dialogs, popovers, and Cart sheets only."
+      },
+      {
+        "name": "sticky-action",
+        "value": "0 8px 30px oklch(20% 0.02 66 / 14%)",
+        "purpose": "Mobile action bars that separate from scrolling content."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Responsive state entry and direct-manipulation feedback."
+      },
+      {
+        "name": "duration-feedback",
+        "value": "160ms",
+        "purpose": "Pointer press, color, and short control feedback."
+      },
+      {
+        "name": "duration-local",
+        "value": "220ms",
+        "purpose": "Occasional drawers, sheets, and local continuity."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "640px"
+      },
+      {
+        "name": "wide",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single dominant action in a commerce region.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\">Сагсанд нэмэх</button>",
+      "css": ".ds-button-primary { min-height: 44px; border: 0; border-radius: 8px; padding: 12px 18px; background: oklch(58% 0.16 38); color: oklch(98% 0.01 75); font: 700 13px/1.3 Inter, system-ui, sans-serif; cursor: pointer; transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), filter 160ms ease; } .ds-button-primary:hover { filter: brightness(.96); } .ds-button-primary:active { transform: scale(.97); } .ds-button-primary:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Secondary action without competing accent fill.",
+      "html": "<button class=\"ds-button-quiet\" type=\"button\">Дэлгэрэнгүй</button>",
+      "css": ".ds-button-quiet { min-height: 44px; border: 0; border-radius: 8px; padding: 12px 18px; background: oklch(92% 0.035 78); color: oklch(24% 0.025 66); font: 700 13px/1.3 Inter, system-ui, sans-serif; cursor: pointer; } .ds-button-quiet:hover { filter: brightness(.97); } .ds-button-quiet:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A conventional, full-width Store search field.",
+      "html": "<label class=\"ds-field\"><span>Хайх</span><input placeholder=\"Бүтээгдэхүүн, SKU…\"></label>",
+      "css": ".ds-field { display: grid; gap: 7px; color: oklch(24% 0.025 66); font: 700 13px/1.3 Inter, system-ui, sans-serif; } .ds-field input { min-height: 48px; border: 1px solid oklch(48% 0.02 66 / 35%); border-radius: 8px; padding: 12px 14px; background: oklch(97% 0.018 85); color: oklch(24% 0.025 66); font: 400 16px/1.5 Inter, system-ui, sans-serif; } .ds-field input:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    },
+    {
+      "name": "Availability Status",
+      "kind": "chip",
+      "refersTo": "status",
+      "description": "Text-first state with a redundant visual marker.",
+      "html": "<span class=\"ds-status\"><span aria-hidden=\"true\"></span>Бэлэн, захиалахад дахин шалгана</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 12px; background: oklch(92% 0.035 78); color: oklch(24% 0.025 66); font: 700 13px/1.3 Inter, system-ui, sans-serif; } .ds-status > span { width: 8px; height: 8px; border-radius: 50%; background: oklch(57% 0.13 135); }"
+    },
+    {
+      "name": "Store Navigation",
+      "kind": "nav",
+      "refersTo": "button-quiet",
+      "description": "Text-led navigation with a conventional active state.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Үндсэн цэс\"><a aria-current=\"page\" href=\"#\">Дэлгүүр</a><a href=\"#\">Түүх</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 24px; font: 600 14px/1.4 Inter, system-ui, sans-serif; } .ds-nav a { color: oklch(24% 0.025 66); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 6px; } .ds-nav a:hover, .ds-nav a[aria-current=page] { text-decoration-color: currentColor; } .ds-nav a:focus-visible { outline: 3px solid oklch(54% 0.17 250); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Merchant frame, commerce spine",
+    "overview": "The system gives each Store enough visual freedom to feel authored while keeping the act of buying immediately recognizable. Store identity may change composition, typography, imagery, density, color, and merchandising rhythm. The shared layer supplies accessible controls, state language, focus, spacing, responsive behavior, and motion restraint rather than a visible house theme.",
+    "keyCharacteristics": [
+      "Merchant-specific composition over token-only reskinning.",
+      "Product imagery and prices before decorative interface furniture.",
+      "Server-rendered usefulness before island hydration.",
+      "Familiar conversion controls with expressive merchandising around them.",
+      "Strong keyboard, reflow, contrast, reduced-motion, and Mongolian-language behavior."
+    ],
+    "rules": [
+      {
+        "name": "The Shared Floor Rule",
+        "body": "A Store may replace the frame, never the buying semantics. Shared behavior, state meaning, focus, validation, pricing clarity, and accessibility are not brand variables.",
+        "section": "overview"
+      },
+      {
+        "name": "The Semantic Contrast Rule",
+        "body": "Brand color never weakens focus, error, disabled, availability, or text contrast. Every foreground/background pair must be validated, not assumed.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Emphasis Rule",
+        "body": "Each region has one dominant action. Secondary actions use quieter surfaces or text treatment instead of competing accent fills.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mongolian First Rule",
+        "body": "Never approve a typeface from Latin specimens alone. Check Ө, Ү, Ё, Й, punctuation, MNT figures, long labels, and dense mobile rows before adoption.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-by-Default Rule",
+        "body": "A resting page is not a pile of floating cards. Add elevation only when an element actually overlays or moves independently from the document.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do adapt composition, typography, imagery, density, navigation presentation, and merchandising rhythm for each merchant.",
+      "Do keep Product names, MNT prices, Search, options, Cart, and Checkout entry familiar and visible.",
+      "Do render useful public content before client JavaScript and keep live commercial truth outside cached presentation.",
+      "Do validate every merchant palette against WCAG 2.2 AA, visible focus, 200% zoom, 320px reflow, and reduced motion.",
+      "Do use one purposeful motion response at a time, normally 120–220ms with a strong ease-out curve.",
+      "Do keep the shared Admin quieter and denser than expressive Storefront merchandising."
+    ],
+    "donts": [
+      "Don't create generic Shopify-style theme sameness where identity is reduced to logo, color, and font swaps.",
+      "Don't create Shadcn-style card grids dressed up as commerce or nest cards to manufacture hierarchy.",
+      "Don't let art direction hide products, prices, search, or purchasing behind novelty.",
+      "Don't use gradient text, decorative glassmorphism, side-stripe accents, or repeated tiny uppercase eyebrows as default grammar.",
+      "Don't make every control a pill or every surface rounded and elevated.",
+      "Don't animate keyboard-initiated actions, delay input, or encode inventory/payment state in motion.",
+      "Don't introduce a Store-specific component override framework; reviewed route composition is the customization seam."
+    ]
+  }
+}
