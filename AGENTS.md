@@ -29,7 +29,7 @@ The target workspace has one minimal Store app and nine shared packages: `contra
 
 ## Hard guardrails
 
-Strict TypeScript: no `any`, unchecked assertions, non-null assertions, ignored errors, or classes except the established error hierarchy. Use named exports and feature public entrypoints. Keep routes thin and raw table access inside feature persistence modules. Cross-feature backend calls are direct operations, never HTTP self-calls.
+Strict TypeScript: no `any`, unchecked assertions, non-null assertions, ignored errors, or classes except the established error hierarchy. Do not add inline comments outside established TODO seams. Use named exports and feature public entrypoints. Keep routes thin and raw table access inside feature persistence modules. Cross-feature backend calls are direct operations, never HTTP self-calls.
 
 Do not add unit or integration tests, mocks, stubs, or fake providers. Verify frontend work in a real browser; verify API/backend work with real curl or a focused TypeScript CLI harness. For model behavior, build an interactive CLI harness.
 

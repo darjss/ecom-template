@@ -18,7 +18,7 @@ Start with direct functions, plain data, one feature folder, and existing platfo
 
 Reject factories for fixed dependencies, one-implementation interfaces without a concrete benefit, controller/service/repository stacks, command buses, generic internal frameworks, configuration for one fixed choice, distributed solutions to Store-local problems, arbitrary extension registries, and wrappers that merely rename another interface.
 
-Every dependency solves a present problem. A risky or young dependency belongs behind a small replaceable seam; stable Store data never becomes the experiment.
+Every dependency solves a present problem. A risky or young dependency requires a compatibility spike and belongs behind a small replaceable seam; stable Store data never becomes the experiment.
 
 Use the deletion test: if deleting a module removes only indirection, delete it. If its policy would otherwise spread through several callers, it has earned its place.
 
@@ -54,7 +54,7 @@ Strict TypeScript means no `any`, unchecked assertions, non-null assertions, `@t
 
 Valibot parses HTTP, forms, environment-derived values, persisted JSON, provider payloads, browser storage, and CMS documents. Infer TypeScript types from those schemas. After parsing, use plain valid internal data rather than constructor wrappers around every value.
 
-Drizzle rows are persistence truth, not browser contracts. Elysia and Eden form one typed producer-to-consumer chain; do not recreate transport types manually on the client.
+Drizzle rows are persistence truth, not browser contracts. Elysia and Eden form one typed producer-to-consumer chain; do not recreate transport types manually on the client. Browser code imports only client-safe contracts and entrypoints, never kernel internals, Drizzle tables, Worker bindings, or provider SDKs.
 
 Server modules import fixed Cloudflare bindings directly from `cloudflare:workers`. Do not thread D1, KV, R2, Workflow, Queue, Email, or Service Bindings through factories.
 
@@ -92,7 +92,7 @@ Use Solid, never React. Start with Zaidan, Kobalte, and Corvu primitives. Solar 
 
 ## Comments, privacy, and proof
 
-Code explains what through names, types, and structure. Comments explain only a non-obvious reason, invariant, external constraint, or deliberate tradeoff. Record a decision once and link to it rather than duplicating prose.
+Code explains itself through names, types, and structure. Do not add inline comments outside the established TODO seams. Record a non-obvious invariant, external constraint, or deliberate tradeoff once in its owning contract or issue, then link rather than duplicating prose.
 
 Use Evlog at request and consequential background seams. Restricted Customer Auth, Checkout, Order, Payment, and support events may include the full normalized customer phone. It never enters PostHog, URLs, public errors, browser logs, or generic request logs. Never log secrets, OTPs, tokens, bank details, free text, raw provider payloads, or request bodies.
 
