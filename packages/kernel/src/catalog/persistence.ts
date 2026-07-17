@@ -260,6 +260,14 @@ export const catalogQueries = {
         ? { kind: "changed" as const, product }
         : { kind: "infrastructure" as const };
     }
+    const committed = await readCatalogIdempotency(updateIdempotencyScope, input.idempotencyKey);
+    if (committed) {
+      if (committed.requestHash !== hash) {
+        return { kind: "idempotency_conflict" as const };
+      }
+      const product = await findCatalogProductById(committed.resultId);
+      return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
+    }
     return { kind: (await existsById(id)) ? ("sku_locked" as const) : ("not_found" as const) };
   },
 
