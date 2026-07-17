@@ -216,6 +216,8 @@ const returnedSelectionSql =
   "id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt";
 
 const auditEventsTableName = getTableName(auditEvents);
+const actingOwnerPredicate =
+  "EXISTS (SELECT 1 FROM staff_members AS acting_staff WHERE acting_staff.id = ? AND acting_staff.status = 'active' AND acting_staff.role = 'owner')";
 
 const auditSelect = (
   context: StaffCommandContext,
@@ -228,7 +230,7 @@ const auditSelect = (
   predicateBindings: readonly (string | number)[],
 ) =>
   env.DB.prepare(
-    `INSERT INTO ${auditEventsTableName} (id, actor_kind, actor_id, staff_role, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, 'admin', ?, 'accepted', 'staff_member', ?, NULL, ?, ${metadataSql}, ? FROM staff_members WHERE ${predicateSql}`,
+    `INSERT INTO ${auditEventsTableName} (id, actor_kind, actor_id, staff_role, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, 'admin', ?, 'accepted', 'staff_member', ?, NULL, ?, ${metadataSql}, ? FROM staff_members WHERE (${predicateSql}) AND ${actingOwnerPredicate}`,
   ).bind(
     createAuditEventId(),
     context.actor.staffId,
@@ -239,17 +241,19 @@ const auditSelect = (
     ...metadataBindings,
     now,
     ...predicateBindings,
+    context.actor.staffId,
   );
 
 const cleanupDebtSelect = (
+  context: StaffCommandContext,
   operation: "approve" | "role_change" | "revoke" | "remove",
   now: number,
   predicateSql: string,
   predicateBindings: readonly (string | number)[],
 ) =>
   env.DB.prepare(
-    `INSERT INTO staff_session_cleanup_debts (auth_user_id, staff_id, session_generation, operation, created_at, updated_at) SELECT auth_user_id, id, session_generation + 1, ?, ?, ? FROM staff_members WHERE auth_user_id IS NOT NULL AND ${predicateSql} ON CONFLICT(auth_user_id) DO UPDATE SET staff_id = excluded.staff_id, session_generation = excluded.session_generation, operation = excluded.operation, updated_at = excluded.updated_at`,
-  ).bind(operation, now, now, ...predicateBindings);
+    `INSERT INTO staff_session_cleanup_debts (auth_user_id, staff_id, session_generation, operation, created_at, updated_at) SELECT auth_user_id, id, session_generation + 1, ?, ?, ? FROM staff_members WHERE auth_user_id IS NOT NULL AND (${predicateSql}) AND ${actingOwnerPredicate} ON CONFLICT(auth_user_id) DO UPDATE SET staff_id = excluded.staff_id, session_generation = excluded.session_generation, operation = excluded.operation, updated_at = excluded.updated_at`,
+  ).bind(operation, now, now, ...predicateBindings, context.actor.staffId);
 
 const staffIdPredicate = "id = ?";
 const pendingPredicate = `${staffIdPredicate} AND status = 'pending'`;
@@ -267,8 +271,8 @@ export const staffQueries = {
     const now = Date.now();
     const results = await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (?, ?, NULL, 'active', ?, 0, ?, ?, ?, NULL) ON CONFLICT(normalized_email) DO NOTHING RETURNING ${returnedSelectionSql}`,
-      ).bind(id, normalizedEmail, role, now, now, now),
+        `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) SELECT ?, ?, NULL, 'active', ?, 0, ?, ?, ?, NULL WHERE ${actingOwnerPredicate} ON CONFLICT(normalized_email) DO NOTHING RETURNING ${returnedSelectionSql}`,
+      ).bind(id, normalizedEmail, role, now, now, now, context.actor.staffId),
       auditSelect(
         context,
         "staff.create",
@@ -381,10 +385,10 @@ export const staffQueries = {
         pendingPredicate,
         predicateBindings,
       ),
-      cleanupDebtSelect("approve", now, pendingPredicate, predicateBindings),
+      cleanupDebtSelect(context, "approve", now, pendingPredicate, predicateBindings),
       env.DB.prepare(
-        `UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE ${pendingPredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(role, now, now, ...predicateBindings),
+        `UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE (${pendingPredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
+      ).bind(role, now, now, ...predicateBindings, context.actor.staffId),
     ]);
     const changed = results.at(2)?.results.at(0);
     return changed
@@ -406,10 +410,10 @@ export const staffQueries = {
         activeRoleChangePredicate,
         predicateBindings,
       ),
-      cleanupDebtSelect("role_change", now, activeRoleChangePredicate, predicateBindings),
+      cleanupDebtSelect(context, "role_change", now, activeRoleChangePredicate, predicateBindings),
       env.DB.prepare(
-        `UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE ${activeRoleChangePredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(role, now, ...predicateBindings),
+        `UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE (${activeRoleChangePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
+      ).bind(role, now, ...predicateBindings, context.actor.staffId),
     ]);
     const changed = results.at(2)?.results.at(0);
     return changed
@@ -431,10 +435,10 @@ export const staffQueries = {
         activeRevokePredicate,
         predicateBindings,
       ),
-      cleanupDebtSelect("revoke", now, activeRevokePredicate, predicateBindings),
+      cleanupDebtSelect(context, "revoke", now, activeRevokePredicate, predicateBindings),
       env.DB.prepare(
-        `UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE ${activeRevokePredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(now, now, ...predicateBindings),
+        `UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE (${activeRevokePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
+      ).bind(now, now, ...predicateBindings, context.actor.staffId),
     ]);
     const changed = results.at(2)?.results.at(0);
     return changed
@@ -456,10 +460,10 @@ export const staffQueries = {
         removablePredicate,
         predicateBindings,
       ),
-      cleanupDebtSelect("remove", now, removablePredicate, predicateBindings),
+      cleanupDebtSelect(context, "remove", now, removablePredicate, predicateBindings),
       env.DB.prepare(
-        `DELETE FROM staff_members WHERE ${removablePredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(...predicateBindings),
+        `DELETE FROM staff_members WHERE (${removablePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
+      ).bind(...predicateBindings, context.actor.staffId),
     ]);
     const removed = results.at(2)?.results.at(0);
     const projected = removed ? projectReturnedStaff(removed) : undefined;
