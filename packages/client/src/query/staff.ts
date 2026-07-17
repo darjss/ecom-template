@@ -23,9 +23,4 @@ export const staffMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<InferOk<StaffMutationResult>, InferErr<StaffMutationResult>, StaffMutation>({
     mutationFn: async (mutation) => unwrapRequestResult(await requestStaffMutation(mutation)),
     onSuccess: async () => refetchAuthoritativeStaff(queryClient),
-    onError: async (error) => {
-      if (error.kind === "api" && error.error.reason === "session_revocation_failed") {
-        await refetchAuthoritativeStaff(queryClient);
-      }
-    },
   });

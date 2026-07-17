@@ -121,10 +121,7 @@ export const StaffMemberSchema = v.pipe(
 );
 
 export const StaffListResponseSchema = v.strictObject({
-  data: v.strictObject({
-    members: v.array(StaffMemberSchema),
-    cleanupRequiredCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  }),
+  data: v.strictObject({ members: v.array(StaffMemberSchema) }),
 });
 
 export const StaffCreateInputSchema = v.strictObject({
@@ -137,14 +134,6 @@ export const StaffMutationInputSchema = v.strictObject({
 });
 
 export const StaffMutationResponseSchema = v.strictObject({ data: StaffMemberSchema });
-
-export const StaffCleanupResponseSchema = v.strictObject({
-  data: v.strictObject({
-    attempted: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    cleared: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    remaining: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  }),
-});
 
 export const StaffLifecycleApiErrorSchema = v.strictObject({
   error: v.strictObject({
@@ -254,7 +243,6 @@ export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;
 export type StaffCreateInput = v.InferOutput<typeof StaffCreateInputSchema>;
 export type StaffListResponse = v.InferOutput<typeof StaffListResponseSchema>;
 export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSchema>;
-export type StaffCleanupResponse = v.InferOutput<typeof StaffCleanupResponseSchema>;
 export type StaffClientError = ClientRequestError<
   v.InferOutput<typeof StaffLifecycleApiErrorSchema>["error"]
 >;

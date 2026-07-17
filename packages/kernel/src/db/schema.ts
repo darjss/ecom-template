@@ -84,7 +84,6 @@ export const staffMembers = sqliteTable(
     authUserId: text("auth_user_id").unique(),
     status: text("status", { enum: ["pending", "active", "revoked"] }).notNull(),
     role: text("role", { enum: ["owner", "manager", "staff"] }),
-    sessionGeneration: integer("session_generation").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
@@ -107,31 +106,6 @@ export const staffMembers = sqliteTable(
     check(
       "staff_members_lifecycle_order_check",
       sql`${table.createdAt} <= ${table.updatedAt} AND (${table.approvedAt} IS NULL OR (${table.createdAt} <= ${table.approvedAt} AND ${table.approvedAt} <= ${table.updatedAt})) AND (${table.revokedAt} IS NULL OR (${table.approvedAt} <= ${table.revokedAt} AND ${table.revokedAt} <= ${table.updatedAt}))`,
-    ),
-  ],
-);
-
-export const staffSessionCleanupDebts = sqliteTable(
-  "staff_session_cleanup_debts",
-  {
-    authUserId: text("auth_user_id").primaryKey(),
-    staffId: text("staff_id").notNull(),
-    sessionGeneration: integer("session_generation").notNull(),
-    operation: text("operation", {
-      enum: ["approve", "role_change", "revoke", "remove", "provision"],
-    }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "staff_session_cleanup_debts_staff_id_check",
-      sql`length(${table.staffId}) = 32 AND substr(${table.staffId}, 1, 6) = 'staff_' AND substr(${table.staffId}, 7, 1) GLOB '[0-7]' AND substr(${table.staffId}, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check("staff_session_cleanup_debts_generation_check", sql`${table.sessionGeneration} >= 0`),
-    check(
-      "staff_session_cleanup_debts_operation_check",
-      sql`${table.operation} IN ('approve', 'role_change', 'revoke', 'remove', 'provision')`,
     ),
   ],
 );

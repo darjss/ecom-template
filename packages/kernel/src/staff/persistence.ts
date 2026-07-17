@@ -1,7 +1,6 @@
 import {
   createAuditEventId,
   createStaffId,
-  StaffIdSchema,
   StaffMemberSchema,
   type StaffId,
   type StaffMember,
@@ -9,15 +8,14 @@ import {
   type StaffStatus,
 } from "@ecom/contracts";
 import * as v from "valibot";
-import { and, asc, count, eq, exists, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, isNull, ne, notExists, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { staff_auth_users } from "../auth/staff.generated";
 import { database } from "../db/database";
-import { auditEvents, staffMembers, staffSessionCleanupDebts } from "../db/schema";
+import { auditEvents, staffMembers } from "../db/schema";
 
 export type StaffRecord = StaffMember & {
   readonly authUserId: string | null;
-  readonly sessionGeneration: number;
 };
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -28,7 +26,6 @@ const projectStaff = (row: {
   authUserId: string | null;
   status: StaffStatus;
   role: StaffRole | null;
-  sessionGeneration: number;
   createdAt: Date;
   updatedAt: Date;
   approvedAt: Date | null;
@@ -45,7 +42,6 @@ const projectStaff = (row: {
     revokedAt: row.revokedAt?.toISOString() ?? null,
   }),
   authUserId: row.authUserId,
-  sessionGeneration: row.sessionGeneration,
 });
 
 const selection = {
@@ -54,7 +50,6 @@ const selection = {
   authUserId: staffMembers.authUserId,
   status: staffMembers.status,
   role: staffMembers.role,
-  sessionGeneration: staffMembers.sessionGeneration,
   createdAt: staffMembers.createdAt,
   updatedAt: staffMembers.updatedAt,
   approvedAt: staffMembers.approvedAt,
@@ -79,122 +74,62 @@ const attemptDatabase = async <T>(query: PromiseLike<T>) => {
   }
 };
 
-const findByAuthUserId = async (authUserId: string) => {
-  const attempt = await attemptDatabase(
-    database()
-      .select(selection)
-      .from(staffMembers)
-      .where(eq(staffMembers.authUserId, authUserId))
-      .limit(1),
-  );
-  if (!attempt.success) {
-    return attempt;
-  }
-  const row = attempt.value.at(0);
-  return { success: true as const, value: row ? projectStaff(row) : undefined };
-};
-
-const findByNormalizedEmail = async (normalizedEmail: string) => {
-  const attempt = await attemptDatabase(
-    database()
-      .select(selection)
-      .from(staffMembers)
-      .where(eq(staffMembers.normalizedEmail, normalizedEmail))
-      .limit(1),
-  );
-  if (!attempt.success) {
-    return attempt;
-  }
-  const row = attempt.value.at(0);
-  return { success: true as const, value: row ? projectStaff(row) : undefined };
-};
-
 const resolveApplicant = async (authUserId: string, email: string) => {
   const normalizedEmail = normalizeEmail(email);
-  const linkedAttempt = await findByAuthUserId(authUserId);
-  if (!linkedAttempt.success) {
-    return { kind: "infrastructure_unavailable" } as const;
-  }
-  const linked = linkedAttempt.value;
-  if (linked) {
-    return linked.email === normalizedEmail
-      ? ({ kind: "resolved", member: linked } as const)
-      : ({ kind: "identity_conflict" } as const);
-  }
-
   const now = new Date();
-  const insertAttempt = await attemptDatabase(
-    database()
-      .insert(staffMembers)
-      .values({
-        id: createStaffId(),
-        normalizedEmail,
-        authUserId,
-        status: "pending",
-        role: null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing(),
+  const db = database();
+  const authOwner = alias(staffMembers, "auth_owner");
+  const attempt = await attemptDatabase(
+    db.batch([
+      db
+        .insert(staffMembers)
+        .values({
+          id: createStaffId(),
+          normalizedEmail,
+          authUserId,
+          status: "pending",
+          role: null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing()
+        .returning(selection),
+      db
+        .update(staffMembers)
+        .set({ authUserId, updatedAt: now })
+        .where(
+          and(
+            eq(staffMembers.normalizedEmail, normalizedEmail),
+            or(
+              eq(staffMembers.authUserId, authUserId),
+              and(
+                isNull(staffMembers.authUserId),
+                notExists(
+                  db
+                    .select({ id: authOwner.id })
+                    .from(authOwner)
+                    .where(eq(authOwner.authUserId, authUserId)),
+                ),
+              ),
+            ),
+          ),
+        )
+        .returning(selection),
+    ]),
   );
-  if (!insertAttempt.success) {
+  if (!attempt.success) {
     return { kind: "infrastructure_unavailable" } as const;
   }
-  const updateAttempt = await attemptDatabase(
-    database()
-      .update(staffMembers)
-      .set({ authUserId, updatedAt: now })
-      .where(
-        and(
-          eq(staffMembers.normalizedEmail, normalizedEmail),
-          or(isNull(staffMembers.authUserId), eq(staffMembers.authUserId, authUserId)),
-        ),
-      ),
-  );
-  if (!updateAttempt.success) {
-    return { kind: "infrastructure_unavailable" } as const;
-  }
-
-  const resolvedAttempt = await findByAuthUserId(authUserId);
-  if (!resolvedAttempt.success) {
-    return { kind: "infrastructure_unavailable" } as const;
-  }
-  const resolved = resolvedAttempt.value;
-  if (resolved) {
-    return resolved.email === normalizedEmail
-      ? ({ kind: "resolved", member: resolved } as const)
-      : ({ kind: "identity_conflict" } as const);
-  }
-  const emailOwnerAttempt = await findByNormalizedEmail(normalizedEmail);
-  if (!emailOwnerAttempt.success) {
-    return { kind: "infrastructure_unavailable" } as const;
-  }
-  if (emailOwnerAttempt.value) {
-    return { kind: "identity_conflict" } as const;
-  }
-  throw new Error("Applicant resolution did not produce a Staff record");
+  const [inserted, linked] = attempt.value;
+  const resolved = inserted.at(0) ?? linked.at(0);
+  return resolved
+    ? ({ kind: "resolved", member: projectStaff(resolved) } as const)
+    : ({ kind: "identity_conflict" } as const);
 };
 
 export type StaffCommandContext = {
   readonly actor: { readonly staffId: StaffId; readonly role: StaffRole };
   readonly correlationId: string;
-};
-
-const StaffCleanupOperationSchema = v.picklist([
-  "approve",
-  "role_change",
-  "revoke",
-  "remove",
-  "provision",
-]);
-
-export type StaffCleanupOperation = v.InferOutput<typeof StaffCleanupOperationSchema>;
-
-export type StaffCleanupDebt = {
-  readonly authUserId: string;
-  readonly staffId: StaffId;
-  readonly sessionGeneration: number;
-  readonly operation: StaffCleanupOperation;
 };
 
 const actingStaff = alias(staffMembers, "acting_staff");
@@ -261,41 +196,6 @@ const insertAudit = (
         .where(and(predicate, actingOwner(context.actor.staffId))),
     );
 
-const insertCleanupDebt = (
-  context: StaffCommandContext,
-  operation: "approve" | "role_change" | "revoke" | "remove",
-  now: number,
-  predicate: SQL | undefined,
-) =>
-  database()
-    .insert(staffSessionCleanupDebts)
-    .select(
-      database()
-        .select({
-          authUserId: staffMembers.authUserId,
-          staffId: staffMembers.id,
-          sessionGeneration: sql<number>`${staffMembers.sessionGeneration} + 1`.as(
-            "session_generation",
-          ),
-          operation: sql<typeof operation>`${operation}`.as("operation"),
-          createdAt: sql<Date>`${now}`.as("created_at"),
-          updatedAt: sql<Date>`${now}`.as("updated_at"),
-        })
-        .from(staffMembers)
-        .where(
-          and(isNotNull(staffMembers.authUserId), predicate, actingOwner(context.actor.staffId)),
-        ),
-    )
-    .onConflictDoUpdate({
-      target: staffSessionCleanupDebts.authUserId,
-      set: {
-        staffId: sql`excluded.staff_id`,
-        sessionGeneration: sql`excluded.session_generation`,
-        operation: sql`excluded.operation`,
-        updatedAt: new Date(now),
-      },
-    });
-
 export const staffQueries = {
   findById,
   resolveApplicant,
@@ -316,7 +216,6 @@ export const staffQueries = {
               authUserId: sql<null>`null`.as("auth_user_id"),
               status: sql<"active">`${"active"}`.as("status"),
               role: sql<StaffRole>`${role}`.as("role"),
-              sessionGeneration: sql<number>`0`.as("session_generation"),
               createdAt: sql<Date>`${now}`.as("created_at"),
               updatedAt: sql<Date>`${now}`.as("updated_at"),
               approvedAt: sql<Date>`${now}`.as("approved_at"),
@@ -371,78 +270,26 @@ export const staffQueries = {
     return rows.map(projectStaff);
   },
 
-  async countCleanupDebts() {
-    const rows = await database().select({ value: count() }).from(staffSessionCleanupDebts);
-    return rows.at(0)?.value ?? 0;
-  },
-
-  async listCleanupDebts(limit: number): Promise<readonly StaffCleanupDebt[]> {
+  async hasAnotherActiveOwner(id: StaffId) {
     const rows = await database()
-      .select({
-        authUserId: staffSessionCleanupDebts.authUserId,
-        staffId: staffSessionCleanupDebts.staffId,
-        sessionGeneration: staffSessionCleanupDebts.sessionGeneration,
-        operation: staffSessionCleanupDebts.operation,
-      })
-      .from(staffSessionCleanupDebts)
-      .orderBy(asc(staffSessionCleanupDebts.createdAt))
-      .limit(limit);
-    return rows.map((row) => ({
-      authUserId: row.authUserId,
-      staffId: v.parse(StaffIdSchema, row.staffId),
-      sessionGeneration: v.parse(
-        v.pipe(v.number(), v.integer(), v.minValue(0)),
-        row.sessionGeneration,
-      ),
-      operation: v.parse(StaffCleanupOperationSchema, row.operation),
-    }));
-  },
-
-  async clearCleanupDebt(authUserId: string, sessionGeneration: number) {
-    const deleted = await database()
-      .delete(staffSessionCleanupDebts)
+      .select({ id: staffMembers.id })
+      .from(staffMembers)
       .where(
         and(
-          eq(staffSessionCleanupDebts.authUserId, authUserId),
-          eq(staffSessionCleanupDebts.sessionGeneration, sessionGeneration),
+          ne(staffMembers.id, id),
+          eq(staffMembers.status, "active"),
+          eq(staffMembers.role, "owner"),
         ),
       )
-      .returning({ authUserId: staffSessionCleanupDebts.authUserId });
-    if (deleted.length === 1) {
-      return true;
-    }
-    const current = await database()
-      .select({ sessionGeneration: staffSessionCleanupDebts.sessionGeneration })
-      .from(staffSessionCleanupDebts)
-      .where(eq(staffSessionCleanupDebts.authUserId, authUserId))
       .limit(1);
-    return current.length === 0;
-  },
-
-  async readCurrentSessionAuthority(authUserId: string, email: string, generation: number) {
-    const rows = await database()
-      .select({
-        id: staffMembers.id,
-        normalizedEmail: staffMembers.normalizedEmail,
-        sessionGeneration: staffMembers.sessionGeneration,
-      })
-      .from(staffMembers)
-      .where(eq(staffMembers.authUserId, authUserId))
-      .limit(1);
-    const member = rows.at(0);
-    if (member && member.normalizedEmail !== normalizeEmail(email)) {
-      return { kind: "identity_conflict" } as const;
-    }
-    return member?.sessionGeneration === generation
-      ? { kind: "current" as const, staffId: v.parse(StaffIdSchema, member.id) }
-      : { kind: "stale" as const };
+    return rows.length === 1;
   },
 
   async approve(context: StaffCommandContext, id: StaffId, role: StaffRole) {
     const now = Date.now();
     const predicate = and(eq(staffMembers.id, id), eq(staffMembers.status, "pending"));
     const db = database();
-    const [, , changedRows] = await db.batch([
+    const [, changedRows] = await db.batch([
       insertAudit(
         context,
         "staff.approve",
@@ -451,13 +298,11 @@ export const staffQueries = {
         sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"active"}, 'role', ${role}))`,
         predicate,
       ),
-      insertCleanupDebt(context, "approve", now, predicate),
       db
         .update(staffMembers)
         .set({
           status: "active",
           role,
-          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
           approvedAt: new Date(now),
           revokedAt: null,
           updatedAt: new Date(now),
@@ -480,7 +325,7 @@ export const staffQueries = {
       role === "owner" ? undefined : or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
     const db = database();
-    const [, , changedRows] = await db.batch([
+    const [, changedRows] = await db.batch([
       insertAudit(
         context,
         "staff.role_change",
@@ -489,12 +334,10 @@ export const staffQueries = {
         sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${staffMembers.status}, 'role', ${role}))`,
         predicate,
       ),
-      insertCleanupDebt(context, "role_change", now, predicate),
       db
         .update(staffMembers)
         .set({
           role,
-          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
           updatedAt: new Date(now),
         })
         .where(and(predicate, actingOwner(context.actor.staffId)))
@@ -514,7 +357,7 @@ export const staffQueries = {
       or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
     const db = database();
-    const [, , changedRows] = await db.batch([
+    const [, changedRows] = await db.batch([
       insertAudit(
         context,
         "staff.revoke",
@@ -523,12 +366,10 @@ export const staffQueries = {
         sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"revoked"}, 'role', ${staffMembers.role}))`,
         predicate,
       ),
-      insertCleanupDebt(context, "revoke", now, predicate),
       db
         .update(staffMembers)
         .set({
           status: "revoked",
-          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
           revokedAt: new Date(now),
           updatedAt: new Date(now),
         })
@@ -548,7 +389,7 @@ export const staffQueries = {
       or(ne(staffMembers.status, "active"), ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
     const db = database();
-    const [, , removedRows] = await db.batch([
+    const [, removedRows] = await db.batch([
       insertAudit(
         context,
         "staff.remove",
@@ -557,20 +398,14 @@ export const staffQueries = {
         sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', null)`,
         predicate,
       ),
-      insertCleanupDebt(context, "remove", now, predicate),
       db
         .delete(staffMembers)
         .where(and(predicate, actingOwner(context.actor.staffId)))
         .returning(selection),
     ]);
     const removed = removedRows.at(0);
-    const projected = removed ? projectStaff(removed) : undefined;
-    return projected
-      ? {
-          removed: projected,
-          cleanupGeneration: projected.sessionGeneration + 1,
-          current: undefined,
-        }
-      : { removed: undefined, cleanupGeneration: undefined, current: await findById(id) };
+    return removed
+      ? { removed: projectStaff(removed), current: undefined }
+      : { removed: undefined, current: await findById(id) };
   },
 };

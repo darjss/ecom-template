@@ -1,9 +1,7 @@
 import {
-  StaffCleanupResponseSchema,
   StaffLifecycleApiErrorSchema,
   StaffListResponseSchema,
   StaffMutationResponseSchema,
-  type StaffCleanupResponse,
   type StaffCreateInput,
   type StaffId,
   type StaffMutationResponse,
@@ -22,24 +20,15 @@ export const requestStaffList = () =>
 
 export type StaffMutation =
   | ({ readonly kind: "create" } & StaffCreateInput)
-  | { readonly kind: "cleanup" }
   | { readonly kind: "approve"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "role"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "revoke"; readonly id: StaffId }
   | { readonly kind: "remove"; readonly id: StaffId };
 
-export type StaffMutationResult = StaffMutationResponse | StaffCleanupResponse;
+export type StaffMutationResult = StaffMutationResponse;
 
 export const requestStaffMutation = (mutation: StaffMutation) => {
   const client = createApiClient();
-  if (mutation.kind === "cleanup") {
-    return requestResult(
-      () => client.api.staff["session-cleanup"].retry.post(),
-      StaffCleanupResponseSchema,
-      StaffLifecycleApiErrorSchema,
-      "Invalid Staff mutation response",
-    );
-  }
   const request = () =>
     mutation.kind === "create"
       ? client.api.staff.post({ email: mutation.email, role: mutation.role })
