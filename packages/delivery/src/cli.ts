@@ -145,7 +145,7 @@ const ownerProvisioningWorker = (token: string) => `
 import { createAuditEventId, createStaffId } from "../../packages/contracts/src/index";
 import { eq } from "../../packages/kernel/node_modules/drizzle-orm";
 import { database } from "../../packages/kernel/src/db/database";
-import { auditEvents, staffMembers, staffSessionCleanupDebts } from "../../packages/kernel/src/db/schema";
+import { auditEvents, staffMembers } from "../../packages/kernel/src/db/schema";
 
 export default {
   async fetch(request) {
@@ -161,7 +161,6 @@ export default {
           authUserId: staffMembers.authUserId,
           status: staffMembers.status,
           role: staffMembers.role,
-          sessionGeneration: staffMembers.sessionGeneration,
         })
         .from(staffMembers)
         .where(eq(staffMembers.normalizedEmail, email))
@@ -169,6 +168,11 @@ export default {
     ).at(0);
     if (current?.status === "active" && current.role === "owner") {
       return new Response("ok");
+    }
+    if (current?.authUserId) {
+      return new Response("Use Staff Admin to change authority for a linked identity", {
+        status: 409,
+      });
     }
 
     const now = new Date();
@@ -204,38 +208,17 @@ export default {
       return new Response("ok");
     }
 
-    const sessionGeneration = current.sessionGeneration + 1;
-    const activate = db
-      .update(staffMembers)
-      .set({
-        status: "active",
-        role: "owner",
-        sessionGeneration,
-        approvedAt: now,
-        revokedAt: null,
-        updatedAt: now,
-      })
-      .where(eq(staffMembers.normalizedEmail, email));
-    if (!current.authUserId) {
-      await db.batch([activate, audit]);
-      return new Response("ok");
-    }
     await db.batch([
       db
-        .insert(staffSessionCleanupDebts)
-        .values({
-          authUserId: current.authUserId,
-          staffId: id,
-          sessionGeneration,
-          operation: "provision",
-          createdAt: now,
+        .update(staffMembers)
+        .set({
+          status: "active",
+          role: "owner",
+          approvedAt: now,
+          revokedAt: null,
           updatedAt: now,
         })
-        .onConflictDoUpdate({
-          target: staffSessionCleanupDebts.authUserId,
-          set: { staffId: id, sessionGeneration, operation: "provision", updatedAt: now },
-        }),
-      activate,
+        .where(eq(staffMembers.normalizedEmail, email)),
       audit,
     ]);
     return new Response("ok");
