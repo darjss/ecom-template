@@ -3,7 +3,7 @@ import type { CatalogClientError, Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
-import { createSignal, Show } from "solid-js";
+import { Show } from "solid-js";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -14,40 +14,22 @@ const mutationErrorMessage = (error: CatalogClientError) =>
 const ProductEditForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
-  const [pendingCommand, setPendingCommand] = createSignal<{
-    signature: string;
-    idempotencyKey: string;
-  }>();
   const form = createForm(() => ({
     defaultValues: {
       name: props.product.name,
       slug: props.product.slug,
       description: props.product.description,
       priceMnt: props.product.priceMnt,
-      sku: props.product.sku,
     },
     onSubmit: async ({ value }) => {
-      const input = {
+      await mutation.mutateAsync({
+        kind: "update",
+        id: props.product.id,
         name: value.name.trim(),
         slug: value.slug.trim(),
         description: value.description,
         priceMnt: value.priceMnt,
-        sku: value.sku.trim(),
-      };
-      const signature = JSON.stringify(input);
-      const existing = pendingCommand();
-      const command =
-        existing?.signature === signature
-          ? existing
-          : { signature, idempotencyKey: crypto.randomUUID() };
-      setPendingCommand(command);
-      await mutation.mutateAsync({
-        kind: "update",
-        id: props.product.id,
-        idempotencyKey: command.idempotencyKey,
-        ...input,
       });
-      setPendingCommand(undefined);
     },
   }));
   return (
@@ -78,20 +60,6 @@ const ProductEditForm = (props: { product: Product }) => {
             <input
               required
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="sku">
-        {(field) => (
-          <label>
-            <span>SKU</span>
-            <input
-              required
-              maxlength={64}
-              disabled={props.product.state !== "draft"}
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}
             />

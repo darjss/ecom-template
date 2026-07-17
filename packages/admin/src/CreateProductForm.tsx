@@ -2,49 +2,31 @@ import { catalogMutationOptions } from "@ecom/client";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
-import { createSignal, Show } from "solid-js";
+import { Show } from "solid-js";
 
 export const CreateProductForm = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
-  const [pendingCommand, setPendingCommand] = createSignal<{
-    signature: string;
-    idempotencyKey: string;
-  }>();
   const form = createForm(() => ({
     defaultValues: {
       name: "",
       slug: "",
       description: "",
       priceMnt: 1,
-      sku: "",
       openingQuantity: 0,
       inventoryReason: "Анхны үлдэгдэл",
     },
     onSubmit: async ({ value }) => {
-      const input = {
+      await mutation.mutateAsync({
+        kind: "create",
         name: value.name.trim(),
         slug: value.slug.trim(),
         description: value.description,
         priceMnt: value.priceMnt,
-        sku: value.sku.trim(),
         openingQuantity: value.openingQuantity,
         inventoryReason: value.inventoryReason.trim(),
-      };
-      const signature = JSON.stringify(input);
-      const existing = pendingCommand();
-      const command =
-        existing?.signature === signature
-          ? existing
-          : { signature, idempotencyKey: crypto.randomUUID() };
-      setPendingCommand(command);
-      await mutation.mutateAsync({
-        kind: "create",
-        idempotencyKey: command.idempotencyKey,
-        ...input,
       });
       form.reset();
-      setPendingCommand(undefined);
     },
   }));
   return (
@@ -75,19 +57,6 @@ export const CreateProductForm = () => {
             <input
               required
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="sku">
-        {(field) => (
-          <label>
-            <span>SKU</span>
-            <input
-              required
-              maxlength={64}
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}
             />

@@ -27,7 +27,7 @@ export const CatalogSlugSchema = v.pipe(
   v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   v.maxLength(100),
 );
-export const SkuSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64));
+export const SkuSchema = v.pipe(v.string(), v.regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/), v.maxLength(64));
 export const PriceMntSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -83,29 +83,25 @@ export const CatalogProductResponseSchema = v.strictObject({
     cachePurgeRequestId: CachePurgeRequestIdSchema,
   }),
 });
-export const CatalogIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const CreateProductInputSchema = v.strictObject({
-  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
   priceMnt: PriceMntSchema,
-  sku: SkuSchema,
   openingQuantity: InventoryQuantitySchema,
   inventoryReason: InventoryReasonSchema,
 });
 export const UpdateProductInputSchema = v.strictObject({
-  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.pipe(v.string(), v.maxLength(5_000)),
   priceMnt: PriceMntSchema,
-  sku: SkuSchema,
 });
+export const InventoryAdjustmentIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
   reason: InventoryReasonSchema,
-  idempotencyKey: CatalogIdempotencyKeySchema,
+  idempotencyKey: InventoryAdjustmentIdempotencyKeySchema,
 });
 
 export const InventoryBlockingReservationSchema = v.strictObject({
@@ -166,7 +162,9 @@ export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
 export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
-export type InventoryAdjustmentIdempotencyKey = v.InferOutput<typeof CatalogIdempotencyKeySchema>;
+export type InventoryAdjustmentIdempotencyKey = v.InferOutput<
+  typeof InventoryAdjustmentIdempotencyKeySchema
+>;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
 export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;
