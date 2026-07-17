@@ -6,7 +6,7 @@ import {
   type OptionValueId,
   type Product,
 } from "@ecom/contracts";
-import { Button } from "@ecom/ui";
+import { AltArrowDown, AltArrowUp, Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
 import { For, Show } from "solid-js";
@@ -140,7 +140,7 @@ const OptionPresentationEditor = (props: { product: Product }) => {
                   onClick={() => void move(-1)}
                   aria-label={`${group.label} дээш`}
                 >
-                  ↑
+                  <AltArrowUp aria-hidden="true" size={20} />
                 </Button>
                 <Button
                   type="button"
@@ -149,7 +149,7 @@ const OptionPresentationEditor = (props: { product: Product }) => {
                   onClick={() => void move(1)}
                   aria-label={`${group.label} доош`}
                 >
-                  ↓
+                  <AltArrowDown aria-hidden="true" size={20} />
                 </Button>
                 <Button type="submit" variant="secondary" disabled={mutation.isPending}>
                   Нэр хадгалах
