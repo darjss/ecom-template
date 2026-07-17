@@ -2,10 +2,7 @@ import { env } from "cloudflare:workers";
 import { parseCachePurgeEnvironment, parseCachePurgeResponse } from "./cache-contract";
 
 export const purgeCatalogCache = async (productId: string) => {
-  const configuration = parseCachePurgeEnvironment({
-    CLOUDFLARE_ZONE_ID: env.CLOUDFLARE_ZONE_ID,
-    CLOUDFLARE_CACHE_PURGE_TOKEN: env.CLOUDFLARE_CACHE_PURGE_TOKEN,
-  });
+  const configuration = parseCachePurgeEnvironment(env);
   if (!configuration.success) {
     return { kind: "failed" as const };
   }
