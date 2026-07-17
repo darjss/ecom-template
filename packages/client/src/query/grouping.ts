@@ -7,7 +7,7 @@ import {
 } from "../grouping/request";
 import { unwrapRequestResult } from "../request";
 
-export const groupingQueryKey = ["catalog", "groupings"] as const;
+const groupingQueryKey = ["catalog", "groupings"] as const;
 type GroupingResult = Awaited<ReturnType<typeof requestGroupings>>;
 type GroupingMutationResult = Awaited<ReturnType<typeof requestGroupingMutation>>;
 

@@ -31,10 +31,25 @@ const listPublishedProducts = async () => {
   return rows.map((row) => v.parse(PublicProductSummarySchema, row));
 };
 
+const projectPublicGrouping = (group: {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string;
+}) =>
+  v.parse(PublicGroupingSchema, {
+    id: group.id,
+    slug: group.slug,
+    name: group.name,
+    description: group.description,
+  });
+
 const publicListing = async (
   grouping: Awaited<ReturnType<typeof groupingQueries.findPublicCategory>>,
 ) => {
-  if (!grouping) return undefined;
+  if (!grouping) {
+    return undefined;
+  }
   const productsById = new Map(
     (await listPublishedProducts()).map((product) => [product.id, product]),
   );
@@ -58,7 +73,9 @@ const publicListing = async (
 export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
   readSummary: async () => {
     const health = await readDatabaseHealth();
-    if (health.isErr()) throw new Error("Store infrastructure is unavailable");
+    if (health.isErr()) {
+      throw new Error("Store infrastructure is unavailable");
+    }
     return summary;
   },
   listPublishedProducts,
@@ -72,20 +89,13 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
       listPublishedProducts(),
     ]);
     const publishedIds = new Set(products.map((product) => product.id));
-    const project = (group: (typeof groups.categories)[number]) =>
-      v.parse(PublicGroupingSchema, {
-        id: group.id,
-        slug: group.slug,
-        name: group.name,
-        description: group.description,
-      });
     return {
       categories: groups.categories
         .filter((group) => group.productIds.some((id) => publishedIds.has(id)))
-        .map(project),
+        .map(projectPublicGrouping),
       collections: groups.collections
         .filter((group) => group.productIds.some((id) => publishedIds.has(id)))
-        .map(project),
+        .map(projectPublicGrouping),
     };
   },
   readPublishedCategory: async (slug) =>
