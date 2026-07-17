@@ -13,7 +13,7 @@ import {
   type SavePersonalizationsInput,
   type UpdateBundleInput,
 } from "@ecom/contracts";
-import { and, asc, desc, eq, exists, inArray, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import { compactSku } from "../catalog/sku";
@@ -523,7 +523,7 @@ export const bundleQueries = {
         db
           .update(skus)
           .set({ lockedAt: now, updatedAt: now })
-          .where(and(eq(skus.bundleId, id), publishedNow)),
+          .where(and(eq(skus.bundleId, id), publishedNow, isNull(skus.lockedAt))),
         db
           .insert(catalogCachePurgeDebts)
           .select(

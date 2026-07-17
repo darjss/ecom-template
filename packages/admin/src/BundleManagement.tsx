@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Match, Show, Switch } from "solid-js";
 import * as v from "valibot";
 import { submitBundleForm } from "./bundle-form";
+import { CatalogImageForm } from "./CatalogImageForm";
 import { PersonalizationEditor } from "./PersonalizationEditor";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -237,6 +238,7 @@ const BundleRow = (props: { bundle: Bundle }) => {
           )}
         </For>
       </ul>
+      <CatalogImageForm item={props.bundle} />
       <PersonalizationEditor catalogItemId={props.bundle.id} />
       <Show when={props.bundle.cachePurgeDebt} keyed>
         {(debt) => (

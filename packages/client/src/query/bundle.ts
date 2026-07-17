@@ -28,6 +28,13 @@ export const bundleQueryOptions = () =>
 
 const personalizationQueryKey = (id: CatalogItemId) => ["catalog", "personalizations", id] as const;
 
+export const refreshCatalogItemOwner = async (queryClient: QueryClient, id: CatalogItemId) => {
+  const bundleId = v.safeParse(BundleIdSchema, id);
+  const authoritativeKey = bundleId.success ? bundleQueryKey : catalogQueryKey;
+  await queryClient.invalidateQueries({ queryKey: authoritativeKey, refetchType: "none" });
+  await queryClient.refetchQueries({ queryKey: authoritativeKey, type: "active" });
+};
+
 export const personalizationQueryOptions = (id: CatalogItemId, enabled = true) =>
   queryOptions({
     queryKey: personalizationQueryKey(id),
@@ -40,18 +47,13 @@ export const personalizationMutationOptions = (queryClient: QueryClient, id: Cat
     mutationFn: async (input: SavePersonalizationsInput) =>
       unwrapRequestResult(await requestPersonalizationMutation(id, input)),
     onSuccess: async () => {
-      const bundleId = v.safeParse(BundleIdSchema, id);
-      const authoritativeKey = bundleId.success ? bundleQueryKey : catalogQueryKey;
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: personalizationQueryKey(id),
-          refetchType: "none",
-        }),
-        queryClient.invalidateQueries({ queryKey: authoritativeKey, refetchType: "none" }),
-      ]);
+      await queryClient.invalidateQueries({
+        queryKey: personalizationQueryKey(id),
+        refetchType: "none",
+      });
       await Promise.all([
         queryClient.refetchQueries({ queryKey: personalizationQueryKey(id), type: "active" }),
-        queryClient.refetchQueries({ queryKey: authoritativeKey, type: "active" }),
+        refreshCatalogItemOwner(queryClient, id),
       ]);
     },
   });

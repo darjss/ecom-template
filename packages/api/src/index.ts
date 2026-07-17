@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   CatalogApiErrorSchema,
+  CatalogItemIdSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CreateProductInputSchema,
@@ -488,8 +489,8 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
-    .post("/catalog/products/:id/images", async ({ body, params, request, status }) => {
-      const id = v.safeParse(ProductIdSchema, params.id);
+    .post("/catalog/items/:id/images", async ({ body, params, request, status }) => {
+      const id = v.safeParse(CatalogItemIdSchema, params.id);
       const multipart = v.safeParse(MediaUploadBodySchema, body);
       const fields = multipart.success
         ? v.safeParse(MediaUploadFieldsSchema, {

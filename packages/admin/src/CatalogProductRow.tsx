@@ -167,7 +167,7 @@ export const CatalogProductRow = (props: { product: Product }) => {
           </div>
         )}
       </Show>
-      <CatalogImageForm product={props.product} />
+      <CatalogImageForm item={props.product} />
       <ProductVariantsForm product={props.product} />
       <PersonalizationEditor catalogItemId={props.product.id} />
       <InventoryAdjustmentForm product={props.product} />

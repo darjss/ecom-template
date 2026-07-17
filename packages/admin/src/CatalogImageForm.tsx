@@ -1,5 +1,5 @@
 import { catalogImageMutationOptions } from "@ecom/client";
-import type { CatalogClientError, Product } from "@ecom/contracts";
+import type { Bundle, CatalogClientError, Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
@@ -18,7 +18,7 @@ const mutationErrorMessage = (error: CatalogClientError) =>
     ? error.error.message
     : "Зургийг хадгалж чадсангүй. Сүлжээг шалгаад дахин оролдоно уу.";
 
-export const CatalogImageForm = (props: { product: Product }) => {
+export const CatalogImageForm = (props: { item: Bundle | Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogImageMutationOptions(queryClient));
   const defaultValues: CatalogImageFormValues = { file: null, position: 0, altText: "" };
@@ -29,7 +29,7 @@ export const CatalogImageForm = (props: { product: Product }) => {
         return;
       }
       await mutation.mutateAsync({
-        productId: props.product.id,
+        catalogItemId: props.item.id,
         file: value.file,
         position: value.position,
         altText: value.altText.trim(),
@@ -39,10 +39,10 @@ export const CatalogImageForm = (props: { product: Product }) => {
   }));
 
   return (
-    <section class="col-span-full border-t border-black/10 pt-4" aria-label="Бүтээгдэхүүний зураг">
-      <Show when={props.product.images.length > 0}>
+    <section class="col-span-full border-t border-black/10 pt-4" aria-label="Каталогийн зураг">
+      <Show when={props.item.images.length > 0}>
         <ul class="m-0 mb-4 flex list-none flex-wrap gap-3 p-0">
-          <For each={props.product.images}>
+          <For each={props.item.images}>
             {(image) => (
               <li class="w-28">
                 <img
