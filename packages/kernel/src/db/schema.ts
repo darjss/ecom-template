@@ -397,6 +397,30 @@ export const catalogCachePurgeDebts = sqliteTable(
   ],
 );
 
+export const catalogListingCachePurgeDebt = sqliteTable(
+  "catalog_listing_cache_purge_debt",
+  {
+    key: text("key").primaryKey(),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("catalog_listing_cache_purge_debt_key_check", sql`${table.key} = 'catalog'`),
+    check("catalog_listing_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
+    check(
+      "catalog_listing_cache_purge_debt_attempt_check",
+      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      "catalog_listing_cache_purge_debt_request_check",
+      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
+    ),
+  ],
+);
+
 export const variants = sqliteTable(
   "variants",
   {

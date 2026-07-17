@@ -56,7 +56,7 @@ const groupings = await storefront.listPublishedGroupings();
         <p>Үнэ нь бүхэл төгрөгөөр харагдана. Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
       </div>
       <div class="product-copy">
-        {groupings.collections.length > 0 && <nav class="mb-6 flex flex-wrap gap-3" aria-label="Collection"><span class="font-bold">Collection:</span>{groupings.collections.map((collection) => <a href={`/collections/${collection.slug}`}>{collection.name}</a>)}</nav>}
+        {groupings.collections.length > 0 && <nav class="mb-6 flex flex-wrap gap-3" aria-label="Цуглуулга"><span class="font-bold">Цуглуулга:</span>{groupings.collections.map((collection) => <a href={`/collections/${collection.slug}`}>{collection.name}</a>)}</nav>}
         {products.length === 0 ? <p>Одоогоор нийтлэгдсэн бүтээгдэхүүн алга.</p> : <ul class="catalog-list">{products.map((product) => <li><a href={`/products/${product.slug}`}><strong>{product.name}</strong><span>{new Intl.NumberFormat("mn-MN").format(product.priceMnt)} ₮</span></a></li>)}</ul>}
       </div>
     </section>

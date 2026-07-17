@@ -2,11 +2,13 @@ import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
 import type { ClientRequestError } from "./client-error";
 import {
+  CatalogItemIdSchema,
+  CachePurgeDebtSchema,
+  CatalogItemKindSchema,
   CatalogNameSchema,
   CatalogSlugSchema,
-  ProductIdSchema,
   ProductStateSchema,
-  PublicProductSummarySchema,
+  PublicCatalogItemSummarySchema,
 } from "./catalog";
 
 const groupingIdSchema = (prefix: string, label: string) =>
@@ -36,8 +38,9 @@ export const TagLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.max
 export const GroupingDescriptionSchema = v.pipe(v.string(), v.maxLength(5_000));
 const GroupingTimestampSchema = v.pipe(v.string(), v.isoTimestamp());
 
-export const GroupingProductSchema = v.strictObject({
-  id: ProductIdSchema,
+export const GroupingCatalogItemSchema = v.strictObject({
+  id: CatalogItemIdSchema,
+  kind: CatalogItemKindSchema,
   name: CatalogNameSchema,
   state: ProductStateSchema,
 });
@@ -49,7 +52,7 @@ export const CategorySchema = v.strictObject({
   parentId: v.nullable(CategoryIdSchema),
   position: GroupingPositionSchema,
   state: GroupingStateSchema,
-  productIds: v.array(ProductIdSchema),
+  catalogItemIds: v.array(CatalogItemIdSchema),
   createdAt: GroupingTimestampSchema,
   updatedAt: GroupingTimestampSchema,
   activatedAt: v.nullable(GroupingTimestampSchema),
@@ -62,7 +65,7 @@ export const CollectionSchema = v.strictObject({
   name: CatalogNameSchema,
   description: GroupingDescriptionSchema,
   state: GroupingStateSchema,
-  productIds: v.array(ProductIdSchema),
+  catalogItemIds: v.array(CatalogItemIdSchema),
   createdAt: GroupingTimestampSchema,
   updatedAt: GroupingTimestampSchema,
   activatedAt: v.nullable(GroupingTimestampSchema),
@@ -73,7 +76,7 @@ export const TagSchema = v.strictObject({
   id: TagIdSchema,
   label: TagLabelSchema,
   state: GroupingStateSchema,
-  productIds: v.array(ProductIdSchema),
+  catalogItemIds: v.array(CatalogItemIdSchema),
   createdAt: GroupingTimestampSchema,
   updatedAt: GroupingTimestampSchema,
   activatedAt: v.nullable(GroupingTimestampSchema),
@@ -85,10 +88,23 @@ export const GroupingListResponseSchema = v.strictObject({
     categories: v.array(CategorySchema),
     collections: v.array(CollectionSchema),
     tags: v.array(TagSchema),
-    products: v.array(GroupingProductSchema),
+    catalogItems: v.array(GroupingCatalogItemSchema),
+    cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   }),
 });
-export const GroupingMutationResponseSchema = v.strictObject({ data: GroupingSchema });
+const GroupingCachePurgeResultSchema = v.strictObject({
+  cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
+  cachePurgeRequestId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+});
+export const GroupingMutationResponseSchema = v.strictObject({
+  data: v.strictObject({
+    grouping: GroupingSchema,
+    ...GroupingCachePurgeResultSchema.entries,
+  }),
+});
+export const GroupingCachePurgeResponseSchema = v.strictObject({
+  data: GroupingCachePurgeResultSchema,
+});
 
 export const CategoryInputSchema = v.strictObject({
   name: CatalogNameSchema,
@@ -102,9 +118,11 @@ export const CollectionInputSchema = v.strictObject({
   description: v.optional(GroupingDescriptionSchema, ""),
 });
 export const TagInputSchema = v.strictObject({ label: TagLabelSchema });
-export const GroupingStateInputSchema = v.strictObject({ state: GroupingStateSchema });
+export const GroupingStateInputSchema = v.strictObject({
+  state: v.picklist(["active", "archived"]),
+});
 export const GroupingMembershipInputSchema = v.strictObject({
-  productIds: v.pipe(v.array(ProductIdSchema), v.maxLength(500)),
+  catalogItemIds: v.pipe(v.array(CatalogItemIdSchema), v.maxLength(500)),
 });
 
 export const GroupingFailureReasonSchema = v.picklist([
@@ -116,6 +134,8 @@ export const GroupingFailureReasonSchema = v.picklist([
   "parent_not_found",
   "category_cycle",
   "active_child",
+  "inactive_ancestor",
+  "concurrent_parent_change",
   "duplicate_membership",
 ]);
 export const GroupingApiErrorSchema = v.strictObject({
@@ -141,7 +161,7 @@ export const PublicGroupingSchema = v.strictObject({
 });
 export const PublicGroupingListingSchema = v.strictObject({
   grouping: PublicGroupingSchema,
-  products: v.array(PublicProductSummarySchema),
+  catalogItems: v.array(PublicCatalogItemSummarySchema),
 });
 
 export type CategoryId = v.InferOutput<typeof CategoryIdSchema>;

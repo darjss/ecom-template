@@ -26,11 +26,11 @@ const money = new Intl.NumberFormat("mn-MN");
       {listing.grouping.description && <p class="mt-5 max-w-prose text-lg text-(--muted)">{listing.grouping.description}</p>}
     </header>
     <ul class="m-0 grid list-none grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-3">
-      {listing.products.map((product) => (
+      {listing.catalogItems.map((catalogItem) => (
         <li class="border-b border-black/15 py-6 sm:px-5 sm:first:pl-0">
-          <a class="grid min-h-28 content-between gap-6 text-(--ink) no-underline" href={`/products/${product.slug}`}>
-            <strong class="text-xl tracking-tight">{product.name}</strong>
-            <span class="font-bold">{money.format(product.priceMnt)} ₮</span>
+          <a class="grid min-h-28 content-between gap-6 text-(--ink) no-underline" href={`/${catalogItem.kind === "bundle" ? "bundles" : "products"}/${catalogItem.slug}`}>
+            <strong class="text-xl tracking-tight">{catalogItem.name}</strong>
+            <span class="font-bold">{money.format(catalogItem.priceMnt)} ₮</span>
           </a>
         </li>
       ))}

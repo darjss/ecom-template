@@ -1,5 +1,6 @@
 import {
   GroupingApiErrorSchema,
+  GroupingCachePurgeResponseSchema,
   GroupingListResponseSchema,
   GroupingMutationResponseSchema,
   type CategoryId,
@@ -7,13 +8,13 @@ import {
   type CollectionId,
   type CollectionInput,
   type GroupingMembershipInput,
-  type GroupingState,
   type TagId,
   type TagInput,
 } from "@ecom/contracts";
 import { createApiClient } from "../eden";
 import { requestResult } from "../request";
 
+const invalidMutation = "Invalid grouping mutation response";
 export const requestGroupings = () =>
   requestResult(
     () => createApiClient().api.catalog.groupings.get(),
@@ -22,72 +23,100 @@ export const requestGroupings = () =>
     "Invalid grouping response",
   );
 
-export type GroupingMutation =
-  | { readonly kind: "create-category"; readonly input: CategoryInput }
-  | { readonly kind: "update-category"; readonly id: CategoryId; readonly input: CategoryInput }
-  | { readonly kind: "state-category"; readonly id: CategoryId; readonly state: GroupingState }
-  | {
-      readonly kind: "members-category";
-      readonly id: CategoryId;
-      readonly input: GroupingMembershipInput;
-    }
-  | { readonly kind: "create-collection"; readonly input: CollectionInput }
-  | {
-      readonly kind: "update-collection";
-      readonly id: CollectionId;
-      readonly input: CollectionInput;
-    }
-  | { readonly kind: "state-collection"; readonly id: CollectionId; readonly state: GroupingState }
-  | {
-      readonly kind: "members-collection";
-      readonly id: CollectionId;
-      readonly input: GroupingMembershipInput;
-    }
-  | { readonly kind: "create-tag"; readonly input: TagInput }
-  | { readonly kind: "update-tag"; readonly id: TagId; readonly input: TagInput }
-  | { readonly kind: "state-tag"; readonly id: TagId; readonly state: GroupingState }
-  | { readonly kind: "members-tag"; readonly id: TagId; readonly input: GroupingMembershipInput };
-
-export const requestGroupingMutation = (mutation: GroupingMutation) => {
-  const client = createApiClient();
-  const request = () =>
-    mutation.kind === "create-category"
-      ? client.api.catalog.categories.post(mutation.input)
-      : mutation.kind === "update-category"
-        ? client.api.catalog.categories({ id: mutation.id }).patch(mutation.input)
-        : mutation.kind === "state-category"
-          ? client.api.catalog
-              .categories({ id: mutation.id })
-              .state.patch({ state: mutation.state })
-          : mutation.kind === "members-category"
-            ? client.api.catalog.categories({ id: mutation.id }).products.put(mutation.input)
-            : mutation.kind === "create-collection"
-              ? client.api.catalog.collections.post(mutation.input)
-              : mutation.kind === "update-collection"
-                ? client.api.catalog.collections({ id: mutation.id }).patch(mutation.input)
-                : mutation.kind === "state-collection"
-                  ? client.api.catalog
-                      .collections({ id: mutation.id })
-                      .state.patch({ state: mutation.state })
-                  : mutation.kind === "members-collection"
-                    ? client.api.catalog
-                        .collections({ id: mutation.id })
-                        .products.put(mutation.input)
-                    : mutation.kind === "create-tag"
-                      ? client.api.catalog.tags.post(mutation.input)
-                      : mutation.kind === "update-tag"
-                        ? client.api.catalog.tags({ id: mutation.id }).patch(mutation.input)
-                        : mutation.kind === "state-tag"
-                          ? client.api.catalog
-                              .tags({ id: mutation.id })
-                              .state.patch({ state: mutation.state })
-                          : client.api.catalog
-                              .tags({ id: mutation.id })
-                              .products.put(mutation.input);
-  return requestResult(
-    request,
+export const requestCreateCategory = (input: CategoryInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.categories.post(input),
     GroupingMutationResponseSchema,
     GroupingApiErrorSchema,
-    "Invalid grouping mutation response",
+    invalidMutation,
   );
-};
+export const requestUpdateCategory = (id: CategoryId, input: CategoryInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.categories({ id }).patch(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestSetCategoryState = (id: CategoryId, state: "active" | "archived") =>
+  requestResult(
+    () => createApiClient().api.catalog.categories({ id }).state.patch({ state }),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestReplaceCategoryMembership = (id: CategoryId, input: GroupingMembershipInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.categories({ id }).items.put(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+
+export const requestCreateCollection = (input: CollectionInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.collections.post(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestUpdateCollection = (id: CollectionId, input: CollectionInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.collections({ id }).patch(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestSetCollectionState = (id: CollectionId, state: "active" | "archived") =>
+  requestResult(
+    () => createApiClient().api.catalog.collections({ id }).state.patch({ state }),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestReplaceCollectionMembership = (
+  id: CollectionId,
+  input: GroupingMembershipInput,
+) =>
+  requestResult(
+    () => createApiClient().api.catalog.collections({ id }).items.put(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+
+export const requestCreateTag = (input: TagInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.tags.post(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestUpdateTag = (id: TagId, input: TagInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.tags({ id }).patch(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestSetTagState = (id: TagId, state: "active" | "archived") =>
+  requestResult(
+    () => createApiClient().api.catalog.tags({ id }).state.patch({ state }),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+export const requestReplaceTagMembership = (id: TagId, input: GroupingMembershipInput) =>
+  requestResult(
+    () => createApiClient().api.catalog.tags({ id }).items.put(input),
+    GroupingMutationResponseSchema,
+    GroupingApiErrorSchema,
+    invalidMutation,
+  );
+
+export const requestGroupingCachePurgeRetry = () =>
+  requestResult(
+    () => createApiClient().api.catalog.groupings["cache-purge"].retry.post(),
+    GroupingCachePurgeResponseSchema,
+    GroupingApiErrorSchema,
+    "Invalid grouping cache-purge response",
+  );

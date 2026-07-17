@@ -3,9 +3,20 @@ export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/me
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export { createApiClient } from "./eden";
 export {
-  requestGroupingMutation,
+  requestCreateCategory,
+  requestCreateCollection,
+  requestCreateTag,
+  requestGroupingCachePurgeRetry,
   requestGroupings,
-  type GroupingMutation,
+  requestReplaceCategoryMembership,
+  requestReplaceCollectionMembership,
+  requestReplaceTagMembership,
+  requestSetCategoryState,
+  requestSetCollectionState,
+  requestSetTagState,
+  requestUpdateCategory,
+  requestUpdateCollection,
+  requestUpdateTag,
 } from "./grouping/request";
 export { createStoreQueryClient } from "./query/client";
 export { catalogImageMutationOptions } from "./query/catalog-media";

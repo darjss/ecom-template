@@ -11,10 +11,6 @@ if (!listing) {
     headers: { "cache-control": "private, no-store" },
   });
 }
-applyPublicHtmlCache(Astro.response.headers, [
-  "store-shell",
-  "catalog",
-  `category:${listing.grouping.id}`,
-]);
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog"]);
 ---
 <GroupingListing listing={listing} kindLabel="Ангилал" />

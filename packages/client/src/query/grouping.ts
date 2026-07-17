@@ -1,15 +1,10 @@
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
-import type { InferErr, InferOk } from "better-result";
-import {
-  requestGroupingMutation,
-  requestGroupings,
-  type GroupingMutation,
-} from "../grouping/request";
+import type { InferErr, InferOk, Result as ResultType } from "better-result";
+import { requestGroupings } from "../grouping/request";
 import { unwrapRequestResult } from "../request";
 
 const groupingQueryKey = ["catalog", "groupings"] as const;
 type GroupingResult = Awaited<ReturnType<typeof requestGroupings>>;
-type GroupingMutationResult = Awaited<ReturnType<typeof requestGroupingMutation>>;
 
 export const groupingQueryOptions = () =>
   queryOptions<InferOk<GroupingResult>, InferErr<GroupingResult>>({
@@ -17,13 +12,15 @@ export const groupingQueryOptions = () =>
     queryFn: async () => unwrapRequestResult(await requestGroupings()),
   });
 
-export const groupingMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<
-    InferOk<GroupingMutationResult>,
-    InferErr<GroupingMutationResult>,
-    GroupingMutation
-  >({
-    mutationFn: async (mutation) => unwrapRequestResult(await requestGroupingMutation(mutation)),
+export const groupingMutationOptions = <
+  Variables,
+  RequestResult extends ResultType<unknown, unknown>,
+>(
+  queryClient: QueryClient,
+  request: (variables: Variables) => Promise<RequestResult>,
+) =>
+  mutationOptions<InferOk<RequestResult>, InferErr<RequestResult>, Variables>({
+    mutationFn: async (variables) => unwrapRequestResult(await request(variables)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: groupingQueryKey, refetchType: "none" });
       await queryClient.refetchQueries({ queryKey: groupingQueryKey, type: "active" });

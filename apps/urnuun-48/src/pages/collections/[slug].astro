@@ -6,15 +6,11 @@ import { storefront } from "../../api";
 export const prerender = false;
 const listing = await storefront.readPublishedCollection(Astro.params.slug ?? "");
 if (!listing) {
-  return new Response("Collection олдсонгүй", {
+  return new Response("Цуглуулга олдсонгүй", {
     status: 404,
     headers: { "cache-control": "private, no-store" },
   });
 }
-applyPublicHtmlCache(Astro.response.headers, [
-  "store-shell",
-  "catalog",
-  `collection:${listing.grouping.id}`,
-]);
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog"]);
 ---
-<GroupingListing listing={listing} kindLabel="Collection" />
+<GroupingListing listing={listing} kindLabel="Цуглуулга" />

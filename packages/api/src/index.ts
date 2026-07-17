@@ -4,17 +4,6 @@ import {
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CreateProductInputSchema,
-  CategoryIdSchema,
-  CategoryInputSchema,
-  CollectionIdSchema,
-  CollectionInputSchema,
-  GroupingApiErrorSchema,
-  GroupingListResponseSchema,
-  GroupingMembershipInputSchema,
-  GroupingMutationResponseSchema,
-  GroupingStateInputSchema,
-  TagIdSchema,
-  TagInputSchema,
   HealthApiErrorSchema,
   InventoryAdjustmentInputSchema,
   MediaAssetIdSchema,
@@ -41,15 +30,13 @@ import {
   adjustProductInventory,
   approveStaff,
   attachCatalogImage,
-  createProduct,
   changeStaffRole,
+  createProduct,
   createStaff,
   createStaffAuth,
   createStorefrontReader,
   listCatalog,
-  listGroupings,
   listStaff,
-  mutateGrouping,
   readCatalogMedia,
   readDatabaseHealth,
   readStaffAuthSession,
@@ -61,13 +48,13 @@ import {
   type CatalogMediaFailure,
   type CatalogOperationFailure,
   type CustomerSmsDelivery,
-  type GroupingOperationFailure,
   type StaffOperationFailure,
   type StorefrontReader,
 } from "@ecom/kernel";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createCustomerAuthRoutes } from "./customer-routes";
+import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 
 export { MediaUploadMultipartMaxBytes };
@@ -171,54 +158,6 @@ const catalogError = (
     }),
   );
 };
-
-const groupingError = (
-  failure: GroupingOperationFailure,
-  status: (code: number, body: unknown) => unknown,
-) => {
-  const code = failure.code;
-  const httpStatus =
-    code === "forbidden"
-      ? 403
-      : code === "not_found" || code === "parent_not_found"
-        ? 404
-        : code === "infrastructure_unavailable"
-          ? 503
-          : 409;
-  const messages: Record<GroupingOperationFailure["code"], string> = {
-    forbidden: "Catalog authority is required",
-    not_found: "Grouping or Product was not found",
-    duplicate_slug: "Grouping slug is permanently reserved",
-    duplicate_label: "Tag label is already in use",
-    invalid_lifecycle: "Grouping lifecycle target is not valid",
-    slug_locked: "An activated grouping slug cannot change",
-    parent_not_found: "Parent Category was not found",
-    category_cycle: "Category parent would create a cycle",
-    active_child: "Active child Categories must be resolved before archival",
-    duplicate_membership: "A Product may appear only once in a grouping",
-    infrastructure_unavailable: "Grouping infrastructure is unavailable",
-  };
-  return status(
-    httpStatus,
-    v.parse(GroupingApiErrorSchema, {
-      error: {
-        code:
-          httpStatus === 403
-            ? "forbidden"
-            : httpStatus === 404
-              ? "not_found"
-              : httpStatus === 503
-                ? "unavailable"
-                : "conflict",
-        message: messages[code],
-        reason: code === "forbidden" || code === "infrastructure_unavailable" ? undefined : code,
-      },
-    }),
-  );
-};
-
-const groupingValidation = (status: (code: number, body: unknown) => unknown, message: string) =>
-  status(422, v.parse(GroupingApiErrorSchema, { error: { code: "validation", message } }));
 
 const unavailableAuthResponse = () =>
   Response.json(
@@ -577,238 +516,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
-    .get("/catalog/groupings", async ({ request, status }) => {
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await listGroupings(authorization.actor);
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingListResponseSchema, { data: result.value });
-    })
-    .post("/catalog/categories", async ({ body, request, status }) => {
-      const input = v.safeParse(CategoryInputSchema, body);
-      if (!input.success) {
-        return groupingValidation(status, "Valid Category facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "create-category",
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/categories/:id", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CategoryIdSchema, params.id);
-      const input = v.safeParse(CategoryInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Category facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "update-category",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/categories/:id/state", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CategoryIdSchema, params.id);
-      const input = v.safeParse(GroupingStateInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Category lifecycle facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "state-category",
-        id: id.output,
-        state: input.output.state,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .put("/catalog/categories/:id/products", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CategoryIdSchema, params.id);
-      const input = v.safeParse(GroupingMembershipInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Category membership is required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "members-category",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .post("/catalog/collections", async ({ body, request, status }) => {
-      const input = v.safeParse(CollectionInputSchema, body);
-      if (!input.success) {
-        return groupingValidation(status, "Valid Collection facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "create-collection",
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/collections/:id", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CollectionIdSchema, params.id);
-      const input = v.safeParse(CollectionInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Collection facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "update-collection",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/collections/:id/state", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CollectionIdSchema, params.id);
-      const input = v.safeParse(GroupingStateInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Collection lifecycle facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "state-collection",
-        id: id.output,
-        state: input.output.state,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .put("/catalog/collections/:id/products", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CollectionIdSchema, params.id);
-      const input = v.safeParse(GroupingMembershipInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid ordered Collection membership is required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "members-collection",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .post("/catalog/tags", async ({ body, request, status }) => {
-      const input = v.safeParse(TagInputSchema, body);
-      if (!input.success) {
-        return groupingValidation(status, "A valid Tag label is required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "create-tag",
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/tags/:id", async ({ body, params, request, status }) => {
-      const id = v.safeParse(TagIdSchema, params.id);
-      const input = v.safeParse(TagInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "A valid Tag label is required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "update-tag",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .patch("/catalog/tags/:id/state", async ({ body, params, request, status }) => {
-      const id = v.safeParse(TagIdSchema, params.id);
-      const input = v.safeParse(GroupingStateInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Tag lifecycle facts are required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "state-tag",
-        id: id.output,
-        state: input.output.state,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
-    .put("/catalog/tags/:id/products", async ({ body, params, request, status }) => {
-      const id = v.safeParse(TagIdSchema, params.id);
-      const input = v.safeParse(GroupingMembershipInputSchema, body);
-      if (!id.success || !input.success) {
-        return groupingValidation(status, "Valid Tag membership is required");
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await mutateGrouping(authorization.actor, {
-        kind: "members-tag",
-        id: id.output,
-        input: input.output,
-      });
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingMutationResponseSchema, { data: result.value });
-    })
+    .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
     .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();
       if (databaseHealth.isErr()) {

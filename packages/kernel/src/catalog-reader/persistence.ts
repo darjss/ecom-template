@@ -1,12 +1,15 @@
 import {
+  CatalogItemIdSchema,
   ProductIdSchema,
   ProductSchema,
+  PublicCatalogItemSummarySchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type CatalogItemId,
   type Product,
   type ProductId,
 } from "@ecom/contracts";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
@@ -94,6 +97,35 @@ export const findCatalogProductById = async (id: ProductId) => {
 
 export const catalogReaderQueries = {
   findById: findCatalogProductById,
+
+  async listPublishedCatalogItems(ids?: readonly CatalogItemId[]) {
+    if (ids?.length === 0) {
+      return [];
+    }
+    const rows = await database()
+      .select({
+        id: catalogItems.id,
+        kind: catalogItems.kind,
+        slug: catalogItems.slug,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        priceMnt: catalogItems.priceMnt,
+      })
+      .from(catalogItems)
+      .where(
+        ids
+          ? and(eq(catalogItems.state, "published"), inArray(catalogItems.id, ids))
+          : eq(catalogItems.state, "published"),
+      )
+      .orderBy(desc(catalogItems.createdAt));
+    return rows.map((row) =>
+      v.parse(PublicCatalogItemSummarySchema, {
+        ...row,
+        id: v.parse(CatalogItemIdSchema, row.id),
+        images: [],
+      }),
+    );
+  },
 
   async listAll() {
     const rows = await productQuery().orderBy(desc(catalogItems.createdAt));

@@ -50,24 +50,22 @@ const publicListing = async (
   if (!grouping) {
     return undefined;
   }
-  const productsById = new Map(
-    (await listPublishedProducts()).map((product) => [product.id, product]),
+  const catalogItems = await catalogQueries.listPublishedCatalogItems(grouping.catalogItemIds);
+  const catalogItemsById = new Map(
+    catalogItems.map((catalogItem) => [catalogItem.id, catalogItem]),
   );
-  const products = grouping.productIds.flatMap((id) => {
-    const product = productsById.get(id);
-    return product ? [product] : [];
+  return v.parse(PublicGroupingListingSchema, {
+    grouping: {
+      id: grouping.id,
+      slug: grouping.slug,
+      name: grouping.name,
+      description: grouping.description,
+    },
+    catalogItems: grouping.catalogItemIds.flatMap((id) => {
+      const catalogItem = catalogItemsById.get(id);
+      return catalogItem ? [catalogItem] : [];
+    }),
   });
-  return products.length > 0
-    ? v.parse(PublicGroupingListingSchema, {
-        grouping: {
-          id: grouping.id,
-          slug: grouping.slug,
-          name: grouping.name,
-          description: grouping.description,
-        },
-        products,
-      })
-    : undefined;
 };
 
 export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
@@ -84,17 +82,17 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
     return row ? v.parse(PublicProductDetailSchema, row) : undefined;
   },
   listPublishedGroupings: async () => {
-    const [groups, products] = await Promise.all([
+    const [groups, catalogItems] = await Promise.all([
       groupingQueries.listPublicGroupings(),
-      listPublishedProducts(),
+      catalogQueries.listPublishedCatalogItems(),
     ]);
-    const publishedIds = new Set(products.map((product) => product.id));
+    const publishedIds = new Set(catalogItems.map((catalogItem) => catalogItem.id));
     return {
       categories: groups.categories
-        .filter((group) => group.productIds.some((id) => publishedIds.has(id)))
+        .filter((group) => group.catalogItemIds.some((id) => publishedIds.has(id)))
         .map(projectPublicGrouping),
       collections: groups.collections
-        .filter((group) => group.productIds.some((id) => publishedIds.has(id)))
+        .filter((group) => group.catalogItemIds.some((id) => publishedIds.has(id)))
         .map(projectPublicGrouping),
     };
   },
