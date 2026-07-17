@@ -349,7 +349,9 @@ export const groupingQueries = {
           db
             .update(categories)
             .set({ ...input, updatedAt: now })
-            .where(and(eq(categories.id, id), ...lineagePredicates))
+            .where(
+              and(eq(categories.id, id), eq(categories.state, current.state), ...lineagePredicates),
+            )
             .returning({ id: categories.id }),
           catalogDebtStatement(now),
         ])
@@ -515,6 +517,7 @@ export const groupingQueries = {
     const transitionPredicate = and(
       eq(categories.id, id),
       eq(categories.state, current.state),
+      current.parentId ? eq(categories.parentId, current.parentId) : isNull(categories.parentId),
       target === "archived"
         ? notExists(
             db
