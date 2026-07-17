@@ -536,6 +536,8 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
 const mediaPathPattern =
   /^\/media\/(media_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25})\/(320|640|960|1280)\.(avif|webp)$/;
 
+export const isPublicMediaPath = (pathname: string) => mediaPathPattern.test(pathname);
+
 export const servePublicMedia = async (request: Request) => {
   const match = mediaPathPattern.exec(new URL(request.url).pathname);
   const mediaAssetId = v.safeParse(MediaAssetIdSchema, match?.[1]);

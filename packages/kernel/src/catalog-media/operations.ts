@@ -32,6 +32,12 @@ type AttachCatalogImageInput = {
   readonly altText: string;
 };
 
+type CatalogMediaMutationResult = {
+  readonly image: CatalogImage;
+  readonly cache: "not_required" | "purged" | "committed_but_not_purged";
+  readonly cachePurgeRequestId: string | null;
+};
+
 const matches = (bytes: Uint8Array, offset: number, signature: readonly number[]) =>
   signature.every((byte, index) => bytes[offset + index] === byte);
 
@@ -55,6 +61,31 @@ const detectedContentType = (bytes: Uint8Array): MediaContentType | undefined =>
 const mediaExtension = (contentType: MediaContentType) =>
   contentType === "image/jpeg" ? "jpg" : contentType === "image/png" ? "png" : "webp";
 
+const isDecodableImage = async (bytes: Uint8Array) => {
+  try {
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.from(bytes));
+        controller.close();
+      },
+    });
+    const decoded = (await env.IMAGES.input(source).output({ format: "image/webp" })).response();
+    if (!decoded.ok) {
+      return false;
+    }
+    await decoded.arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const completedAttachment = (
+  image: CatalogImage,
+  cache: CatalogMediaMutationResult["cache"],
+  cachePurgeRequestId: string | null,
+) => Result.ok<CatalogMediaMutationResult, never>({ image, cache, cachePurgeRequestId });
+
 export const attachCatalogImage = async (
   actor: StaffActor,
   catalogItemId: ProductId,
@@ -77,8 +108,17 @@ export const attachCatalogImage = async (
     if (!(await catalogMediaQueries.catalogItemExists(catalogItemId))) {
       return Result.err<never, CatalogMediaFailure>({ code: "not_found" });
     }
-    const mediaAssetId = createMediaAssetId();
-    const objectKey = `catalog/${crypto.randomUUID()}.${mediaExtension(detectedType)}`;
+  } catch {
+    return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
+  }
+
+  if (!(await isDecodableImage(input.bytes))) {
+    return Result.err<never, CatalogMediaFailure>({ code: "invalid_media_bytes" });
+  }
+
+  const mediaAssetId = createMediaAssetId();
+  const objectKey = `catalog/${crypto.randomUUID()}.${mediaExtension(detectedType)}`;
+  try {
     const object = await env.MEDIA.put(objectKey, input.bytes, {
       httpMetadata: { contentType: detectedType },
       onlyIf: { etagDoesNotMatch: "*" },
@@ -86,22 +126,57 @@ export const attachCatalogImage = async (
     if (!object) {
       return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
     }
-    const image = await catalogMediaQueries.attach(
-      catalogItemId,
-      mediaAssetId,
-      objectKey,
-      detectedType,
-      input.position,
-      input.altText,
-      new Date(),
-    );
-    const product = await catalogQueries.findById(catalogItemId);
-    if (product?.cachePurgeDebt) {
-      await resolvePendingCatalogCachePurge(product);
-    }
-    return Result.ok<CatalogImage, never>(image);
   } catch {
     return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
+  }
+
+  const attachment = await (async () => {
+    try {
+      return await catalogMediaQueries.attach(
+        catalogItemId,
+        mediaAssetId,
+        objectKey,
+        detectedType,
+        input.position,
+        input.altText,
+        new Date(),
+      );
+    } catch {
+      try {
+        await env.MEDIA.delete(objectKey);
+      } catch {
+        return undefined;
+      }
+      return undefined;
+    }
+  })();
+  if (!attachment) {
+    return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
+  }
+
+  if (attachment.displacedAsset) {
+    try {
+      await env.MEDIA.delete(attachment.displacedAsset.objectKey);
+      if (!(await catalogMediaQueries.deleteMediaAsset(attachment.displacedAsset.id))) {
+        return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
+      }
+    } catch {
+      return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
+    }
+  }
+
+  try {
+    const product = await catalogQueries.findById(catalogItemId);
+    if (!product) {
+      return completedAttachment(attachment.image, "committed_but_not_purged", null);
+    }
+    if (!product.cachePurgeDebt) {
+      return completedAttachment(attachment.image, "not_required", null);
+    }
+    const cache = await resolvePendingCatalogCachePurge(product);
+    return completedAttachment(attachment.image, cache.cache, cache.cachePurgeRequestId);
+  } catch {
+    return completedAttachment(attachment.image, "committed_but_not_purged", null);
   }
 };
 

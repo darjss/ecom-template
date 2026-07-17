@@ -29,6 +29,15 @@ const StoredMediaSchema = v.strictObject({
   declaredContentType: v.string(),
 });
 
+const projectStoredMedia = (source: unknown) => {
+  const row = v.parse(StoredMediaSchema, source);
+  return {
+    id: v.parse(MediaAssetIdSchema, row.id),
+    objectKey: row.objectKey,
+    declaredContentType: v.parse(MediaContentTypeSchema, row.declaredContentType),
+  };
+};
+
 const projectCatalogImage = (source: unknown): CatalogImage => {
   const row = v.parse(MediaRowSchema, source);
   return v.parse(CatalogImageSchema, {
@@ -71,7 +80,22 @@ export const catalogMediaQueries = {
   ) {
     const db = database();
     const cacheRevision = crypto.randomUUID();
-    await db.batch([
+    const [displacedRows] = await db.batch([
+      db
+        .select({
+          id: mediaAssets.id,
+          objectKey: mediaAssets.objectKey,
+          declaredContentType: mediaAssets.declaredContentType,
+        })
+        .from(catalogItemImages)
+        .innerJoin(mediaAssets, eq(mediaAssets.id, catalogItemImages.mediaAssetId))
+        .where(
+          and(
+            eq(catalogItemImages.catalogItemId, catalogItemId),
+            eq(catalogItemImages.position, position),
+          ),
+        )
+        .limit(1),
       db.insert(mediaAssets).values({
         id: mediaAssetId,
         objectKey,
@@ -110,14 +134,26 @@ export const catalogMediaQueries = {
             lastAttemptedAt: null,
           },
         }),
-    ]);
-    return projectCatalogImage({
-      mediaAssetId,
-      declaredContentType,
-      createdAt,
-      position,
-      altText,
-    });
+    ] as const);
+    const displaced = displacedRows.at(0);
+    return {
+      image: projectCatalogImage({
+        mediaAssetId,
+        declaredContentType,
+        createdAt,
+        position,
+        altText,
+      }),
+      displacedAsset: displaced ? projectStoredMedia(displaced) : undefined,
+    };
+  },
+
+  async deleteMediaAsset(id: MediaAssetId) {
+    const removed = await database()
+      .delete(mediaAssets)
+      .where(eq(mediaAssets.id, id))
+      .returning({ id: mediaAssets.id });
+    return removed.length === 1;
   },
 
   async listForCatalogItems(ids: readonly ProductId[]) {
@@ -164,11 +200,6 @@ export const catalogMediaQueries = {
     if (!row) {
       return undefined;
     }
-    const parsed = v.parse(StoredMediaSchema, row);
-    return {
-      id: v.parse(MediaAssetIdSchema, parsed.id),
-      objectKey: parsed.objectKey,
-      declaredContentType: v.parse(MediaContentTypeSchema, parsed.declaredContentType),
-    };
+    return projectStoredMedia(row);
   },
 };

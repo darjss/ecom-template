@@ -69,12 +69,18 @@ export const MediaUploadFieldsSchema = v.strictObject({
   position: MediaPositionSchema,
   altText: MediaAltTextSchema,
 });
-export const MediaUploadResponseSchema = v.strictObject({ data: CatalogImageSchema });
-export const MediaUploadMaxBytes = 8 * 1024 * 1024;
-
 export const CachePurgeRequestIdSchema = v.nullable(
   v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 );
+export const MediaUploadResponseSchema = v.strictObject({
+  data: v.strictObject({
+    image: CatalogImageSchema,
+    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
+    cachePurgeRequestId: CachePurgeRequestIdSchema,
+  }),
+});
+export const MediaUploadMaxBytes = 8 * 1024 * 1024;
+
 export const CachePurgeDebtSchema = v.strictObject({
   attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
   requestId: CachePurgeRequestIdSchema,

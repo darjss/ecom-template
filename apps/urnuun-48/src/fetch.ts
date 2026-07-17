@@ -1,5 +1,6 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import {
+  isPublicMediaPath,
   resolveStaffRequest,
   resolveStoreRequestOrigin,
   servePublicMedia,
@@ -59,7 +60,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
 
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
-  if (pathname.startsWith("/media/")) {
+  if (isPublicMediaPath(pathname)) {
     return servePublicMedia(request);
   }
   if (pathname === "/api" || pathname.startsWith("/api/")) {
