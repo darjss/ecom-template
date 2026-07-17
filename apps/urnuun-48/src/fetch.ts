@@ -9,6 +9,9 @@ import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story"]);
+const publicProductPath = /^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isPublicStorefrontPath = (pathname: string) =>
+  publicStorefrontPaths.has(pathname) || publicProductPath.test(pathname);
 
 const privateResponse = (response: Response) => {
   const headers = new Headers(response.headers);
@@ -28,7 +31,7 @@ const classifyResponse = (request: Request, response: Response) => {
   const retainsPublicPolicy =
     (request.method === "GET" || request.method === "HEAD") &&
     response.status === 200 &&
-    publicStorefrontPaths.has(requestUrl.pathname) &&
+    isPublicStorefrontPath(requestUrl.pathname) &&
     requestUrl.search === "" &&
     !request.headers.has("authorization") &&
     !request.headers.has("cookie") &&
@@ -80,7 +83,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
         return new Response(null, {
           status: 303,
           headers: {
-            location: new URL("/admin/login", origin).toString(),
+            location: "/admin/login",
             "cache-control": "private, no-store",
           },
         });

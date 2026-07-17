@@ -52,5 +52,6 @@
   },
   "vars": {
     "PUBLIC_STORE_ORIGIN": "https://urnuun-48.shop.localhost",
+    "CLOUDFLARE_ZONE_ID": "",
   },
 }

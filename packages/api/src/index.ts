@@ -1,6 +1,13 @@
 import {
   ApiErrorSchema,
+  CatalogApiErrorSchema,
+  CatalogListResponseSchema,
+  CatalogProductResponseSchema,
+  CreateProductInputSchema,
   HealthApiErrorSchema,
+  InventoryAdjustmentInputSchema,
+  ProductIdSchema,
+  UpdateProductInputSchema,
   HealthResponseSchema,
   StaffCleanupResponseSchema,
   StaffCreateInputSchema,
@@ -14,18 +21,25 @@ import {
   type StoreDefinition,
 } from "@ecom/contracts";
 import {
+  adjustProductInventory,
   approveStaff,
+  createProduct,
   changeStaffRole,
   createStaff,
   createStaffAuth,
   createStoreBackground,
   createStorefrontReader,
+  listCatalog,
   listStaff,
   readDatabaseHealth,
   readStaffAuthSession,
   removeStaff,
+  retryProductCachePurge,
   retryStaffSessionCleanup,
   revokeStaff,
+  transitionProduct,
+  updateProduct,
+  type CatalogOperationFailure,
   type CustomerSmsDelivery,
   type StaffOperationFailure,
   type StoreBackground,
@@ -61,6 +75,68 @@ const apiError = (
   v.parse(StaffLifecycleApiErrorSchema, {
     error: { code, message, ...(reason ? { reason } : {}) },
   });
+
+const catalogError = (
+  failure: CatalogOperationFailure,
+  status: (code: number, body: unknown) => unknown,
+) => {
+  const code = failure.code;
+  const message =
+    code === "duplicate_slug"
+      ? "Product slug is already in use"
+      : code === "duplicate_sku"
+        ? "SKU is permanently assigned"
+        : code === "sku_locked"
+          ? "A published SKU cannot be changed"
+          : code === "invalid_publication"
+            ? "Product publication invariants are not satisfied"
+            : code === "invalid_lifecycle"
+              ? "Product lifecycle transition is not valid"
+              : code === "reservation_blocked"
+                ? "Active reservations block this inventory adjustment"
+                : code === "inventory_inconsistent"
+                  ? "Reserved inventory truth requires reconciliation"
+                  : code === "inventory_limit"
+                    ? "Inventory on-hand cannot exceed 1,000,000"
+                    : code === "idempotency_conflict"
+                      ? "The idempotency key belongs to another Catalog command"
+                      : code === "not_found"
+                        ? "Product was not found"
+                        : code === "forbidden"
+                          ? "Catalog authority is required"
+                          : code === "conflict"
+                            ? "Inventory changed concurrently"
+                            : "Catalog infrastructure is unavailable";
+  const httpStatus =
+    code === "forbidden"
+      ? 403
+      : code === "not_found"
+        ? 404
+        : code === "infrastructure_unavailable"
+          ? 503
+          : 409;
+  return status(
+    httpStatus,
+    v.parse(CatalogApiErrorSchema, {
+      error: {
+        code:
+          httpStatus === 403
+            ? "forbidden"
+            : httpStatus === 404
+              ? "not_found"
+              : httpStatus === 503
+                ? "unavailable"
+                : "conflict",
+        message,
+        reason:
+          code === "conflict" || code === "infrastructure_unavailable" || code === "forbidden"
+            ? undefined
+            : code,
+        blockers: failure.blockers,
+      },
+    }),
+  );
+};
 
 const unavailableAuthResponse = () =>
   Response.json(
@@ -282,6 +358,125 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });
     })
+    .get("/catalog/products", async ({ request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await listCatalog(authorization.actor);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogListResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products", async ({ body, request, status }) => {
+      const input = v.safeParse(CreateProductInputSchema, body);
+      if (!input.success) {
+        return status(
+          422,
+          apiError("validation", "Valid Product and opening inventory facts are required"),
+        );
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await createProduct(authorization.actor, input.output);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .patch("/catalog/products/:id", async ({ body, params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      const input = v.safeParse(UpdateProductInputSchema, body);
+      if (!id.success || !input.success) {
+        return status(422, apiError("validation", "Valid Product facts are required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await updateProduct(authorization.actor, id.output, input.output);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products/:id/publish", async ({ params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Product ID is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await transitionProduct(authorization.actor, id.output, "publish");
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products/:id/archive", async ({ params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Product ID is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await transitionProduct(authorization.actor, id.output, "archive");
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products/:id/reactivate", async ({ params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Product ID is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await transitionProduct(authorization.actor, id.output, "reactivate");
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products/:id/cache-purge/retry", async ({ params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Product ID is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await retryProductCachePurge(authorization.actor, id.output);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post(
+      "/catalog/products/:id/inventory-adjustments",
+      async ({ body, params, request, status }) => {
+        const id = v.safeParse(ProductIdSchema, params.id);
+        const input = v.safeParse(InventoryAdjustmentInputSchema, body);
+        if (!id.success || !input.success) {
+          return status(
+            422,
+            apiError("validation", "A non-zero inventory delta and reason are required"),
+          );
+        }
+        const authorization = await authorizeRoute(request, definition, status);
+        if (!authorization.authorized) {
+          return authorization.response;
+        }
+        const result = await adjustProductInventory(authorization.actor, id.output, input.output);
+        return result.isErr()
+          ? catalogError(result.error, status)
+          : v.parse(CatalogProductResponseSchema, { data: result.value });
+      },
+    )
     .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();
       if (databaseHealth.isErr()) {

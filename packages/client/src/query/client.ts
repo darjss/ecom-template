@@ -1,4 +1,5 @@
 import {
+  CatalogClientErrorSchema,
   ClientErrorSchema,
   CustomerAuthClientErrorSchema,
   StaffClientErrorSchema,
@@ -13,7 +14,11 @@ const parseClientError = (error: unknown) => {
     return common;
   }
   const staff = v.safeParse(StaffClientErrorSchema, error);
-  return staff.success ? staff : v.safeParse(CustomerAuthClientErrorSchema, error);
+  if (staff.success) {
+    return staff;
+  }
+  const customer = v.safeParse(CustomerAuthClientErrorSchema, error);
+  return customer.success ? customer : v.safeParse(CatalogClientErrorSchema, error);
 };
 
 const retrySafeFailure = (failureCount: number, error: unknown) => {

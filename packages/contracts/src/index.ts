@@ -1,6 +1,8 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
 
+export * from "./catalog";
+
 export const ApiErrorCodeSchema = v.picklist([
   "unauthorized",
   "forbidden",
