@@ -42,6 +42,130 @@ const currentDraft = (product: Product) => ({
 
 const errorText = "Сонголтын мэдээллийг хадгалж чадсангүй.";
 
+const OptionPresentationEditor = (props: { product: Product }) => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(() => catalogMutationOptions(queryClient));
+  const groups = () => currentDraft(props.product).groups;
+  const saveGroups = async (nextGroups: ReturnType<typeof groups>) => {
+    const draft = currentDraft(props.product);
+    await mutation.mutateAsync({
+      kind: "save-options",
+      id: props.product.id,
+      groups: nextGroups,
+      variants: draft.variants,
+    });
+  };
+  return (
+    <div class="grid gap-3">
+      <For each={groups()}>
+        {(group, index) => {
+          const form = createForm(() => ({
+            defaultValues: {
+              label: group.label,
+              valueLabels: group.values.map(({ label }) => label).join(", "),
+            },
+            onSubmit: async ({ value }) => {
+              const labels = value.valueLabels.split(",").map((label) => label.trim());
+              if (labels.length !== group.values.length || labels.some((label) => !label)) {
+                return;
+              }
+              await saveGroups(
+                groups().map((candidate) =>
+                  candidate.id === group.id
+                    ? {
+                        ...candidate,
+                        label: value.label.trim(),
+                        values: candidate.values.map((optionValue, position) => ({
+                          ...optionValue,
+                          label: labels[position] ?? optionValue.label,
+                        })),
+                      }
+                    : candidate,
+                ),
+              );
+            },
+          }));
+          const move = async (offset: -1 | 1) => {
+            const next = [...groups()];
+            const target = index() + offset;
+            const moving = next[index()];
+            const replaced = next[target];
+            if (!moving || !replaced) {
+              return;
+            }
+            next[index()] = { ...replaced, position: index() };
+            next[target] = { ...moving, position: target };
+            await saveGroups(next);
+          };
+          return (
+            <form
+              class="grid grid-cols-1 items-end gap-3 border-t border-black/10 pt-3 md:grid-cols-[1fr_2fr_auto]"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                await form.handleSubmit();
+              }}
+            >
+              <form.Field name="label">
+                {(field) => (
+                  <label class="grid gap-1 text-xs font-bold text-(--muted)">
+                    <span>Бүлгийн нэр</span>
+                    <input
+                      class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 font-normal text-(--ink)"
+                      required
+                      maxlength={80}
+                      value={field().state.value}
+                      onInput={(event) => field().handleChange(event.currentTarget.value)}
+                    />
+                  </label>
+                )}
+              </form.Field>
+              <form.Field name="valueLabels">
+                {(field) => (
+                  <label class="grid gap-1 text-xs font-bold text-(--muted)">
+                    <span>Утгын нэрс</span>
+                    <input
+                      class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 font-normal text-(--ink)"
+                      required
+                      value={field().state.value}
+                      onInput={(event) => field().handleChange(event.currentTarget.value)}
+                    />
+                  </label>
+                )}
+              </form.Field>
+              <div class="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={mutation.isPending || index() === 0}
+                  onClick={() => void move(-1)}
+                  aria-label={`${group.label} дээш`}
+                >
+                  ↑
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={mutation.isPending || index() === groups().length - 1}
+                  onClick={() => void move(1)}
+                  aria-label={`${group.label} доош`}
+                >
+                  ↓
+                </Button>
+                <Button type="submit" variant="secondary" disabled={mutation.isPending}>
+                  Нэр хадгалах
+                </Button>
+              </div>
+            </form>
+          );
+        }}
+      </For>
+      <Show when={mutation.isError}>
+        <p role="alert">{errorText}</p>
+      </Show>
+    </div>
+  );
+};
+
 const AddOptionGroupForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
@@ -52,7 +176,9 @@ const AddOptionGroupForm = (props: { product: Product }) => {
         .split(",")
         .map((entry) => entry.trim().split(":"))
         .filter((entry) => entry.length === 2 && entry[0] && entry[1]);
-      if (parsedValues.length === 0) return;
+      if (parsedValues.length === 0) {
+        return;
+      }
       const draft = currentDraft(props.product);
       const groupId = createOptionGroupId();
       await mutation.mutateAsync({
@@ -149,7 +275,9 @@ const AddVariantForm = (props: { product: Product }) => {
   const form = createForm(() => ({
     defaultValues: { optionValueIds: [] as OptionValueId[], priceOverrideMnt: "" },
     onSubmit: async ({ value }) => {
-      if (value.optionValueIds.length !== groups().length) return;
+      if (value.optionValueIds.length !== groups().length) {
+        return;
+      }
       const draft = currentDraft(props.product);
       await mutation.mutateAsync({
         kind: "save-options",
@@ -346,6 +474,7 @@ export const ProductVariantsForm = (props: { product: Product }) => (
         SKU автоматаар үүсэж, анхны нийтлэлтийн дараа сонголтын баримтууд түгжигдэнэ.
       </p>
     </div>
+    <OptionPresentationEditor product={props.product} />
     <Show when={props.product.state === "draft"}>
       <AddOptionGroupForm product={props.product} />
       <AddVariantForm product={props.product} />

@@ -1,5 +1,4 @@
 import type {
-  Product,
   ProductId,
   SaveProductOptionsInput,
   UpdateVariantPresentationInput,
@@ -8,6 +7,7 @@ import type {
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { findCatalogProductById } from "../catalog-reader/persistence";
+import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogVariantQueries } from "./persistence";
 
 export type CatalogVariantFailure = {
@@ -26,10 +26,14 @@ const authorized = (actor: StaffActor) =>
   hasStaffCapability(actor.role, "catalog_cms") &&
   hasStaffCapability(actor.role, "inventory_discounts");
 
-const changedProduct = async (productId: ProductId) => {
+const changedProduct = async (productId: ProductId, purge: boolean) => {
   const product = await findCatalogProductById(productId);
   return product
-    ? Result.ok<Product, never>(product)
+    ? Result.ok(
+        purge
+          ? await resolvePendingCatalogCachePurge(product)
+          : { product, cache: "not_required" as const, cachePurgeRequestId: null },
+      )
     : Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
 };
 
@@ -38,11 +42,13 @@ export const saveProductOptions = async (
   productId: ProductId,
   input: SaveProductOptionsInput,
 ) => {
-  if (!authorized(actor)) return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  if (!authorized(actor)) {
+    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  }
   try {
     const result = await catalogVariantQueries.saveConfiguration(productId, input);
     return result.kind === "changed"
-      ? changedProduct(productId)
+      ? changedProduct(productId, result.purge)
       : Result.err<never, CatalogVariantFailure>({ code: result.kind });
   } catch {
     return Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
@@ -55,11 +61,13 @@ export const updateVariantPresentation = async (
   variantId: VariantId,
   input: UpdateVariantPresentationInput,
 ) => {
-  if (!authorized(actor)) return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  if (!authorized(actor)) {
+    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  }
   try {
     const result = await catalogVariantQueries.updatePresentation(productId, variantId, input);
     return result.kind === "changed"
-      ? changedProduct(productId)
+      ? changedProduct(productId, true)
       : Result.err<never, CatalogVariantFailure>({ code: result.kind });
   } catch {
     return Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
@@ -72,11 +80,15 @@ export const setVariantState = async (
   variantId: VariantId,
   state: "active" | "archived",
 ) => {
-  if (!authorized(actor)) return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  if (!authorized(actor)) {
+    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
+  }
   try {
     if (state === "archived") {
       const product = await findCatalogProductById(productId);
-      if (!product) return Result.err<never, CatalogVariantFailure>({ code: "not_found" });
+      if (!product) {
+        return Result.err<never, CatalogVariantFailure>({ code: "not_found" });
+      }
       if (
         product.state !== "draft" &&
         product.optionConfiguration.variants.filter(
@@ -88,7 +100,7 @@ export const setVariantState = async (
     }
     const result = await catalogVariantQueries.transition(productId, variantId, state);
     return result.kind === "changed"
-      ? changedProduct(productId)
+      ? changedProduct(productId, true)
       : Result.err<never, CatalogVariantFailure>({ code: result.kind });
   } catch {
     return Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });

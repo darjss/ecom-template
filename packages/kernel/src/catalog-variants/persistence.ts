@@ -12,9 +12,10 @@ import {
   type UpdateVariantPresentationInput,
   type VariantId,
 } from "@ecom/contracts";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 import {
+  catalogCachePurgeDebts,
   catalogItemImages,
   catalogItems,
   optionGroups,
@@ -27,7 +28,7 @@ import {
 import { database } from "../db/database";
 import { compactSku, skuFromVariantId } from "../catalog/sku";
 
-const combinationKey = (valueIds: readonly string[]) => [...valueIds].sort().join("|");
+const combinationKey = (valueIds: readonly string[]) => [...valueIds].toSorted().join("|");
 
 export const readProductOptionConfiguration = async (productId: ProductId) => {
   const db = database();
@@ -105,6 +106,23 @@ export const readProductOptionConfiguration = async (productId: ProductId) => {
 
 const distinct = (values: readonly string[]) => new Set(values).size === values.length;
 
+const temporaryPositions = (
+  currentPositions: readonly number[],
+  nextPositions: readonly number[],
+) => {
+  const used = new Set([...currentPositions, ...nextPositions]);
+  return Array.from({ length: nextPositions.length }, () => {
+    const position = Array.from({ length: 100 }, (_, index) => 99 - index).find(
+      (candidate) => !used.has(candidate),
+    );
+    if (position === undefined) {
+      throw new Error("Bounded option positions are unavailable");
+    }
+    used.add(position);
+    return position;
+  });
+};
+
 export const catalogVariantQueries = {
   async validatePublication(productId: ProductId) {
     const configuration = await readProductOptionConfiguration(productId);
@@ -124,8 +142,9 @@ export const catalogVariantQueries = {
     if (
       explicit.length === 0 ||
       groups.some((group) => group.values.every(({ state }) => state !== "active"))
-    )
+    ) {
       return false;
+    }
     const combinations = explicit.map(({ optionValueIds }) => combinationKey(optionValueIds));
     return (
       distinct(combinations) &&
@@ -150,8 +169,9 @@ export const catalogVariantQueries = {
       .where(eq(catalogItems.id, productId))
       .limit(1);
     const product = productRows.at(0);
-    if (!product) return { kind: "not_found" as const };
-    if (product.publishedAt) return { kind: "immutable_configuration" as const };
+    if (!product) {
+      return { kind: "not_found" as const };
+    }
 
     const groups = input.groups.map((group) => ({
       ...group,
@@ -189,10 +209,12 @@ export const catalogVariantQueries = {
           !distinct(variant.optionValueIds) ||
           variant.optionValueIds.some((id) => !valueIds.has(id)),
       )
-    )
+    ) {
       return { kind: "invalid_combination" as const };
-    if (!distinct(requestedVariants.map(({ combinationKey: key }) => key)))
+    }
+    if (!distinct(requestedVariants.map(({ combinationKey: key }) => key))) {
       return { kind: "duplicate_combination" as const };
+    }
 
     const [ownedGroups, ownedValues, ownedVariants] = await Promise.all([
       groups.length === 0
@@ -239,8 +261,9 @@ export const catalogVariantQueries = {
               ),
             ),
     ]);
-    if (ownedGroups.length || ownedValues.length || ownedVariants.length)
+    if (ownedGroups.length || ownedValues.length || ownedVariants.length) {
       return { kind: "invalid_combination" as const };
+    }
     const imageIds = requestedVariants.flatMap(({ imageMediaAssetId }) =>
       imageMediaAssetId ? [imageMediaAssetId] : [],
     );
@@ -254,8 +277,128 @@ export const catalogVariantQueries = {
             inArray(catalogItemImages.mediaAssetId, imageIds),
           ),
         );
-      if (new Set(ownedImages.map(({ id }) => id)).size !== new Set(imageIds).size)
+      if (new Set(ownedImages.map(({ id }) => id)).size !== new Set(imageIds).size) {
         return { kind: "media_not_owned" as const };
+      }
+    }
+
+    if (product.publishedAt) {
+      const current = await readProductOptionConfiguration(productId);
+      const currentGroups = current.groups.filter(({ state }) => state === "active");
+      const currentValues = currentGroups.flatMap((group) =>
+        group.values
+          .filter(({ state }) => state === "active")
+          .map((value) => ({ ...value, optionGroupId: group.id })),
+      );
+      const currentVariants = current.variants.filter(({ isDefault }) => !isDefault);
+      const groupsMatch =
+        groups.length === currentGroups.length &&
+        groups.every((group) => currentGroups.find(({ id }) => id === group.id)?.key === group.key);
+      const valuesMatch =
+        values.length === currentValues.length &&
+        values.every((value) => {
+          const existing = currentValues.find(({ id }) => id === value.id);
+          return existing?.key === value.key && existing.optionGroupId === value.optionGroupId;
+        });
+      const variantsMatch =
+        requestedVariants.length === currentVariants.length &&
+        requestedVariants.every((variant) => {
+          const existing = currentVariants.find(({ id }) => id === variant.id);
+          return (
+            existing?.state === variant.state &&
+            existing.optionValueIds.toSorted().join("|") ===
+              variant.optionValueIds.toSorted().join("|")
+          );
+        });
+      if (!groupsMatch || !valuesMatch || !variantsMatch) {
+        return { kind: "immutable_configuration" as const };
+      }
+      const now = new Date();
+      const revision = crypto.randomUUID();
+      const groupTemporaryPositions = temporaryPositions(
+        currentGroups.map(({ position }) => position),
+        groups.map(({ position }) => position),
+      );
+      const prepareGroups = groups.map((group, index) =>
+        db
+          .update(optionGroups)
+          .set({ position: groupTemporaryPositions[index], updatedAt: now })
+          .where(and(eq(optionGroups.id, group.id), eq(optionGroups.productId, productId))),
+      );
+      const prepareValues = groups.flatMap((group) => {
+        const nextValues = values.filter(({ optionGroupId }) => optionGroupId === group.id);
+        const existingValues = currentValues.filter(
+          ({ optionGroupId }) => optionGroupId === group.id,
+        );
+        const positions = temporaryPositions(
+          existingValues.map(({ position }) => position),
+          nextValues.map(({ position }) => position),
+        );
+        return nextValues.map((value, index) =>
+          db
+            .update(optionValues)
+            .set({ position: positions[index], updatedAt: now })
+            .where(
+              and(
+                eq(optionValues.id, value.id),
+                eq(optionValues.optionGroupId, value.optionGroupId),
+              ),
+            ),
+        );
+      });
+      const groupUpdates = groups.map((group) =>
+        db
+          .update(optionGroups)
+          .set({ label: group.label, position: group.position, updatedAt: now })
+          .where(and(eq(optionGroups.id, group.id), eq(optionGroups.productId, productId))),
+      );
+      const valueUpdates = values.map((value) =>
+        db
+          .update(optionValues)
+          .set({ label: value.label, position: value.position, updatedAt: now })
+          .where(
+            and(eq(optionValues.id, value.id), eq(optionValues.optionGroupId, value.optionGroupId)),
+          ),
+      );
+      const variantUpdates = requestedVariants.map((variant) =>
+        db
+          .update(variants)
+          .set({
+            priceOverrideMnt: variant.priceOverrideMnt,
+            imageMediaAssetId: variant.imageMediaAssetId,
+            updatedAt: now,
+          })
+          .where(and(eq(variants.id, variant.id), eq(variants.productId, productId))),
+      );
+      const cacheDebt = db
+        .insert(catalogCachePurgeDebts)
+        .values({
+          productId,
+          revision,
+          attemptCount: 0,
+          requestId: null,
+          commandCommittedAt: now,
+          lastAttemptedAt: null,
+        })
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        });
+      await db.batch([
+        cacheDebt,
+        ...prepareGroups,
+        ...prepareValues,
+        ...groupUpdates,
+        ...valueUpdates,
+        ...variantUpdates,
+      ] as const);
+      return { kind: "changed" as const, purge: true as const };
     }
 
     const [currentGroups, existingVariants] = await Promise.all([
@@ -311,7 +454,7 @@ export const catalogVariantQueries = {
     ] as const;
     if (groups.length === 0) {
       await db.batch(base);
-      return { kind: "changed" as const };
+      return { kind: "changed" as const, purge: false as const };
     }
     const upsertGroups = db
       .insert(optionGroups)
@@ -377,7 +520,7 @@ export const catalogVariantQueries = {
         ...applyGroups,
         ...applyValues,
       ] as const);
-      return { kind: "changed" as const };
+      return { kind: "changed" as const, purge: false as const };
     }
     const retainedVariants = requestedVariants.filter(({ id }) => existingIds.has(id));
     const prepareVariants = retainedVariants.map((variant) =>
@@ -465,7 +608,7 @@ export const catalogVariantQueries = {
         insertMembership,
       ] as const);
     }
-    return { kind: "changed" as const };
+    return { kind: "changed" as const, purge: false as const };
   },
 
   async updatePresentation(
@@ -485,38 +628,109 @@ export const catalogVariantQueries = {
           ),
         )
         .limit(1);
-      if (!image.at(0)) return { kind: "media_not_owned" as const };
+      if (!image.at(0)) {
+        return { kind: "media_not_owned" as const };
+      }
     }
-    const changed = await db
-      .update(variants)
-      .set({
-        priceOverrideMnt: input.priceOverrideMnt,
-        imageMediaAssetId: input.imageMediaAssetId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(variants.id, variantId),
-          eq(variants.productId, productId),
-          eq(variants.isDefault, false),
-        ),
-      )
-      .returning({ id: variants.id });
-    return changed.length ? { kind: "changed" as const } : { kind: "not_found" as const };
+    const now = new Date();
+    const revision = crypto.randomUUID();
+    const variantPredicate = and(
+      eq(variants.id, variantId),
+      eq(variants.productId, productId),
+      eq(variants.isDefault, false),
+    );
+    const results = await db.batch([
+      db
+        .update(variants)
+        .set({
+          priceOverrideMnt: input.priceOverrideMnt,
+          imageMediaAssetId: input.imageMediaAssetId,
+          updatedAt: now,
+        })
+        .where(variantPredicate)
+        .returning({ id: variants.id }),
+      db
+        .insert(catalogCachePurgeDebts)
+        .select(
+          db
+            .select({
+              productId: sql<string>`${productId}`.as("product_id"),
+              revision: sql<string>`${revision}`.as("revision"),
+              attemptCount: sql<number>`0`.as("attempt_count"),
+              requestId: sql<null>`NULL`.as("request_id"),
+              commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+            })
+            .from(catalogItems)
+            .where(
+              and(
+                eq(catalogItems.id, productId),
+                ne(catalogItems.state, "draft"),
+                exists(db.select({ id: variants.id }).from(variants).where(variantPredicate)),
+              ),
+            ),
+        )
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        }),
+    ] as const);
+    return results[0].length ? { kind: "changed" as const } : { kind: "not_found" as const };
   },
 
   async transition(productId: ProductId, variantId: VariantId, state: "active" | "archived") {
-    const changed = await database()
-      .update(variants)
-      .set({ state, updatedAt: new Date() })
-      .where(
-        and(
-          eq(variants.id, variantId),
-          eq(variants.productId, productId),
-          eq(variants.isDefault, false),
-        ),
-      )
-      .returning({ id: variants.id });
-    return changed.length ? { kind: "changed" as const } : { kind: "not_found" as const };
+    const db = database();
+    const now = new Date();
+    const revision = crypto.randomUUID();
+    const variantPredicate = and(
+      eq(variants.id, variantId),
+      eq(variants.productId, productId),
+      eq(variants.isDefault, false),
+    );
+    const results = await db.batch([
+      db
+        .update(variants)
+        .set({ state, updatedAt: now })
+        .where(variantPredicate)
+        .returning({ id: variants.id }),
+      db
+        .insert(catalogCachePurgeDebts)
+        .select(
+          db
+            .select({
+              productId: sql<string>`${productId}`.as("product_id"),
+              revision: sql<string>`${revision}`.as("revision"),
+              attemptCount: sql<number>`0`.as("attempt_count"),
+              requestId: sql<null>`NULL`.as("request_id"),
+              commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+            })
+            .from(catalogItems)
+            .where(
+              and(
+                eq(catalogItems.id, productId),
+                ne(catalogItems.state, "draft"),
+                exists(db.select({ id: variants.id }).from(variants).where(variantPredicate)),
+              ),
+            ),
+        )
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        }),
+    ] as const);
+    return results[0].length ? { kind: "changed" as const } : { kind: "not_found" as const };
   },
 };

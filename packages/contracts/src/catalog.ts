@@ -114,7 +114,7 @@ export const OptionGroupSchema = v.strictObject({
   label: OptionLabelSchema,
   position: OptionPositionSchema,
   state: v.picklist(["active", "archived"]),
-  values: v.array(OptionValueSchema),
+  values: v.pipe(v.array(OptionValueSchema), v.maxLength(12)),
 });
 export const VariantSchema = v.strictObject({
   id: VariantIdSchema,
@@ -129,8 +129,8 @@ export const VariantSchema = v.strictObject({
   reservedQuantity: InventoryQuantitySchema,
 });
 export const ProductOptionConfigurationSchema = v.strictObject({
-  groups: v.array(OptionGroupSchema),
-  variants: v.array(VariantSchema),
+  groups: v.pipe(v.array(OptionGroupSchema), v.maxLength(3)),
+  variants: v.pipe(v.array(VariantSchema), v.maxLength(101)),
 });
 
 export const ProductSchema = v.strictObject({
@@ -284,18 +284,21 @@ export const PublicOptionGroupSchema = v.strictObject({
   id: OptionGroupIdSchema,
   label: OptionLabelSchema,
   position: OptionPositionSchema,
-  values: v.array(
-    v.strictObject({
-      id: OptionValueIdSchema,
-      label: OptionLabelSchema,
-      position: OptionPositionSchema,
-    }),
+  values: v.pipe(
+    v.array(
+      v.strictObject({
+        id: OptionValueIdSchema,
+        label: OptionLabelSchema,
+        position: OptionPositionSchema,
+      }),
+    ),
+    v.maxLength(12),
   ),
 });
 export const PublicProductDetailSchema = v.strictObject({
   ...PublicProductSummarySchema.entries,
-  optionGroups: v.array(PublicOptionGroupSchema),
-  variants: v.pipe(v.array(PublicVariantSchema), v.minLength(1)),
+  optionGroups: v.pipe(v.array(PublicOptionGroupSchema), v.maxLength(3)),
+  variants: v.pipe(v.array(PublicVariantSchema), v.minLength(1), v.maxLength(100)),
 });
 
 export type ProductId = v.InferOutput<typeof ProductIdSchema>;

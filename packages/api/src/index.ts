@@ -429,13 +429,13 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         return status(422, apiError("validation", "Valid bounded Product options are required"));
       }
       const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) return authorization.response;
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
       const result = await saveProductOptions(authorization.actor, id.output, input.output);
       return result.isErr()
         ? catalogError(result.error, status)
-        : v.parse(CatalogProductResponseSchema, {
-            data: { product: result.value, cache: "not_required", cachePurgeRequestId: null },
-          });
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
     })
     .patch(
       "/catalog/products/:id/variants/:variantId",
@@ -447,7 +447,9 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           return status(422, apiError("validation", "Valid Variant presentation is required"));
         }
         const authorization = await authorizeRoute(request, definition, status);
-        if (!authorization.authorized) return authorization.response;
+        if (!authorization.authorized) {
+          return authorization.response;
+        }
         const result = await updateVariantPresentation(
           authorization.actor,
           id.output,
@@ -456,9 +458,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         );
         return result.isErr()
           ? catalogError(result.error, status)
-          : v.parse(CatalogProductResponseSchema, {
-              data: { product: result.value, cache: "not_required", cachePurgeRequestId: null },
-            });
+          : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
     .post(
@@ -471,7 +471,9 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           return status(422, apiError("validation", "Valid Variant lifecycle facts are required"));
         }
         const authorization = await authorizeRoute(request, definition, status);
-        if (!authorization.authorized) return authorization.response;
+        if (!authorization.authorized) {
+          return authorization.response;
+        }
         const result = await setVariantState(
           authorization.actor,
           id.output,
@@ -480,9 +482,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         );
         return result.isErr()
           ? catalogError(result.error, status)
-          : v.parse(CatalogProductResponseSchema, {
-              data: { product: result.value, cache: "not_required", cachePurgeRequestId: null },
-            });
+          : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
     .post("/catalog/products/:id/images", async ({ body, params, request, status }) => {

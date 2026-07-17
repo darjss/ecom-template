@@ -4,9 +4,7 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 const money = new Intl.NumberFormat("mn-MN");
 
 export const ProductVariantSelector = (props: { product: PublicProductDetail }) => {
-  const [selectedVariantId, setSelectedVariantId] = createSignal(
-    props.product.variants[0]?.id ?? "",
-  );
+  const [selectedVariantId, setSelectedVariantId] = createSignal("");
   const selectedVariant = createMemo(
     () =>
       props.product.variants.find(({ id }) => id === selectedVariantId()) ??
@@ -35,7 +33,9 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
       variant.optionValues.some((value) => value.groupId === groupId && value.valueId === valueId),
     );
     const next = exact ?? fallback;
-    if (next) setSelectedVariantId(next.id);
+    if (next) {
+      setSelectedVariantId(next.id);
+    }
   };
   const image = createMemo(() => selectedVariant()?.image ?? props.product.images[0] ?? null);
 
