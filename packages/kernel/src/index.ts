@@ -1,6 +1,10 @@
 export { signOutCustomer } from "./auth/customer-runtime";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
-export { attachCatalogImage, readCatalogMedia, type CatalogMediaFailure } from "./catalog/media";
+export {
+  attachCatalogImage,
+  readCatalogMedia,
+  type CatalogMediaFailure,
+} from "./catalog-media/operations";
 export {
   adjustProductInventory,
   createProduct,

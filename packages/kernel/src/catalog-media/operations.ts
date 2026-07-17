@@ -11,9 +11,9 @@ import {
 import { Result } from "better-result";
 import { env } from "cloudflare:workers";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { resolvePendingCatalogCachePurge } from "./cache";
-import { catalogMediaQueries } from "./media-persistence";
-import { catalogQueries } from "./persistence";
+import { resolvePendingCatalogCachePurge } from "../catalog/cache";
+import { catalogQueries } from "../catalog/persistence";
+import { catalogMediaQueries } from "./persistence";
 
 export type CatalogMediaFailure = {
   readonly code:

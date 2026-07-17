@@ -10,7 +10,7 @@ import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
-import { catalogMediaQueries } from "../catalog/media-persistence";
+import { catalogMediaQueries } from "../catalog-media/persistence";
 
 const ReturnedProductSchema = v.strictObject({
   id: v.string(),
