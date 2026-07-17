@@ -12,7 +12,8 @@ import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story"]);
-const publicCatalogPath = /^\/(?:products|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const publicCatalogPath =
+  /^\/(?:products|bundles|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const privateCatalogImageUploadPath = /^\/api\/catalog\/products\/[^/]+\/images$/;
 const isPublicStorefrontPath = (pathname: string) =>
   publicStorefrontPaths.has(pathname) || publicCatalogPath.test(pathname);
