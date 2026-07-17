@@ -222,21 +222,20 @@ export const cleanupStaffUserSessions = async (
     v.array(StaffCleanupSessionSchema),
     await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
   );
-  if (!sessions.success || sessions.output.length > staffSessionCleanupLimit) {
+  if (!sessions.success) {
     return false;
   }
-  for (const session of sessions.output) {
-    if (requiresDeletion(session.generation)) {
-      await adapter.deleteSession(session.token);
-    }
+  const targets = sessions.output
+    .filter((session) => requiresDeletion(session.generation))
+    .slice(0, staffSessionCleanupLimit);
+  for (const session of targets) {
+    await adapter.deleteSession(session.token);
   }
   const remaining = v.safeParse(
     v.array(StaffCleanupSessionSchema),
     await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
   );
   return (
-    remaining.success &&
-    remaining.output.length <= staffSessionCleanupLimit &&
-    remaining.output.every((session) => !requiresDeletion(session.generation))
+    remaining.success && remaining.output.every((session) => !requiresDeletion(session.generation))
   );
 };
