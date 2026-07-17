@@ -229,6 +229,9 @@ importers:
       json-canonicalize:
         specifier: 2.0.0
         version: 2.0.0
+      ky:
+        specifier: 2.0.2
+        version: 2.0.2
       valibot:
         specifier: 1.4.2
         version: 1.4.2(typescript@7.0.2)
@@ -4632,6 +4635,10 @@ packages:
 
   known-css-properties@0.30.0:
     resolution: {integrity: sha512-VSWXYUnsPu9+WYKkfmJyLKtIvaRJi1kXUqVmBACORXZQxT5oZDsoZ2vQP+bQFDnWtpI/4eq3MLoRMjI2fnLzTQ==}
+
+  ky@2.0.2:
+    resolution: {integrity: sha512-/GmXpo9F9W+f8n4Ivr2iH+7h7wL7jLbLKWkMlpflcCRb6kGjBfTlASEXaZ9qUgNTn4VgS0P2pwxxzQ4EM6Ulgg==}
+    engines: {node: '>=22'}
 
   kysely@0.28.17:
     resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
@@ -9992,6 +9999,8 @@ snapshots:
       zod: 4.4.3
 
   known-css-properties@0.30.0: {}
+
+  ky@2.0.2: {}
 
   kysely@0.28.17: {}
 

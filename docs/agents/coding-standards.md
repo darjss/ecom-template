@@ -86,9 +86,9 @@ Astro performs consolidated Storefront server reads directly in-process. Do not 
 
 ## Dependencies and presentation
 
-Use native APIs for simple work and `es-toolkit` for real generic operations. Use specialized baseline dependencies only at their owning seams: `dismatch` for union matching, `json-canonicalize` for idempotency hashing, Culori for Theme colors, Micromark for constrained CMS Markdown, and Solid Primitives for reactive persistence. Do not add a competing utility, validation, Result, state, date, icon, motion, logging, or matching library without review.
+Use native APIs for simple work and `es-toolkit` for real generic operations. Use specialized baseline dependencies only at their owning seams: `dismatch` for union matching, `json-canonicalize` for idempotency hashing, Culori for Theme colors, Micromark for constrained CMS Markdown, Solid Primitives for reactive persistence, and Ky for handwritten outbound HTTP. Ky is the sole handwritten outbound HTTP client; framework fetch handlers and transports remain framework interfaces. Treat external response bodies as unknown until Valibot parses them, and enable retries only when the owning business operation permits replay. Do not add a competing utility, validation, Result, state, date, icon, motion, logging, HTTP, or matching library without review.
 
-Use Solid, never React. Start with Zaidan, Kobalte, and Corvu primitives. Solar Icons is the controlled icon family. Astro View Transitions carry route continuity; Motion handles local feedback. Motion never delays input, obscures information, or becomes commerce state, and it always has reduced-motion behavior.
+Use Solid, never React. Start with Zaidan, Kobalte, and Corvu primitives. Solar Icons is the controlled icon family. Tailwind v4 utilities are mandatory for application and component styling. Raw CSS is limited to global theme, token, and base output or capabilities Tailwind cannot express; never use it for page or component styles or relocated utility rules. Prefer established tokens and utilities over arbitrary values. Astro View Transitions carry route continuity; Motion handles local feedback. Motion never delays input, obscures information, or becomes commerce state, and it always has reduced-motion behavior.
 
 ## Comments, privacy, and proof
 
