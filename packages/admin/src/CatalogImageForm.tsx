@@ -70,10 +70,10 @@ export const CatalogImageForm = (props: { product: Product }) => {
       >
         <form.Field name="file">
           {(field) => (
-            <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+            <label class="grid min-w-0 gap-1.5 text-xs font-bold text-(--muted)">
               <span>JPEG, PNG эсвэл WebP · 8 MB хүртэл</span>
               <input
-                class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink) file:mr-3 file:rounded-md file:border-0 file:bg-(--surface) file:px-3 file:py-1.5 file:font-bold file:text-(--ink)"
+                class="min-h-11 w-full min-w-0 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink) file:mr-3 file:rounded-md file:border-0 file:bg-(--surface) file:px-3 file:py-1.5 file:font-bold file:text-(--ink)"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 required
