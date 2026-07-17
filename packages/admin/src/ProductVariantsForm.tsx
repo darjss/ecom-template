@@ -41,6 +41,14 @@ const currentDraft = (product: Product) => ({
 });
 
 const errorText = "Сонголтын мэдээллийг хадгалж чадсангүй.";
+const optionValueEntries = (value: string) => {
+  const entries = value.split(",").map((entry) => entry.trim().split(":"));
+  return entries.length > 0 && entries.every((entry) => entry.length === 2 && entry[0] && entry[1])
+    ? entries
+    : undefined;
+};
+const optionValueEntryError = (value: string) =>
+  optionValueEntries(value) ? undefined : "Дор хаяж нэг утгыг key:Нэр хэлбэрээр оруулна уу.";
 
 const OptionPresentationEditor = (props: { product: Product }) => {
   const queryClient = useQueryClient();
@@ -172,11 +180,8 @@ const AddOptionGroupForm = (props: { product: Product }) => {
   const form = createForm(() => ({
     defaultValues: { key: "", label: "", values: "" },
     onSubmit: async ({ value }) => {
-      const parsedValues = value.values
-        .split(",")
-        .map((entry) => entry.trim().split(":"))
-        .filter((entry) => entry.length === 2 && entry[0] && entry[1]);
-      if (parsedValues.length === 0) {
+      const parsedValues = optionValueEntries(value.values);
+      if (!parsedValues) {
         return;
       }
       const draft = currentDraft(props.product);
@@ -240,16 +245,24 @@ const AddOptionGroupForm = (props: { product: Product }) => {
           </label>
         )}
       </form.Field>
-      <form.Field name="values">
+      <form.Field
+        name="values"
+        validators={{
+          onChange: ({ value }) => optionValueEntryError(value),
+          onSubmit: ({ value }) => optionValueEntryError(value),
+        }}
+      >
         {(field) => (
           <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Утгууд (red:Улаан, blue:Цэнхэр)</span>
             <input
               class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 font-normal text-(--ink)"
-              required
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}
             />
+            <Show when={field().state.meta.errors[0]} keyed>
+              {(error) => <span role="alert">{String(error)}</span>}
+            </Show>
           </label>
         )}
       </form.Field>
@@ -272,6 +285,8 @@ const AddVariantForm = (props: { product: Product }) => {
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
   const groups = () =>
     props.product.optionConfiguration.groups.filter(({ state }) => state === "active");
+  const selectionError = (value: OptionValueId[]) =>
+    groups().every((_, index) => value[index]) ? undefined : "Бүлэг бүрээс нэг утга сонгоно уу.";
   const form = createForm(() => ({
     defaultValues: { optionValueIds: [] as OptionValueId[], priceOverrideMnt: "" },
     onSubmit: async ({ value }) => {
@@ -304,33 +319,47 @@ const AddVariantForm = (props: { product: Product }) => {
         await form.handleSubmit();
       }}
     >
-      <form.Field name="optionValueIds">
+      <form.Field
+        name="optionValueIds"
+        validators={{
+          onChange: ({ value }) => selectionError(value),
+          onSubmit: ({ value }) => selectionError(value),
+        }}
+      >
         {(field) => (
-          <For each={groups()}>
-            {(group, index) => (
-              <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
-                <span>{group.label}</span>
-                <select
-                  class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 text-(--ink)"
-                  required
-                  value={field().state.value[index()] ?? ""}
-                  onChange={(event) => {
-                    const parsed = v.safeParse(OptionValueIdSchema, event.currentTarget.value);
-                    if (parsed.success) {
-                      const next = [...field().state.value];
-                      next[index()] = parsed.output;
-                      field().handleChange(next);
-                    }
-                  }}
-                >
-                  <option value="">Сонгох</option>
-                  <For each={group.values.filter(({ state }) => state === "active")}>
-                    {(value) => <option value={value.id}>{value.label}</option>}
-                  </For>
-                </select>
-              </label>
-            )}
-          </For>
+          <>
+            <For each={groups()}>
+              {(group, index) => (
+                <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+                  <span>{group.label}</span>
+                  <select
+                    class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 text-(--ink)"
+                    value={field().state.value[index()] ?? ""}
+                    onChange={(event) => {
+                      const parsed = v.safeParse(OptionValueIdSchema, event.currentTarget.value);
+                      if (parsed.success) {
+                        const next = [...field().state.value];
+                        next[index()] = parsed.output;
+                        field().handleChange(next);
+                      }
+                    }}
+                  >
+                    <option value="">Сонгох</option>
+                    <For each={group.values.filter(({ state }) => state === "active")}>
+                      {(value) => <option value={value.id}>{value.label}</option>}
+                    </For>
+                  </select>
+                </label>
+              )}
+            </For>
+            <Show when={field().state.meta.errors[0]} keyed>
+              {(error) => (
+                <p class="m-0 text-sm" role="alert">
+                  {String(error)}
+                </p>
+              )}
+            </Show>
+          </>
         )}
       </form.Field>
       <form.Field name="priceOverrideMnt">

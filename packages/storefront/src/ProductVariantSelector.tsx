@@ -29,12 +29,8 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
             ),
         ),
     );
-    const fallback = props.product.variants.find((variant) =>
-      variant.optionValues.some((value) => value.groupId === groupId && value.valueId === valueId),
-    );
-    const next = exact ?? fallback;
-    if (next) {
-      setSelectedVariantId(next.id);
+    if (exact) {
+      setSelectedVariantId(exact.id);
     }
   };
   const image = createMemo(() => selectedVariant()?.image ?? props.product.images[0] ?? null);
@@ -60,13 +56,25 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
               <For each={group.values}>
                 {(value) => {
                   const isSelected = () => selectedValueId(group.id) === value.id;
-                  const isSold = () =>
-                    props.product.variants.some((variant) =>
-                      variant.optionValues.some(
-                        (selection) =>
-                          selection.groupId === group.id && selection.valueId === value.id,
-                      ),
+                  const isCompatible = () => {
+                    const current = selectedVariant();
+                    return props.product.variants.some(
+                      (variant) =>
+                        variant.optionValues.some(
+                          (selection) =>
+                            selection.groupId === group.id && selection.valueId === value.id,
+                        ) &&
+                        current?.optionValues.every(
+                          (selection) =>
+                            selection.groupId === group.id ||
+                            variant.optionValues.some(
+                              (candidate) =>
+                                candidate.groupId === selection.groupId &&
+                                candidate.valueId === selection.valueId,
+                            ),
+                        ),
                     );
+                  };
                   return (
                     <button
                       type="button"
@@ -75,7 +83,7 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
                         "border-(--tomato) bg-(--tomato) text-white": isSelected(),
                         "border-black/25 bg-white text-(--ink)": !isSelected(),
                       }}
-                      disabled={!isSold()}
+                      disabled={!isCompatible()}
                       aria-pressed={isSelected()}
                       onClick={() => selectValue(group.id, value.id)}
                     >

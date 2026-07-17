@@ -14,7 +14,10 @@ import * as v from "valibot";
 import { database } from "../db/database";
 import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
-import { readProductOptionConfiguration } from "../catalog-variants/persistence";
+import {
+  readProductOptionConfiguration,
+  readProductOptionConfigurations,
+} from "../catalog-variants/persistence";
 
 const ReturnedProductSchema = v.strictObject({
   id: v.string(),
@@ -143,20 +146,25 @@ export const catalogReaderQueries = {
 
   async listAll() {
     const rows = await productQuery().orderBy(desc(catalogItems.createdAt));
-    return Promise.all(
-      rows.map(async (row) => {
-        const id = v.parse(ProductIdSchema, row.id);
-        const [images, optionConfiguration] = await Promise.all([
-          catalogMediaQueries.listForCatalogItems([id]),
-          readProductOptionConfiguration(id),
-        ]);
-        return projectProduct(
-          row,
-          images.map(({ image }) => image),
-          optionConfiguration,
-        );
-      }),
-    );
+    const ids = rows.map((row) => v.parse(ProductIdSchema, row.id));
+    const [images, configurations] = await Promise.all([
+      catalogMediaQueries.listForCatalogItems(ids),
+      readProductOptionConfigurations(ids),
+    ]);
+    return rows.map((row) => {
+      const id = v.parse(ProductIdSchema, row.id);
+      const optionConfiguration = configurations.find(
+        ({ productId }) => productId === id,
+      )?.configuration;
+      if (!optionConfiguration) {
+        throw new Error("Product option configuration is unavailable");
+      }
+      return projectProduct(
+        row,
+        images.filter(({ catalogItemId }) => catalogItemId === id).map(({ image }) => image),
+        optionConfiguration,
+      );
+    });
   },
 
   async listPublished() {

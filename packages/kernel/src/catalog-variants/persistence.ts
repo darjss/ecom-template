@@ -7,6 +7,7 @@ import {
   createOptionValueId,
   createStockItemId,
   createVariantId,
+  type Product,
   type ProductId,
   type SaveProductOptionsInput,
   type UpdateVariantPresentationInput,
@@ -31,16 +32,20 @@ import { compactSku, skuFromVariantId } from "../catalog/sku";
 
 const combinationKey = (valueIds: readonly string[]) => [...valueIds].toSorted().join("|");
 
-export const readProductOptionConfiguration = async (productId: ProductId) => {
+export const readProductOptionConfigurations = async (productIds: readonly ProductId[]) => {
+  if (productIds.length === 0) {
+    return [];
+  }
   const db = database();
   const [groupRows, valueRows, variantRows, membershipRows] = await Promise.all([
     db
       .select()
       .from(optionGroups)
-      .where(eq(optionGroups.productId, productId))
+      .where(inArray(optionGroups.productId, productIds))
       .orderBy(asc(optionGroups.position)),
     db
       .select({
+        productId: optionGroups.productId,
         id: optionValues.id,
         optionGroupId: optionValues.optionGroupId,
         key: optionValues.key,
@@ -50,10 +55,11 @@ export const readProductOptionConfiguration = async (productId: ProductId) => {
       })
       .from(optionValues)
       .innerJoin(optionGroups, eq(optionGroups.id, optionValues.optionGroupId))
-      .where(eq(optionGroups.productId, productId))
+      .where(inArray(optionGroups.productId, productIds))
       .orderBy(asc(optionValues.position)),
     db
       .select({
+        productId: variants.productId,
         id: variants.id,
         sku: skus.sku,
         isDefault: variants.isDefault,
@@ -67,42 +73,59 @@ export const readProductOptionConfiguration = async (productId: ProductId) => {
       .from(variants)
       .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
-      .where(eq(variants.productId, productId))
+      .where(inArray(variants.productId, productIds))
       .orderBy(asc(variants.createdAt)),
     db
       .select({
+        productId: variants.productId,
         variantId: variantOptionValues.variantId,
         optionValueId: variantOptionValues.optionValueId,
       })
       .from(variantOptionValues)
       .innerJoin(variants, eq(variants.id, variantOptionValues.variantId))
-      .where(eq(variants.productId, productId)),
+      .where(inArray(variants.productId, productIds)),
   ]);
-  return v.parse(ProductOptionConfigurationSchema, {
-    groups: groupRows.map((group) => ({
-      id: v.parse(OptionGroupIdSchema, group.id),
-      key: group.key,
-      label: group.label,
-      position: group.position,
-      state: group.state,
-      values: valueRows
-        .filter((value) => value.optionGroupId === group.id)
-        .map((value) => ({
-          id: v.parse(OptionValueIdSchema, value.id),
-          key: value.key,
-          label: value.label,
-          position: value.position,
-          state: value.state,
+  return productIds.map((productId) => ({
+    productId,
+    configuration: v.parse(ProductOptionConfigurationSchema, {
+      groups: groupRows
+        .filter((group) => group.productId === productId)
+        .map((group) => ({
+          id: v.parse(OptionGroupIdSchema, group.id),
+          key: group.key,
+          label: group.label,
+          position: group.position,
+          state: group.state,
+          values: valueRows
+            .filter((value) => value.optionGroupId === group.id)
+            .map((value) => ({
+              id: v.parse(OptionValueIdSchema, value.id),
+              key: value.key,
+              label: value.label,
+              position: value.position,
+              state: value.state,
+            })),
         })),
-    })),
-    variants: variantRows.map((variant) => ({
-      ...variant,
-      id: v.parse(VariantIdSchema, variant.id),
-      optionValueIds: membershipRows
-        .filter((membership) => membership.variantId === variant.id)
-        .map((membership) => v.parse(OptionValueIdSchema, membership.optionValueId)),
-    })),
-  });
+      variants: variantRows
+        .filter((variant) => variant.productId === productId)
+        .map(({ productId: _productId, ...variant }) => ({
+          ...variant,
+          id: v.parse(VariantIdSchema, variant.id),
+          optionValueIds: membershipRows
+            .filter((membership) => membership.variantId === variant.id)
+            .map((membership) => v.parse(OptionValueIdSchema, membership.optionValueId)),
+        })),
+    }) satisfies Product["optionConfiguration"],
+  }));
+};
+
+export const readProductOptionConfiguration = async (productId: ProductId) => {
+  const configurations = await readProductOptionConfigurations([productId]);
+  const configuration = configurations.at(0);
+  if (!configuration) {
+    throw new Error("Product option configuration is unavailable");
+  }
+  return configuration.configuration;
 };
 
 const distinct = (values: readonly string[]) => new Set(values).size === values.length;
@@ -164,11 +187,18 @@ export const catalogVariantQueries = {
 
   async saveConfiguration(productId: ProductId, input: SaveProductOptionsInput) {
     const db = database();
-    const productRows = await db
-      .select({ publishedAt: catalogItems.publishedAt })
-      .from(catalogItems)
-      .where(eq(catalogItems.id, productId))
-      .limit(1);
+    const [productRows, defaultVariantRows] = await Promise.all([
+      db
+        .select({ publishedAt: catalogItems.publishedAt })
+        .from(catalogItems)
+        .where(eq(catalogItems.id, productId))
+        .limit(1),
+      db
+        .select({ id: variants.id })
+        .from(variants)
+        .where(and(eq(variants.productId, productId), eq(variants.isDefault, true)))
+        .limit(1),
+    ]);
     const product = productRows.at(0);
     if (!product) {
       return { kind: "not_found" as const };
@@ -199,11 +229,21 @@ export const catalogVariantQueries = {
       return { kind: "invalid_combination" as const };
     }
     const valueIds = new Set(values.map(({ id }) => id));
-    const requestedVariants = input.variants.map((variant) => ({
-      ...variant,
-      id: variant.id ?? createVariantId(),
-      combinationKey: combinationKey(variant.optionValueIds),
-    }));
+    const defaultVariantId = defaultVariantRows.at(0)?.id;
+    if (input.variants.some(({ id }) => id === defaultVariantId)) {
+      return { kind: "invalid_combination" as const };
+    }
+    const requestedVariants = input.variants.map((variant) => {
+      const id = variant.id ?? createVariantId();
+      return {
+        ...variant,
+        id,
+        combinationKey:
+          variant.optionValueIds.length === 0
+            ? `__incomplete__:${id}`
+            : combinationKey(variant.optionValueIds),
+      };
+    });
     if (
       requestedVariants.some(
         (variant) =>
@@ -283,7 +323,7 @@ export const catalogVariantQueries = {
       }
     }
 
-    if (product.publishedAt) {
+    const savePublishedPresentation = async () => {
       const current = await readProductOptionConfiguration(productId);
       const currentGroups = current.groups.filter(({ state }) => state === "active");
       const currentValues = currentGroups.flatMap((group) =>
@@ -400,216 +440,216 @@ export const catalogVariantQueries = {
         ...variantUpdates,
       ] as const);
       return { kind: "changed" as const, purge: true as const };
-    }
+    };
 
-    const [currentGroups, existingVariants] = await Promise.all([
-      db
-        .select({ id: optionGroups.id })
-        .from(optionGroups)
-        .where(eq(optionGroups.productId, productId)),
-      db
-        .select({ id: variants.id })
-        .from(variants)
-        .where(and(eq(variants.productId, productId), eq(variants.isDefault, false))),
-    ]);
-    const existingIds = new Set(existingVariants.map(({ id }) => id));
-    const newVariants = requestedVariants.filter(({ id }) => !existingIds.has(id));
-    const now = new Date();
-    const archiveGroups = db
-      .update(optionGroups)
-      .set({ state: "archived", updatedAt: now })
-      .where(eq(optionGroups.productId, productId));
-    const archiveValues = db
-      .update(optionValues)
-      .set({ state: "archived", updatedAt: now })
-      .where(
-        inArray(
-          optionValues.optionGroupId,
-          currentGroups.length ? currentGroups.map(({ id }) => id) : ["missing"],
-        ),
+    const replaceDraftConfiguration = async () => {
+      const [currentGroups, existingVariants] = await Promise.all([
+        db
+          .select({ id: optionGroups.id })
+          .from(optionGroups)
+          .where(eq(optionGroups.productId, productId)),
+        db
+          .select({ id: variants.id })
+          .from(variants)
+          .where(and(eq(variants.productId, productId), eq(variants.isDefault, false))),
+      ]);
+      const existingIds = new Set(existingVariants.map(({ id }) => id));
+      const retainedVariants = requestedVariants.filter(({ id }) => existingIds.has(id));
+      const newVariants = requestedVariants.filter(({ id }) => !existingIds.has(id));
+      const now = new Date();
+      const draftPredicate = and(eq(catalogItems.id, productId), eq(catalogItems.state, "draft"));
+      const draftExists = exists(
+        db.select({ id: catalogItems.id }).from(catalogItems).where(draftPredicate),
       );
-    const archiveVariants = db
-      .update(variants)
-      .set({ state: "archived", updatedAt: now })
-      .where(and(eq(variants.productId, productId), eq(variants.isDefault, false)));
-    const defaultState = groups.length === 0 ? "active" : "archived";
-    const updateDefault = db
-      .update(variants)
-      .set({ state: defaultState, updatedAt: now })
-      .where(and(eq(variants.productId, productId), eq(variants.isDefault, true)));
-    const clearMembership = db
-      .delete(variantOptionValues)
-      .where(
-        inArray(
-          variantOptionValues.variantId,
-          existingVariants.length ? existingVariants.map(({ id }) => id) : ["missing"],
-        ),
-      );
-
-    const base = [
-      archiveGroups,
-      archiveValues,
-      archiveVariants,
-      updateDefault,
-      clearMembership,
-    ] as const;
-    if (groups.length === 0) {
-      await db.batch(base);
-      return { kind: "changed" as const, purge: false as const };
-    }
-    const upsertGroups = db
-      .insert(optionGroups)
-      .values(
-        groups.map((group) => ({
-          id: group.id,
-          productId,
-          key: group.key,
-          label: group.label,
-          position: group.position,
-          state: "active" as const,
-          createdAt: now,
-          updatedAt: now,
-        })),
-      )
-      .onConflictDoUpdate({ target: optionGroups.id, set: { state: "active", updatedAt: now } });
-    const upsertValues = db
-      .insert(optionValues)
-      .values(
-        values.map((value) => ({
-          id: value.id,
-          optionGroupId: value.optionGroupId,
-          key: value.key,
-          label: value.label,
-          position: value.position,
-          state: "active" as const,
-          createdAt: now,
-          updatedAt: now,
-        })),
-      )
-      .onConflictDoUpdate({ target: optionValues.id, set: { state: "active", updatedAt: now } });
-    const applyGroups = groups.map((group) =>
-      db
-        .update(optionGroups)
-        .set({
-          key: group.key,
-          label: group.label,
-          position: group.position,
-          state: "active",
-          updatedAt: now,
-        })
-        .where(and(eq(optionGroups.id, group.id), eq(optionGroups.productId, productId))),
-    );
-    const applyValues = values.map((value) =>
-      db
-        .update(optionValues)
-        .set({
-          key: value.key,
-          label: value.label,
-          position: value.position,
-          state: "active",
-          updatedAt: now,
-        })
+      const guardDraft = db
+        .update(catalogItems)
+        .set({ updatedAt: now })
+        .where(draftPredicate)
+        .returning({ id: catalogItems.id });
+      const clearMembership = db
+        .delete(variantOptionValues)
         .where(
-          and(eq(optionValues.id, value.id), eq(optionValues.optionGroupId, value.optionGroupId)),
+          and(
+            inArray(
+              variantOptionValues.variantId,
+              existingVariants.length ? existingVariants.map(({ id }) => id) : ["missing"],
+            ),
+            draftExists,
+          ),
+        );
+      const deleteValues = db
+        .delete(optionValues)
+        .where(
+          and(
+            inArray(
+              optionValues.optionGroupId,
+              currentGroups.length ? currentGroups.map(({ id }) => id) : ["missing"],
+            ),
+            draftExists,
+          ),
+        );
+      const deleteGroups = db
+        .delete(optionGroups)
+        .where(and(eq(optionGroups.productId, productId), draftExists));
+      const archiveVariants = db
+        .update(variants)
+        .set({ state: "archived", updatedAt: now })
+        .where(and(eq(variants.productId, productId), eq(variants.isDefault, false), draftExists));
+      const defaultState = groups.length === 0 ? "active" : "archived";
+      const updateDefault = db
+        .update(variants)
+        .set({ state: defaultState, updatedAt: now })
+        .where(and(eq(variants.productId, productId), eq(variants.isDefault, true), draftExists));
+      const base = [
+        guardDraft,
+        clearMembership,
+        deleteValues,
+        deleteGroups,
+        archiveVariants,
+        updateDefault,
+      ] as const;
+      if (groups.length === 0) {
+        const results = await db.batch(base);
+        return results[0].length
+          ? { kind: "changed" as const, purge: false as const }
+          : { kind: "immutable_configuration" as const };
+      }
+      const insertGroups = groups.map((group) =>
+        db.insert(optionGroups).select(
+          db
+            .select({
+              id: sql<string>`${group.id}`.as("id"),
+              productId: sql<string>`${productId}`.as("product_id"),
+              key: sql<string>`${group.key}`.as("key"),
+              label: sql<string>`${group.label}`.as("label"),
+              position: sql<number>`${group.position}`.as("position"),
+              state: sql<"active">`'active'`.as("state"),
+              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
         ),
-    );
-    if (requestedVariants.length === 0) {
-      await db.batch([
-        ...base,
-        upsertGroups,
-        upsertValues,
-        ...applyGroups,
-        ...applyValues,
-      ] as const);
-      return { kind: "changed" as const, purge: false as const };
-    }
-    const retainedVariants = requestedVariants.filter(({ id }) => existingIds.has(id));
-    const prepareVariants = retainedVariants.map((variant) =>
-      db
-        .update(variants)
-        .set({ combinationKey: `editing:${variant.id}`, updatedAt: now })
-        .where(and(eq(variants.id, variant.id), eq(variants.productId, productId))),
-    );
-    const applyVariants = retainedVariants.map((variant) =>
-      db
-        .update(variants)
-        .set({
-          combinationKey: variant.combinationKey,
-          priceOverrideMnt: variant.priceOverrideMnt,
-          imageMediaAssetId: variant.imageMediaAssetId,
-          state: variant.state,
-          updatedAt: now,
-        })
-        .where(and(eq(variants.id, variant.id), eq(variants.productId, productId))),
-    );
-    const membership = requestedVariants.flatMap((variant) =>
-      variant.optionValueIds.map((optionValueId) => ({ variantId: variant.id, optionValueId })),
-    );
-    const insertMembership = db.insert(variantOptionValues).values(membership);
-    if (newVariants.length === 0) {
-      await db.batch([
-        ...base,
-        upsertGroups,
-        upsertValues,
-        ...applyGroups,
-        ...applyValues,
-        ...prepareVariants,
-        ...applyVariants,
-        insertMembership,
-      ] as const);
-    } else {
-      const insertVariants = db.insert(variants).values(
-        newVariants.map((variant) => ({
-          id: variant.id,
-          productId,
-          isDefault: false,
-          combinationKey: variant.combinationKey,
-          priceOverrideMnt: variant.priceOverrideMnt,
-          imageMediaAssetId: variant.imageMediaAssetId,
-          state: variant.state,
-          createdAt: now,
-          updatedAt: now,
-        })),
       );
-      const insertSkus = db.insert(skus).values(
-        newVariants.map((variant) => {
-          const sku = skuFromVariantId(variant.id);
-          return {
-            sku,
-            skuCompact: compactSku(sku),
-            ownerKind: "variant" as const,
-            variantId: variant.id,
-            bundleId: null,
-            lockedAt: null,
-            createdAt: now,
+      const insertValues = values.map((value) =>
+        db.insert(optionValues).select(
+          db
+            .select({
+              id: sql<string>`${value.id}`.as("id"),
+              optionGroupId: sql<string>`${value.optionGroupId}`.as("option_group_id"),
+              key: sql<string>`${value.key}`.as("key"),
+              label: sql<string>`${value.label}`.as("label"),
+              position: sql<number>`${value.position}`.as("position"),
+              state: sql<"active">`'active'`.as("state"),
+              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
+        ),
+      );
+      const prepareVariants = retainedVariants.map((variant) =>
+        db
+          .update(variants)
+          .set({ combinationKey: `editing:${variant.id}`, updatedAt: now })
+          .where(and(eq(variants.id, variant.id), eq(variants.productId, productId), draftExists)),
+      );
+      const applyVariants = retainedVariants.map((variant) =>
+        db
+          .update(variants)
+          .set({
+            combinationKey: variant.combinationKey,
+            priceOverrideMnt: variant.priceOverrideMnt,
+            imageMediaAssetId: variant.imageMediaAssetId,
+            state: variant.state,
             updatedAt: now,
-          };
-        }),
+          })
+          .where(and(eq(variants.id, variant.id), eq(variants.productId, productId), draftExists)),
       );
-      const insertStocks = db.insert(stockItems).values(
-        newVariants.map((variant) => ({
-          id: createStockItemId(),
-          variantId: variant.id,
-          onHandQuantity: 0,
-          reservedQuantity: 0,
-          updatedAt: now,
-        })),
+      const insertVariants = newVariants.map((variant) =>
+        db.insert(variants).select(
+          db
+            .select({
+              id: sql<string>`${variant.id}`.as("id"),
+              productId: sql<string>`${productId}`.as("product_id"),
+              isDefault: sql<boolean>`0`.as("is_default"),
+              combinationKey: sql<string>`${variant.combinationKey}`.as("combination_key"),
+              priceOverrideMnt: sql<number | null>`${variant.priceOverrideMnt}`.as(
+                "price_override_mnt",
+              ),
+              imageMediaAssetId: sql<string | null>`${variant.imageMediaAssetId}`.as(
+                "image_media_asset_id",
+              ),
+              state: sql<typeof variant.state>`${variant.state}`.as("state"),
+              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
+        ),
       );
-      await db.batch([
+      const insertSkus = newVariants.map((variant) => {
+        const sku = skuFromVariantId(variant.id);
+        return db.insert(skus).select(
+          db
+            .select({
+              sku: sql<string>`${sku}`.as("sku"),
+              skuCompact: sql<string>`${compactSku(sku)}`.as("sku_compact"),
+              ownerKind: sql<"variant">`'variant'`.as("owner_kind"),
+              variantId: sql<string>`${variant.id}`.as("variant_id"),
+              bundleId: sql<null>`NULL`.as("bundle_id"),
+              lockedAt: sql<null>`NULL`.as("locked_at"),
+              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
+        );
+      });
+      const insertStocks = newVariants.map((variant) =>
+        db.insert(stockItems).select(
+          db
+            .select({
+              id: sql<string>`${createStockItemId()}`.as("id"),
+              variantId: sql<string>`${variant.id}`.as("variant_id"),
+              onHandQuantity: sql<number>`0`.as("on_hand_quantity"),
+              reservedQuantity: sql<number>`0`.as("reserved_quantity"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
+        ),
+      );
+      const insertMembership = requestedVariants.flatMap((variant) =>
+        variant.optionValueIds.map((optionValueId) =>
+          db.insert(variantOptionValues).select(
+            db
+              .select({
+                variantId: sql<string>`${variant.id}`.as("variant_id"),
+                optionValueId: sql<string>`${optionValueId}`.as("option_value_id"),
+              })
+              .from(catalogItems)
+              .where(draftPredicate),
+          ),
+        ),
+      );
+      const results = await db.batch([
         ...base,
-        upsertGroups,
-        upsertValues,
-        ...applyGroups,
-        ...applyValues,
+        ...insertGroups,
+        ...insertValues,
         ...prepareVariants,
-        insertVariants,
+        ...insertVariants,
         ...applyVariants,
-        insertSkus,
-        insertStocks,
-        insertMembership,
+        ...insertSkus,
+        ...insertStocks,
+        ...insertMembership,
       ] as const);
-    }
-    return { kind: "changed" as const, purge: false as const };
+      return results[0].length
+        ? { kind: "changed" as const, purge: false as const }
+        : { kind: "immutable_configuration" as const };
+    };
+
+    return product.publishedAt ? savePublishedPresentation() : replaceDraftConfiguration();
   },
 
   async updatePresentation(

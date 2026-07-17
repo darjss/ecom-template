@@ -438,14 +438,18 @@ export const optionGroups = sqliteTable(
   (table) => [
     check(
       "option_groups_id_check",
-      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_group_'`,
+      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_group_' AND substr(${table.id}, 14, 1) GLOB '[0-7]' AND substr(${table.id}, 14) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
     check("option_groups_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
     check("option_groups_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
     check("option_groups_position_check", sql`${table.position} BETWEEN 0 AND 99`),
     check("option_groups_state_check", sql`${table.state} IN ('active', 'archived')`),
-    uniqueIndex("option_groups_product_key_idx").on(table.productId, table.key),
-    uniqueIndex("option_groups_product_position_idx").on(table.productId, table.position),
+    uniqueIndex("option_groups_product_key_idx")
+      .on(table.productId, table.key)
+      .where(sql`${table.state} = 'active'`),
+    uniqueIndex("option_groups_product_position_idx")
+      .on(table.productId, table.position)
+      .where(sql`${table.state} = 'active'`),
   ],
 );
 
@@ -466,14 +470,18 @@ export const optionValues = sqliteTable(
   (table) => [
     check(
       "option_values_id_check",
-      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_value_'`,
+      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_value_' AND substr(${table.id}, 14, 1) GLOB '[0-7]' AND substr(${table.id}, 14) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
     check("option_values_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
     check("option_values_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
     check("option_values_position_check", sql`${table.position} BETWEEN 0 AND 99`),
     check("option_values_state_check", sql`${table.state} IN ('active', 'archived')`),
-    uniqueIndex("option_values_group_key_idx").on(table.optionGroupId, table.key),
-    uniqueIndex("option_values_group_position_idx").on(table.optionGroupId, table.position),
+    uniqueIndex("option_values_group_key_idx")
+      .on(table.optionGroupId, table.key)
+      .where(sql`${table.state} = 'active'`),
+    uniqueIndex("option_values_group_position_idx")
+      .on(table.optionGroupId, table.position)
+      .where(sql`${table.state} = 'active'`),
     index("option_values_group_state_idx").on(table.optionGroupId, table.state),
   ],
 );
