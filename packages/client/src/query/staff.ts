@@ -1,18 +1,17 @@
-import type { StaffClientError, StaffListResponse } from "@ecom/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
-import {
-  requestStaffList,
-  requestStaffMutation,
-  type StaffMutation,
-  type StaffMutationResult,
-} from "../staff/request";
+import type { InferErr, InferOk } from "better-result";
+import { requestStaffList, requestStaffMutation, type StaffMutation } from "../staff/request";
+import { unwrapRequestResult } from "../request";
 
 const staffQueryKey = ["staff"] as const;
 
+type StaffListResult = Awaited<ReturnType<typeof requestStaffList>>;
+type StaffMutationResult = Awaited<ReturnType<typeof requestStaffMutation>>;
+
 export const staffQueryOptions = () =>
-  queryOptions<StaffListResponse, StaffClientError>({
+  queryOptions<InferOk<StaffListResult>, InferErr<StaffListResult>>({
     queryKey: staffQueryKey,
-    queryFn: requestStaffList,
+    queryFn: async () => unwrapRequestResult(await requestStaffList()),
   });
 
 const refetchAuthoritativeStaff = async (queryClient: QueryClient) => {
@@ -21,8 +20,8 @@ const refetchAuthoritativeStaff = async (queryClient: QueryClient) => {
 };
 
 export const staffMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<StaffMutationResult, StaffClientError, StaffMutation>({
-    mutationFn: requestStaffMutation,
+  mutationOptions<InferOk<StaffMutationResult>, InferErr<StaffMutationResult>, StaffMutation>({
+    mutationFn: async (mutation) => unwrapRequestResult(await requestStaffMutation(mutation)),
     onSuccess: async () => refetchAuthoritativeStaff(queryClient),
     onError: async (error) => {
       if (error.kind === "api" && error.error.reason === "session_revocation_failed") {

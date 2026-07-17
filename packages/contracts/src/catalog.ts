@@ -1,5 +1,6 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
+import type { ClientRequestError } from "./client-error";
 
 const typeIdSchema = (prefix: string, label: string) =>
   v.pipe(
@@ -137,12 +138,6 @@ export const CatalogApiErrorSchema = v.strictObject({
     blockers: v.optional(v.array(InventoryBlockingReservationSchema)),
   }),
 });
-export const CatalogClientErrorSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("network"), message: v.string() }),
-  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
-  v.strictObject({ kind: v.literal("api"), error: CatalogApiErrorSchema.entries.error }),
-]);
-
 export const PublicProductSummarySchema = v.strictObject({
   id: ProductIdSchema,
   slug: CatalogSlugSchema,
@@ -167,7 +162,9 @@ export type InventoryAdjustmentIdempotencyKey = v.InferOutput<
 >;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
-export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;
+export type CatalogClientError = ClientRequestError<
+  v.InferOutput<typeof CatalogApiErrorSchema>["error"]
+>;
 export type PublicProductSummary = v.InferOutput<typeof PublicProductSummarySchema>;
 export type PublicProductDetail = v.InferOutput<typeof PublicProductDetailSchema>;
 

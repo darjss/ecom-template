@@ -1,18 +1,9 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
+import { ApiErrorCodeSchema, type ClientRequestError } from "./client-error";
 
 export * from "./catalog";
-
-export const ApiErrorCodeSchema = v.picklist([
-  "unauthorized",
-  "forbidden",
-  "not_found",
-  "validation",
-  "conflict",
-  "rate_limited",
-  "unavailable",
-  "internal",
-]);
+export * from "./client-error";
 
 export const ApiErrorSchema = v.strictObject({
   error: v.strictObject({
@@ -172,12 +163,6 @@ export const StaffLifecycleApiErrorSchema = v.strictObject({
   }),
 });
 
-export const StaffClientErrorSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("network"), message: v.string() }),
-  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
-  v.strictObject({ kind: v.literal("api"), error: StaffLifecycleApiErrorSchema.entries.error }),
-]);
-
 export const StaffSessionStateSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("active"), role: StaffRoleSchema }),
   v.strictObject({ kind: v.literal("awaiting_approval") }),
@@ -210,24 +195,6 @@ export const CustomerAuthApiErrorSchema = v.strictObject({
     retryAfterSeconds: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   }),
 });
-export const CustomerAuthClientErrorSchema = v.variant("kind", [
-  v.strictObject({
-    kind: v.literal("network"),
-    domain: v.literal("customer_auth"),
-    message: v.string(),
-  }),
-  v.strictObject({
-    kind: v.literal("contract"),
-    domain: v.literal("customer_auth"),
-    message: v.string(),
-  }),
-  v.strictObject({
-    kind: v.literal("api"),
-    domain: v.literal("customer_auth"),
-    error: CustomerAuthApiErrorSchema.entries.error,
-  }),
-]);
-
 export const HealthApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.literal("unavailable"),
@@ -275,18 +242,6 @@ export const CartSchema = v.strictObject({
   lines: v.array(CartLineSchema),
 });
 
-export const ClientErrorSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("network"), message: v.string() }),
-  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
-  v.strictObject({ kind: v.literal("api"), error: ApiErrorSchema.entries.error }),
-]);
-
-export const HealthClientErrorSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("network"), message: v.string() }),
-  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
-  v.strictObject({ kind: v.literal("api"), error: HealthApiErrorSchema.entries.error }),
-]);
-
 export type StaffId = v.InferOutput<typeof StaffIdSchema>;
 export type CustomerId = v.InferOutput<typeof CustomerIdSchema>;
 export type AuditActorKind = v.InferOutput<typeof AuditActorKindSchema>;
@@ -300,23 +255,28 @@ export type StaffCreateInput = v.InferOutput<typeof StaffCreateInputSchema>;
 export type StaffListResponse = v.InferOutput<typeof StaffListResponseSchema>;
 export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSchema>;
 export type StaffCleanupResponse = v.InferOutput<typeof StaffCleanupResponseSchema>;
-export type StaffClientError = v.InferOutput<typeof StaffClientErrorSchema>;
+export type StaffClientError = ClientRequestError<
+  v.InferOutput<typeof StaffLifecycleApiErrorSchema>["error"]
+>;
 export type StaffSessionState = v.InferOutput<typeof StaffSessionStateSchema>;
 export type MongolianPhone = v.InferOutput<typeof MongolianPhoneSchema>;
 export type CustomerOtpRequest = v.InferOutput<typeof CustomerOtpRequestSchema>;
 export type CustomerOtpVerify = v.InferOutput<typeof CustomerOtpVerifySchema>;
 export type CustomerOtpAcceptedResponse = v.InferOutput<typeof CustomerOtpAcceptedResponseSchema>;
 export type CustomerSessionResponse = v.InferOutput<typeof CustomerSessionResponseSchema>;
-export type CustomerAuthClientError = v.InferOutput<typeof CustomerAuthClientErrorSchema>;
+export type CustomerAuthClientError = ClientRequestError<
+  v.InferOutput<typeof CustomerAuthApiErrorSchema>["error"]
+>;
 export type ApiError = v.InferOutput<typeof ApiErrorSchema>;
 export type HealthApiError = v.InferOutput<typeof HealthApiErrorSchema>;
 export type HealthResponse = v.InferOutput<typeof HealthResponseSchema>;
-export type HealthClientError = v.InferOutput<typeof HealthClientErrorSchema>;
+export type HealthClientError = ClientRequestError<
+  v.InferOutput<typeof HealthApiErrorSchema>["error"]
+>;
 export type StoreDefinition = v.InferOutput<typeof StoreDefinitionSchema>;
 export type StorefrontSummary = v.InferOutput<typeof StorefrontSummarySchema>;
 export type Cart = v.InferOutput<typeof CartSchema>;
 export type CartLine = v.InferOutput<typeof CartLineSchema>;
-export type ClientError = v.InferOutput<typeof ClientErrorSchema>;
 
 export const createStaffId = () => typeidUnboxed("staff");
 export const createCustomerId = () => typeidUnboxed("customer");

@@ -1,27 +1,59 @@
 import {
+  ClientFailureSchema,
   HealthApiErrorSchema,
-  HealthClientErrorSchema,
   HealthResponseSchema,
-  type HealthClientError,
-  type HealthResponse,
+  type ClientRequestError,
 } from "@ecom/contracts";
+import { Result, type InferOk, type Result as ResultType } from "better-result";
 import * as v from "valibot";
 import { createApiClient } from "./eden";
 
-const healthClientError = (error: HealthClientError) => v.parse(HealthClientErrorSchema, error);
-
-export const requestHealth = async (): Promise<HealthResponse> => {
-  const response = await createApiClient().api.health.get();
-  if (response.error) {
-    const parsedError = v.safeParse(HealthApiErrorSchema, response.error.value);
-    if (!parsedError.success) {
-      throw healthClientError({ kind: "contract", message: "Invalid API error response" });
-    }
-    throw healthClientError({ kind: "api", error: parsedError.output.error });
-  }
-  const parsedHealth = v.safeParse(HealthResponseSchema, response.data);
-  if (!parsedHealth.success) {
-    throw healthClientError({ kind: "contract", message: "Invalid health response" });
-  }
-  return parsedHealth.output;
+type EdenResponse<Data, ApiErrorEnvelope> = {
+  readonly data: Data | null;
+  readonly error: { readonly value: ApiErrorEnvelope } | null;
 };
+
+export const requestResult = async <ResponseData, ResponseError, Data, ApiError>(
+  request: () => Promise<EdenResponse<ResponseData, ResponseError>>,
+  dataSchema: v.GenericSchema<ResponseData, Data>,
+  errorSchema: v.GenericSchema<ResponseError, { readonly error: ApiError }>,
+  invalidDataMessage: string,
+): Promise<ResultType<Data, ClientRequestError<ApiError>>> => {
+  try {
+    const response = await request();
+    if (response.error) {
+      const parsedError = v.safeParse(errorSchema, response.error.value);
+      return parsedError.success
+        ? Result.err({ kind: "api", error: parsedError.output.error })
+        : Result.err({ kind: "contract", message: "Invalid API error response" });
+    }
+    const parsedData = v.safeParse(dataSchema, response.data);
+    return parsedData.success
+      ? Result.ok(parsedData.output)
+      : Result.err({ kind: "contract", message: invalidDataMessage });
+  } catch (error) {
+    const parsedFailure = v.safeParse(ClientFailureSchema, error);
+    if (parsedFailure.success && parsedFailure.output.kind === "network") {
+      return Result.err(parsedFailure.output);
+    }
+    throw error;
+  }
+};
+
+export function unwrapRequestResult<Request extends ResultType<unknown, unknown>>(
+  result: Request,
+): InferOk<Request>;
+export function unwrapRequestResult(result: ResultType<unknown, unknown>): unknown {
+  if (result.isErr()) {
+    throw result.error;
+  }
+  return result.value;
+}
+
+export const requestHealth = () =>
+  requestResult(
+    () => createApiClient().api.health.get(),
+    HealthResponseSchema,
+    HealthApiErrorSchema,
+    "Invalid health response",
+  );

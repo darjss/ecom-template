@@ -1,10 +1,12 @@
-import type { HealthClientError, HealthResponse } from "@ecom/contracts";
 import { queryOptions } from "@tanstack/solid-query";
-import { requestHealth } from "../request";
+import type { InferErr, InferOk } from "better-result";
+import { requestHealth, unwrapRequestResult } from "../request";
+
+type HealthResult = Awaited<ReturnType<typeof requestHealth>>;
 
 export const healthQueryOptions = () =>
-  queryOptions<HealthResponse, HealthClientError>({
+  queryOptions<InferOk<HealthResult>, InferErr<HealthResult>>({
     queryKey: ["health"],
-    queryFn: requestHealth,
+    queryFn: async () => unwrapRequestResult(await requestHealth()),
     staleTime: 30_000,
   });
