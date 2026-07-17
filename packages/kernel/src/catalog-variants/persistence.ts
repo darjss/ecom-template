@@ -12,7 +12,8 @@ import {
   type UpdateVariantPresentationInput,
   type VariantId,
 } from "@ecom/contracts";
-import { and, asc, eq, exists, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import {
   catalogCachePurgeDebts,
@@ -688,11 +689,39 @@ export const catalogVariantQueries = {
     const db = database();
     const now = new Date();
     const revision = crypto.randomUUID();
-    const variantPredicate = and(
+    const otherVariant = alias(variants, "other_active_variant");
+    const ownedVariant = and(
       eq(variants.id, variantId),
       eq(variants.productId, productId),
       eq(variants.isDefault, false),
     );
+    const variantPredicate =
+      state === "active"
+        ? ownedVariant
+        : and(
+            ownedVariant,
+            or(
+              exists(
+                db
+                  .select({ id: catalogItems.id })
+                  .from(catalogItems)
+                  .where(and(eq(catalogItems.id, productId), eq(catalogItems.state, "draft"))),
+              ),
+              exists(
+                db
+                  .select({ id: otherVariant.id })
+                  .from(otherVariant)
+                  .where(
+                    and(
+                      eq(otherVariant.productId, productId),
+                      ne(otherVariant.id, variantId),
+                      eq(otherVariant.isDefault, false),
+                      eq(otherVariant.state, "active"),
+                    ),
+                  ),
+              ),
+            ),
+          );
     const results = await db.batch([
       db
         .update(variants)
@@ -731,6 +760,16 @@ export const catalogVariantQueries = {
           },
         }),
     ] as const);
-    return results[0].length ? { kind: "changed" as const } : { kind: "not_found" as const };
+    if (results[0].length) {
+      return { kind: "changed" as const };
+    }
+    const existing = await db
+      .select({ id: variants.id })
+      .from(variants)
+      .where(ownedVariant)
+      .limit(1);
+    return existing.length
+      ? { kind: "invalid_publication" as const }
+      : { kind: "not_found" as const };
   },
 };
