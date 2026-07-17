@@ -2,6 +2,17 @@ import type { PublicProductDetail } from "@ecom/contracts";
 import { createMemo, createSignal, For, Show } from "solid-js";
 
 const money = new Intl.NumberFormat("mn-MN");
+const overlapWithCurrent = (
+  candidate: PublicProductDetail["variants"][number],
+  current: PublicProductDetail["variants"][number] | undefined,
+) =>
+  current?.optionValues.filter((selection) =>
+    candidate.optionValues.some(
+      (candidateValue) =>
+        candidateValue.groupId === selection.groupId &&
+        candidateValue.valueId === selection.valueId,
+    ),
+  ).length ?? 0;
 
 export const ProductVariantSelector = (props: { product: PublicProductDetail }) => {
   const [selectedVariantId, setSelectedVariantId] = createSignal("");
@@ -13,24 +24,24 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
   const selectedValueId = (groupId: string) =>
     selectedVariant()?.optionValues.find(({ groupId: candidate }) => candidate === groupId)
       ?.valueId;
+  const variantsContaining = (groupId: string, valueId: string) =>
+    props.product.variants.filter((variant) =>
+      variant.optionValues.some(
+        (candidate) => candidate.groupId === groupId && candidate.valueId === valueId,
+      ),
+    );
   const selectValue = (groupId: string, valueId: string) => {
     const current = selectedVariant();
-    const exact = props.product.variants.find(
-      (variant) =>
-        variant.optionValues.some(
-          (value) => value.groupId === groupId && value.valueId === valueId,
-        ) &&
-        current?.optionValues.every(
-          (value) =>
-            value.groupId === groupId ||
-            variant.optionValues.some(
-              (candidate) =>
-                candidate.groupId === value.groupId && candidate.valueId === value.valueId,
-            ),
-        ),
+    const matching = variantsContaining(groupId, valueId);
+    const next = matching.reduce<(typeof matching)[number] | undefined>(
+      (best, candidate) =>
+        !best || overlapWithCurrent(candidate, current) > overlapWithCurrent(best, current)
+          ? candidate
+          : best,
+      undefined,
     );
-    if (exact) {
-      setSelectedVariantId(exact.id);
+    if (next) {
+      setSelectedVariantId(next.id);
     }
   };
   const image = createMemo(() => selectedVariant()?.image ?? props.product.images[0] ?? null);
@@ -56,25 +67,6 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
               <For each={group.values}>
                 {(value) => {
                   const isSelected = () => selectedValueId(group.id) === value.id;
-                  const isCompatible = () => {
-                    const current = selectedVariant();
-                    return props.product.variants.some(
-                      (variant) =>
-                        variant.optionValues.some(
-                          (selection) =>
-                            selection.groupId === group.id && selection.valueId === value.id,
-                        ) &&
-                        current?.optionValues.every(
-                          (selection) =>
-                            selection.groupId === group.id ||
-                            variant.optionValues.some(
-                              (candidate) =>
-                                candidate.groupId === selection.groupId &&
-                                candidate.valueId === selection.valueId,
-                            ),
-                        ),
-                    );
-                  };
                   return (
                     <button
                       type="button"
@@ -83,7 +75,7 @@ export const ProductVariantSelector = (props: { product: PublicProductDetail }) 
                         "border-(--tomato) bg-(--tomato) text-white": isSelected(),
                         "border-black/25 bg-white text-(--ink)": !isSelected(),
                       }}
-                      disabled={!isCompatible()}
+                      disabled={variantsContaining(group.id, value.id).length === 0}
                       aria-pressed={isSelected()}
                       onClick={() => selectValue(group.id, value.id)}
                     >

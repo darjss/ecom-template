@@ -13,7 +13,7 @@ import {
   type UpdateVariantPresentationInput,
   type VariantId,
 } from "@ecom/contracts";
-import { and, asc, eq, exists, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, exists, gt, inArray, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import {
@@ -730,23 +730,113 @@ export const catalogVariantQueries = {
     const now = new Date();
     const revision = crypto.randomUUID();
     const otherVariant = alias(variants, "other_active_variant");
+    const activationVariant = alias(variants, "activation_variant");
+    const activationSku = alias(skus, "activation_sku");
+    const activationGroup = alias(optionGroups, "activation_group");
+    const activationValue = alias(optionValues, "activation_value");
+    const activationMembership = alias(variantOptionValues, "activation_membership");
+    const repeatedActivationValue = alias(optionValues, "repeated_activation_value");
+    const repeatedActivationMembership = alias(
+      variantOptionValues,
+      "repeated_activation_membership",
+    );
     const ownedVariant = and(
       eq(variants.id, variantId),
       eq(variants.productId, productId),
       eq(variants.isDefault, false),
     );
+    const activeGroups = db
+      .select({ id: activationGroup.id })
+      .from(activationGroup)
+      .where(and(eq(activationGroup.productId, productId), eq(activationGroup.state, "active")));
+    const missingGroup = db
+      .select({ id: activationGroup.id })
+      .from(activationGroup)
+      .where(
+        and(
+          eq(activationGroup.productId, productId),
+          eq(activationGroup.state, "active"),
+          notExists(
+            db
+              .select({ id: activationMembership.optionValueId })
+              .from(activationMembership)
+              .innerJoin(
+                activationValue,
+                eq(activationValue.id, activationMembership.optionValueId),
+              )
+              .where(
+                and(
+                  eq(activationMembership.variantId, variantId),
+                  eq(activationValue.optionGroupId, activationGroup.id),
+                  eq(activationValue.state, "active"),
+                ),
+              ),
+          ),
+        ),
+      );
+    const invalidMembership = db
+      .select({ id: activationMembership.optionValueId })
+      .from(activationMembership)
+      .innerJoin(activationValue, eq(activationValue.id, activationMembership.optionValueId))
+      .innerJoin(activationGroup, eq(activationGroup.id, activationValue.optionGroupId))
+      .where(
+        and(
+          eq(activationMembership.variantId, variantId),
+          or(
+            ne(activationGroup.productId, productId),
+            ne(activationGroup.state, "active"),
+            ne(activationValue.state, "active"),
+          ),
+        ),
+      );
+    const repeatedGroup = db
+      .select({ optionGroupId: repeatedActivationValue.optionGroupId })
+      .from(repeatedActivationMembership)
+      .innerJoin(
+        repeatedActivationValue,
+        eq(repeatedActivationValue.id, repeatedActivationMembership.optionValueId),
+      )
+      .where(eq(repeatedActivationMembership.variantId, variantId))
+      .groupBy(repeatedActivationValue.optionGroupId)
+      .having(gt(count(), 1));
+    const validTargetVariant = db
+      .select({ id: activationVariant.id })
+      .from(activationVariant)
+      .innerJoin(activationSku, eq(activationSku.variantId, activationVariant.id))
+      .where(
+        and(
+          eq(activationVariant.id, variantId),
+          eq(activationVariant.productId, productId),
+          eq(activationVariant.isDefault, false),
+          sql`coalesce(${activationVariant.priceOverrideMnt}, ${catalogItems.priceMnt}) > 0`,
+          sql`length(trim(${activationSku.sku})) > 0`,
+        ),
+      );
+    const validPublishedActivation = db
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(
+        and(
+          eq(catalogItems.id, productId),
+          ne(catalogItems.state, "draft"),
+          exists(activeGroups),
+          exists(validTargetVariant),
+          notExists(missingGroup),
+          notExists(invalidMembership),
+          notExists(repeatedGroup),
+        ),
+      );
+    const draftProduct = db
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, productId), eq(catalogItems.state, "draft")));
     const variantPredicate =
       state === "active"
-        ? ownedVariant
+        ? and(ownedVariant, or(exists(draftProduct), exists(validPublishedActivation)))
         : and(
             ownedVariant,
             or(
-              exists(
-                db
-                  .select({ id: catalogItems.id })
-                  .from(catalogItems)
-                  .where(and(eq(catalogItems.id, productId), eq(catalogItems.state, "draft"))),
-              ),
+              exists(draftProduct),
               exists(
                 db
                   .select({ id: otherVariant.id })
