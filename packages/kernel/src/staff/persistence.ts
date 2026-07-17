@@ -3,16 +3,14 @@ import {
   createStaffId,
   StaffIdSchema,
   StaffMemberSchema,
-  StaffRoleSchema,
-  StaffStatusSchema,
   type StaffId,
   type StaffMember,
   type StaffRole,
   type StaffStatus,
 } from "@ecom/contracts";
 import * as v from "valibot";
-import { and, asc, count, eq, getTableName, isNull, or } from "drizzle-orm";
-import { env } from "cloudflare:workers";
+import { and, asc, count, eq, exists, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { staff_auth_users } from "../auth/staff.generated";
 import { database } from "../db/database";
 import { auditEvents, staffMembers, staffSessionCleanupDebts } from "../db/schema";
@@ -49,30 +47,6 @@ const projectStaff = (row: {
   authUserId: row.authUserId,
   sessionGeneration: row.sessionGeneration,
 });
-
-const ReturnedStaffRowSchema = v.strictObject({
-  id: v.string(),
-  normalizedEmail: v.string(),
-  authUserId: v.nullable(v.string()),
-  status: StaffStatusSchema,
-  role: v.nullable(StaffRoleSchema),
-  sessionGeneration: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  createdAt: v.number(),
-  updatedAt: v.number(),
-  approvedAt: v.nullable(v.number()),
-  revokedAt: v.nullable(v.number()),
-});
-
-const projectReturnedStaff = (source: unknown) => {
-  const row = v.parse(ReturnedStaffRowSchema, source);
-  return projectStaff({
-    ...row,
-    createdAt: new Date(row.createdAt),
-    updatedAt: new Date(row.updatedAt),
-    approvedAt: row.approvedAt === null ? null : new Date(row.approvedAt),
-    revokedAt: row.revokedAt === null ? null : new Date(row.revokedAt),
-  });
-};
 
 const selection = {
   id: staffMembers.id,
@@ -223,54 +197,104 @@ export type StaffCleanupDebt = {
   readonly operation: StaffCleanupOperation;
 };
 
-const returnedSelectionSql =
-  "id, normalized_email AS normalizedEmail, auth_user_id AS authUserId, status, role, session_generation AS sessionGeneration, created_at AS createdAt, updated_at AS updatedAt, approved_at AS approvedAt, revoked_at AS revokedAt";
+const actingStaff = alias(staffMembers, "acting_staff");
+const otherOwner = alias(staffMembers, "other_owner");
 
-const auditEventsTableName = getTableName(auditEvents);
-const actingOwnerPredicate =
-  "EXISTS (SELECT 1 FROM staff_members AS acting_staff WHERE acting_staff.id = ? AND acting_staff.status = 'active' AND acting_staff.role = 'owner')";
+const actingOwner = (staffId: StaffId) =>
+  exists(
+    database()
+      .select({ id: actingStaff.id })
+      .from(actingStaff)
+      .where(
+        and(
+          eq(actingStaff.id, staffId),
+          eq(actingStaff.status, "active"),
+          eq(actingStaff.role, "owner"),
+        ),
+      ),
+  );
 
-const auditSelect = (
+const anotherActiveOwner = (staffId: StaffId) =>
+  exists(
+    database()
+      .select({ id: otherOwner.id })
+      .from(otherOwner)
+      .where(
+        and(
+          ne(otherOwner.id, staffId),
+          eq(otherOwner.status, "active"),
+          eq(otherOwner.role, "owner"),
+        ),
+      ),
+  );
+
+const insertAudit = (
   context: StaffCommandContext,
   action: string,
   id: StaffId,
   now: number,
-  metadataSql: string,
-  metadataBindings: readonly (string | number)[],
-  predicateSql: string,
-  predicateBindings: readonly (string | number)[],
+  metadataJson: SQL<string>,
+  predicate: SQL | undefined,
 ) =>
-  env.DB.prepare(
-    `INSERT INTO ${auditEventsTableName} (id, actor_kind, actor_id, staff_role, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, 'admin', ?, 'accepted', 'staff_member', ?, NULL, ?, ${metadataSql}, ? FROM staff_members WHERE (${predicateSql}) AND ${actingOwnerPredicate}`,
-  ).bind(
-    createAuditEventId(),
-    context.actor.staffId,
-    context.actor.role,
-    action,
-    id,
-    context.correlationId,
-    ...metadataBindings,
-    now,
-    ...predicateBindings,
-    context.actor.staffId,
-  );
+  database()
+    .insert(auditEvents)
+    .select(
+      database()
+        .select({
+          id: sql<string>`${createAuditEventId()}`.as("id"),
+          actorKind: sql<"staff">`${"staff"}`.as("actor_kind"),
+          actorId: sql<string>`${context.actor.staffId}`.as("actor_id"),
+          staffRole: sql<StaffRole>`${context.actor.role}`.as("staff_role"),
+          telegramOperatorLabel: sql<null>`null`.as("telegram_operator_label"),
+          telegramUserId: sql<null>`null`.as("telegram_user_id"),
+          sourceChannel: sql<"admin">`${"admin"}`.as("source_channel"),
+          action: sql<string>`${action}`.as("action"),
+          outcome: sql<"accepted">`${"accepted"}`.as("outcome"),
+          entityKind: sql<string>`${"staff_member"}`.as("entity_kind"),
+          entityId: sql<string>`${id}`.as("entity_id"),
+          reason: sql<null>`null`.as("reason"),
+          commandCorrelationId: sql<string>`${context.correlationId}`.as("command_correlation_id"),
+          metadataJson: metadataJson.as("metadata_json"),
+          createdAt: sql<Date>`${now}`.as("created_at"),
+        })
+        .from(staffMembers)
+        .where(and(predicate, actingOwner(context.actor.staffId))),
+    );
 
-const cleanupDebtSelect = (
+const insertCleanupDebt = (
   context: StaffCommandContext,
   operation: "approve" | "role_change" | "revoke" | "remove",
   now: number,
-  predicateSql: string,
-  predicateBindings: readonly (string | number)[],
+  predicate: SQL | undefined,
 ) =>
-  env.DB.prepare(
-    `INSERT INTO staff_session_cleanup_debts (auth_user_id, staff_id, session_generation, operation, created_at, updated_at) SELECT auth_user_id, id, session_generation + 1, ?, ?, ? FROM staff_members WHERE auth_user_id IS NOT NULL AND (${predicateSql}) AND ${actingOwnerPredicate} ON CONFLICT(auth_user_id) DO UPDATE SET staff_id = excluded.staff_id, session_generation = excluded.session_generation, operation = excluded.operation, updated_at = excluded.updated_at`,
-  ).bind(operation, now, now, ...predicateBindings, context.actor.staffId);
-
-const staffIdPredicate = "id = ?";
-const pendingPredicate = `${staffIdPredicate} AND status = 'pending'`;
-const activeRoleChangePredicate = `${staffIdPredicate} AND status = 'active' AND role <> ? AND NOT (role = 'owner' AND ? <> 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)`;
-const activeRevokePredicate = `${staffIdPredicate} AND status = 'active' AND NOT (role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)`;
-const removablePredicate = `${staffIdPredicate} AND NOT (status = 'active' AND role = 'owner' AND (SELECT COUNT(*) FROM staff_members WHERE status = 'active' AND role = 'owner') = 1)`;
+  database()
+    .insert(staffSessionCleanupDebts)
+    .select(
+      database()
+        .select({
+          authUserId: staffMembers.authUserId,
+          staffId: staffMembers.id,
+          sessionGeneration: sql<number>`${staffMembers.sessionGeneration} + 1`.as(
+            "session_generation",
+          ),
+          operation: sql<typeof operation>`${operation}`.as("operation"),
+          createdAt: sql<Date>`${now}`.as("created_at"),
+          updatedAt: sql<Date>`${now}`.as("updated_at"),
+        })
+        .from(staffMembers)
+        .where(
+          and(isNotNull(staffMembers.authUserId), predicate, actingOwner(context.actor.staffId)),
+        ),
+    )
+    .onConflictDoUpdate({
+      target: staffSessionCleanupDebts.authUserId,
+      set: {
+        staffId: sql`excluded.staff_id`,
+        sessionGeneration: sql`excluded.session_generation`,
+        operation: sql`excluded.operation`,
+        updatedAt: new Date(now),
+      },
+    });
 
 export const staffQueries = {
   findById,
@@ -280,23 +304,46 @@ export const staffQueries = {
     const id = createStaffId();
     const normalizedEmail = normalizeEmail(email);
     const now = Date.now();
-    const results = await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) SELECT ?, ?, NULL, 'active', ?, 0, ?, ?, ?, NULL WHERE ${actingOwnerPredicate} ON CONFLICT(normalized_email) DO NOTHING RETURNING ${returnedSelectionSql}`,
-      ).bind(id, normalizedEmail, role, now, now, now, context.actor.staffId),
-      auditSelect(
+    const db = database();
+    const [created] = await db.batch([
+      db
+        .insert(staffMembers)
+        .select(
+          db
+            .select({
+              id: sql<string>`${id}`.as("id"),
+              normalizedEmail: sql<string>`${normalizedEmail}`.as("normalized_email"),
+              authUserId: sql<null>`null`.as("auth_user_id"),
+              status: sql<"active">`${"active"}`.as("status"),
+              role: sql<StaffRole>`${role}`.as("role"),
+              sessionGeneration: sql<number>`0`.as("session_generation"),
+              createdAt: sql<Date>`${now}`.as("created_at"),
+              updatedAt: sql<Date>`${now}`.as("updated_at"),
+              approvedAt: sql<Date>`${now}`.as("approved_at"),
+              revokedAt: sql<null>`null`.as("revoked_at"),
+            })
+            .from(actingStaff)
+            .where(
+              and(
+                eq(actingStaff.id, context.actor.staffId),
+                eq(actingStaff.status, "active"),
+                eq(actingStaff.role, "owner"),
+              ),
+            ),
+        )
+        .onConflictDoNothing({ target: staffMembers.normalizedEmail })
+        .returning(selection),
+      insertAudit(
         context,
         "staff.create",
         id,
         now,
-        `json_object('before', NULL, 'after', json_object('status', status, 'role', role))`,
-        [],
-        staffIdPredicate,
-        [id],
+        sql<string>`json_object('before', null, 'after', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}))`,
+        eq(staffMembers.id, id),
       ),
     ]);
-    const row = results.at(0)?.results.at(0);
-    return row ? projectReturnedStaff(row) : undefined;
+    const row = created.at(0);
+    return row ? projectStaff(row) : undefined;
   },
 
   async resolveAuthUserApplicant(authUserId: string) {
@@ -352,12 +399,16 @@ export const staffQueries = {
   },
 
   async clearCleanupDebt(authUserId: string, sessionGeneration: number) {
-    const result = await env.DB.prepare(
-      "DELETE FROM staff_session_cleanup_debts WHERE auth_user_id = ? AND session_generation = ? RETURNING auth_user_id",
-    )
-      .bind(authUserId, sessionGeneration)
-      .all();
-    if (result.results.length === 1) {
+    const deleted = await database()
+      .delete(staffSessionCleanupDebts)
+      .where(
+        and(
+          eq(staffSessionCleanupDebts.authUserId, authUserId),
+          eq(staffSessionCleanupDebts.sessionGeneration, sessionGeneration),
+        ),
+      )
+      .returning({ authUserId: staffSessionCleanupDebts.authUserId });
+    if (deleted.length === 1) {
       return true;
     }
     const current = await database()
@@ -389,100 +440,131 @@ export const staffQueries = {
 
   async approve(context: StaffCommandContext, id: StaffId, role: StaffRole) {
     const now = Date.now();
-    const predicateBindings = [id] as const;
-    const results = await env.DB.batch([
-      auditSelect(
+    const predicate = and(eq(staffMembers.id, id), eq(staffMembers.status, "pending"));
+    const db = database();
+    const [, , changedRows] = await db.batch([
+      insertAudit(
         context,
         "staff.approve",
         id,
         now,
-        `json_object('before', json_object('status', status, 'role', role), 'after', json_object('status', 'active', 'role', ?))`,
-        [role],
-        pendingPredicate,
-        predicateBindings,
+        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"active"}, 'role', ${role}))`,
+        predicate,
       ),
-      cleanupDebtSelect(context, "approve", now, pendingPredicate, predicateBindings),
-      env.DB.prepare(
-        `UPDATE staff_members SET status = 'active', role = ?, session_generation = session_generation + 1, approved_at = ?, revoked_at = NULL, updated_at = ? WHERE (${pendingPredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(role, now, now, ...predicateBindings, context.actor.staffId),
+      insertCleanupDebt(context, "approve", now, predicate),
+      db
+        .update(staffMembers)
+        .set({
+          status: "active",
+          role,
+          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
+          approvedAt: new Date(now),
+          revokedAt: null,
+          updatedAt: new Date(now),
+        })
+        .where(and(predicate, actingOwner(context.actor.staffId)))
+        .returning(selection),
     ]);
-    const changed = results.at(2)?.results.at(0);
+    const changed = changedRows.at(0);
     return changed
-      ? { changed: projectReturnedStaff(changed), current: undefined }
+      ? { changed: projectStaff(changed), current: undefined }
       : { changed: undefined, current: await findById(id) };
   },
 
   async changeRole(context: StaffCommandContext, id: StaffId, role: StaffRole) {
     const now = Date.now();
-    const predicateBindings = [id, role, role] as const;
-    const results = await env.DB.batch([
-      auditSelect(
+    const predicate = and(
+      eq(staffMembers.id, id),
+      eq(staffMembers.status, "active"),
+      ne(staffMembers.role, role),
+      role === "owner" ? undefined : or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
+    );
+    const db = database();
+    const [, , changedRows] = await db.batch([
+      insertAudit(
         context,
         "staff.role_change",
         id,
         now,
-        `json_object('before', json_object('status', status, 'role', role), 'after', json_object('status', status, 'role', ?))`,
-        [role],
-        activeRoleChangePredicate,
-        predicateBindings,
+        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${staffMembers.status}, 'role', ${role}))`,
+        predicate,
       ),
-      cleanupDebtSelect(context, "role_change", now, activeRoleChangePredicate, predicateBindings),
-      env.DB.prepare(
-        `UPDATE staff_members SET role = ?, session_generation = session_generation + 1, updated_at = ? WHERE (${activeRoleChangePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(role, now, ...predicateBindings, context.actor.staffId),
+      insertCleanupDebt(context, "role_change", now, predicate),
+      db
+        .update(staffMembers)
+        .set({
+          role,
+          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
+          updatedAt: new Date(now),
+        })
+        .where(and(predicate, actingOwner(context.actor.staffId)))
+        .returning(selection),
     ]);
-    const changed = results.at(2)?.results.at(0);
+    const changed = changedRows.at(0);
     return changed
-      ? { changed: projectReturnedStaff(changed), current: undefined }
+      ? { changed: projectStaff(changed), current: undefined }
       : { changed: undefined, current: await findById(id) };
   },
 
   async revoke(context: StaffCommandContext, id: StaffId) {
     const now = Date.now();
-    const predicateBindings = [id] as const;
-    const results = await env.DB.batch([
-      auditSelect(
+    const predicate = and(
+      eq(staffMembers.id, id),
+      eq(staffMembers.status, "active"),
+      or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
+    );
+    const db = database();
+    const [, , changedRows] = await db.batch([
+      insertAudit(
         context,
         "staff.revoke",
         id,
         now,
-        `json_object('before', json_object('status', status, 'role', role), 'after', json_object('status', 'revoked', 'role', role))`,
-        [],
-        activeRevokePredicate,
-        predicateBindings,
+        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"revoked"}, 'role', ${staffMembers.role}))`,
+        predicate,
       ),
-      cleanupDebtSelect(context, "revoke", now, activeRevokePredicate, predicateBindings),
-      env.DB.prepare(
-        `UPDATE staff_members SET status = 'revoked', session_generation = session_generation + 1, revoked_at = ?, updated_at = ? WHERE (${activeRevokePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(now, now, ...predicateBindings, context.actor.staffId),
+      insertCleanupDebt(context, "revoke", now, predicate),
+      db
+        .update(staffMembers)
+        .set({
+          status: "revoked",
+          sessionGeneration: sql`${staffMembers.sessionGeneration} + 1`,
+          revokedAt: new Date(now),
+          updatedAt: new Date(now),
+        })
+        .where(and(predicate, actingOwner(context.actor.staffId)))
+        .returning(selection),
     ]);
-    const changed = results.at(2)?.results.at(0);
+    const changed = changedRows.at(0);
     return changed
-      ? { changed: projectReturnedStaff(changed), current: undefined }
+      ? { changed: projectStaff(changed), current: undefined }
       : { changed: undefined, current: await findById(id) };
   },
 
   async remove(context: StaffCommandContext, id: StaffId) {
     const now = Date.now();
-    const predicateBindings = [id] as const;
-    const results = await env.DB.batch([
-      auditSelect(
+    const predicate = and(
+      eq(staffMembers.id, id),
+      or(ne(staffMembers.status, "active"), ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
+    );
+    const db = database();
+    const [, , removedRows] = await db.batch([
+      insertAudit(
         context,
         "staff.remove",
         id,
         now,
-        `json_object('before', json_object('status', status, 'role', role), 'after', NULL)`,
-        [],
-        removablePredicate,
-        predicateBindings,
+        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', null)`,
+        predicate,
       ),
-      cleanupDebtSelect(context, "remove", now, removablePredicate, predicateBindings),
-      env.DB.prepare(
-        `DELETE FROM staff_members WHERE (${removablePredicate}) AND ${actingOwnerPredicate} RETURNING ${returnedSelectionSql}`,
-      ).bind(...predicateBindings, context.actor.staffId),
+      insertCleanupDebt(context, "remove", now, predicate),
+      db
+        .delete(staffMembers)
+        .where(and(predicate, actingOwner(context.actor.staffId)))
+        .returning(selection),
     ]);
-    const removed = results.at(2)?.results.at(0);
-    const projected = removed ? projectReturnedStaff(removed) : undefined;
+    const removed = removedRows.at(0);
+    const projected = removed ? projectStaff(removed) : undefined;
     return projected
       ? {
           removed: projected,
