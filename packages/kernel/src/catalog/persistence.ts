@@ -20,7 +20,6 @@ import {
 } from "../db/schema";
 import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
-import { recordRejectedAttempt } from "./audit";
 import { catalogReaderQueries, findCatalogProductById } from "./read/persistence";
 import { compactSku, skuFromVariantId } from "./sku";
 
@@ -44,6 +43,29 @@ const hasDuplicateSlug = async (slug: string, excludedId?: ProductId) => {
     )
     .limit(1);
   return rows.length === 1;
+};
+
+export const recordRejectedAttempt = async (
+  actor: StaffActor,
+  action: string,
+  entityKind: "product" | "stock_item",
+  entityId: string,
+  reason: string,
+) => {
+  await database().insert(auditEvents).values({
+    id: createAuditEventId(),
+    actorKind: "staff",
+    actorId: actor.staffId,
+    staffRole: actor.role,
+    sourceChannel: "admin",
+    action,
+    outcome: "rejected",
+    entityKind,
+    entityId,
+    reason,
+    commandCorrelationId: crypto.randomUUID(),
+    createdAt: new Date(),
+  });
 };
 
 const acceptedAuditSelection = (

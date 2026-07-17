@@ -91,13 +91,7 @@ export const updateProduct = async (
     if (result.kind === "changed" && result.product) {
       return Result.ok(await resolvePendingCatalogCachePurge(result.product));
     }
-    if (
-      result.kind === "not_found" ||
-      result.kind === "duplicate_slug" ||
-      result.kind === "duplicate_sku" ||
-      result.kind === "sku_locked" ||
-      result.kind === "idempotency_conflict"
-    ) {
+    if (result.kind === "not_found" || result.kind === "duplicate_slug") {
       return Result.err<never, CatalogOperationFailure>({ code: result.kind });
     }
     return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });

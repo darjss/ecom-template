@@ -16,7 +16,7 @@ import {
   stockItems,
 } from "../db/schema";
 import type { StaffActor } from "../staff/operations";
-import { recordRejectedAttempt } from "./audit";
+import { recordRejectedAttempt } from "./persistence";
 import { findCatalogProductById } from "./read/persistence";
 
 const idempotencyScope = "inventory.adjust";
