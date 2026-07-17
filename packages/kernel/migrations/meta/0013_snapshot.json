@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ef8fc13e-3468-473f-8bd0-af106f082eff",
-  "prevId": "1f1c3c9f-7e96-4376-b5a0-ec37a7cc1313",
+  "id": "f36387ff-5aff-4431-8a1f-e12986d633d2",
+  "prevId": "ea50a675-766e-4f99-b078-a3366ba02559",
   "tables": {
     "audit_events": {
       "name": "audit_events",
@@ -533,83 +533,6 @@
         }
       }
     },
-    "customer_otp_rate_admissions": {
-      "name": "customer_otp_rate_admissions",
-      "columns": {
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "customer_otp_rate_admissions_created_idx": {
-          "name": "customer_otp_rate_admissions_created_idx",
-          "columns": ["created_at"],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "customer_otp_rate_admissions_request_id_check": {
-          "name": "customer_otp_rate_admissions_request_id_check",
-          "value": "length(\"customer_otp_rate_admissions\".\"request_id\") = 36"
-        }
-      }
-    },
-    "customer_otp_rate_counters": {
-      "name": "customer_otp_rate_counters",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "customer_otp_rate_counters_expiry_idx": {
-          "name": "customer_otp_rate_counters_expiry_idx",
-          "columns": ["expires_at"],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "customer_otp_rate_counters_count_check": {
-          "name": "customer_otp_rate_counters_count_check",
-          "value": "\"customer_otp_rate_counters\".\"count\" > 0"
-        }
-      }
-    },
     "customers": {
       "name": "customers",
       "columns": {
@@ -1126,14 +1049,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "session_generation": {
-          "name": "session_generation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1198,71 +1113,6 @@
         "staff_members_lifecycle_order_check": {
           "name": "staff_members_lifecycle_order_check",
           "value": "\"staff_members\".\"created_at\" <= \"staff_members\".\"updated_at\" AND (\"staff_members\".\"approved_at\" IS NULL OR (\"staff_members\".\"created_at\" <= \"staff_members\".\"approved_at\" AND \"staff_members\".\"approved_at\" <= \"staff_members\".\"updated_at\")) AND (\"staff_members\".\"revoked_at\" IS NULL OR (\"staff_members\".\"approved_at\" <= \"staff_members\".\"revoked_at\" AND \"staff_members\".\"revoked_at\" <= \"staff_members\".\"updated_at\"))"
-        }
-      }
-    },
-    "staff_session_cleanup_debts": {
-      "name": "staff_session_cleanup_debts",
-      "columns": {
-        "auth_user_id": {
-          "name": "auth_user_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "staff_id": {
-          "name": "staff_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_generation": {
-          "name": "session_generation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "operation": {
-          "name": "operation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "staff_session_cleanup_debts_staff_id_check": {
-          "name": "staff_session_cleanup_debts_staff_id_check",
-          "value": "length(\"staff_session_cleanup_debts\".\"staff_id\") = 32 AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 1, 6) = 'staff_' AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 7, 1) GLOB '[0-7]' AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
-        },
-        "staff_session_cleanup_debts_generation_check": {
-          "name": "staff_session_cleanup_debts_generation_check",
-          "value": "\"staff_session_cleanup_debts\".\"session_generation\" >= 0"
-        },
-        "staff_session_cleanup_debts_operation_check": {
-          "name": "staff_session_cleanup_debts_operation_check",
-          "value": "\"staff_session_cleanup_debts\".\"operation\" IN ('approve', 'role_change', 'revoke', 'remove', 'provision')"
         }
       }
     },
@@ -1974,9 +1824,9 @@
           "notNull": false,
           "autoincrement": false
         },
-        "generation": {
-          "name": "generation",
-          "type": "integer",
+        "staff_id": {
+          "name": "staff_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
