@@ -10,4 +10,3 @@ const store = createStoreBackend({
 
 export const api = store.api;
 export const storefront = store.storefront;
-export const background = store.background;

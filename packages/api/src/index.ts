@@ -26,7 +26,6 @@ import {
   changeStaffRole,
   createStaff,
   createStaffAuth,
-  createStoreBackground,
   createStorefrontReader,
   listCatalog,
   listStaff,
@@ -40,7 +39,6 @@ import {
   type CatalogOperationFailure,
   type CustomerSmsDelivery,
   type StaffOperationFailure,
-  type StoreBackground,
   type StorefrontReader,
 } from "@ecom/kernel";
 import { Elysia } from "elysia";
@@ -481,7 +479,6 @@ export type StoreElysiaApp = ReturnType<typeof createApi>;
 export type StoreBackend = {
   readonly api: StoreElysiaApp;
   readonly storefront: StorefrontReader;
-  readonly background: StoreBackground;
 };
 
 export const resolveStaffRequest = async (request: Request, input: unknown) => {
@@ -510,6 +507,5 @@ export const createStoreBackend = (input: StoreBackendInput): StoreBackend => {
       location: definition.profile.location,
       status: "open",
     }),
-    background: createStoreBackground(),
   };
 };

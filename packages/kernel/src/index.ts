@@ -10,7 +10,6 @@ export {
   type CatalogMutationResult,
   type CatalogOperationFailure,
 } from "./catalog/operations";
-export { createStoreBackground, type StoreBackground } from "./background/index";
 export {
   readCustomerSession,
   requestCustomerOtp,

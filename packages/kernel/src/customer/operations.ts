@@ -89,13 +89,6 @@ const applySendLimits = async (phoneKey: string, ipKey: string, requestId: strin
     return { limited: true as const, retryAfterSeconds: admission.retryAfterSeconds };
   }
 
-  await Promise.all(
-    [cooldown, phoneDay, ipRateWindow].map((hint) =>
-      env.EPHEMERAL_KV.put(hint.key, requestId, {
-        expirationTtl: Math.max(60, Math.ceil((hint.expiresAt - now) / 1_000)),
-      }),
-    ),
-  );
   return { limited: false as const };
 };
 
