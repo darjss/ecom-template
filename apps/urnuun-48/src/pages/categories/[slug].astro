@@ -1,0 +1,20 @@
+---
+import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import GroupingListing from "../../components/GroupingListing.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+const listing = await storefront.readPublishedCategory(Astro.params.slug ?? "");
+if (!listing) {
+  return new Response("Ангилал олдсонгүй", {
+    status: 404,
+    headers: { "cache-control": "private, no-store" },
+  });
+}
+applyPublicHtmlCache(Astro.response.headers, [
+  "store-shell",
+  "catalog",
+  `category:${listing.grouping.id}`,
+]);
+---
+<GroupingListing listing={listing} kindLabel="Ангилал" />

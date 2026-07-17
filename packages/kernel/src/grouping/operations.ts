@@ -58,7 +58,9 @@ const failure = (code: GroupingOperationFailure["code"]) =>
   Result.err<never, GroupingOperationFailure>({ code });
 
 export const listGroupings = async (actor: StaffActor) => {
-  if (!authorize(actor)) return failure("forbidden");
+  if (!authorize(actor)) {
+    return failure("forbidden");
+  }
   try {
     return Result.ok(await groupingQueries.listAll());
   } catch {
@@ -70,15 +72,28 @@ const duplicateMembership = (input: GroupingMembershipInput) =>
   new Set(input.productIds).size !== input.productIds.length;
 
 export const mutateGrouping = async (actor: StaffActor, mutation: GroupingMutation) => {
-  if (!authorize(actor)) return failure("forbidden");
+  if (!authorize(actor)) {
+    return failure("forbidden");
+  }
   try {
     if (mutation.kind === "create-category" || mutation.kind === "update-category") {
       const parent = await groupingQueries.validateCategoryParent(
         mutation.kind === "update-category" ? mutation.id : undefined,
         mutation.input.parentId,
       );
-      if (parent !== "valid")
+      if (parent !== "valid") {
         return failure(parent === "cycle" ? "category_cycle" : "parent_not_found");
+      }
+    }
+    if (mutation.kind === "state-category" && mutation.state === "active") {
+      const category = await groupingQueries.findCategory(mutation.id);
+      if (!category) {
+        return failure("not_found");
+      }
+      const parent = await groupingQueries.validateCategoryParent(category.id, category.parentId);
+      if (parent !== "valid") {
+        return failure(parent === "cycle" ? "category_cycle" : "parent_not_found");
+      }
     }
     if (
       (mutation.kind === "members-category" ||
@@ -122,7 +137,9 @@ export const mutateGrouping = async (actor: StaffActor, mutation: GroupingMutati
     if (result.kind === "changed") {
       return result.value ? Result.ok(result.value) : failure("infrastructure_unavailable");
     }
-    if (result.kind === "product_not_found") return failure("not_found");
+    if (result.kind === "product_not_found") {
+      return failure("not_found");
+    }
     return failure(result.kind);
   } catch {
     return failure("infrastructure_unavailable");

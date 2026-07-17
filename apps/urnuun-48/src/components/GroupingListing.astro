@@ -1,0 +1,39 @@
+---
+import type { StoreBackend } from "@ecom/api";
+import StoreLayout from "../layouts/StoreLayout.astro";
+
+type PublicGroupingListing = NonNullable<
+  Awaited<ReturnType<StoreBackend["storefront"]["readPublishedCategory"]>>
+>;
+interface Props {
+  listing: PublicGroupingListing;
+  kindLabel: string;
+}
+const { listing, kindLabel } = Astro.props;
+const money = new Intl.NumberFormat("mn-MN");
+---
+<StoreLayout title={`${listing.grouping.name} · Өрнүүн 48`} description={listing.grouping.description || `${listing.grouping.name} бүтээгдэхүүн`}>
+  <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
+  <header class="site-header">
+    <a class="wordmark" href="/" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
+    <nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
+    <a class="admin-link" href="/admin">Удирдлага</a>
+  </header>
+  <main id="content" class="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8 sm:py-20">
+    <header class="border-b border-black/15 pb-8">
+      <p class="mb-3 text-sm font-bold text-(--muted)">{kindLabel}</p>
+      <h1 class="m-0 max-w-3xl text-4xl font-extrabold tracking-[-0.035em] text-balance sm:text-6xl">{listing.grouping.name}</h1>
+      {listing.grouping.description && <p class="mt-5 max-w-prose text-lg text-(--muted)">{listing.grouping.description}</p>}
+    </header>
+    <ul class="m-0 grid list-none grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      {listing.products.map((product) => (
+        <li class="border-b border-black/15 py-6 sm:px-5 sm:first:pl-0">
+          <a class="grid min-h-28 content-between gap-6 text-(--ink) no-underline" href={`/products/${product.slug}`}>
+            <strong class="text-xl tracking-tight">{product.name}</strong>
+            <span class="font-bold">{money.format(product.priceMnt)} ₮</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </main>
+</StoreLayout>

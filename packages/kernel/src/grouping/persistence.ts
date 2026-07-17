@@ -126,7 +126,9 @@ const tagLabelExists = async (normalizedLabel: string, excludedId?: TagId) => {
 };
 
 const validateProductIds = async (productIds: readonly ProductId[]) => {
-  if (productIds.length === 0) return true;
+  if (productIds.length === 0) {
+    return true;
+  }
   const rows = await database()
     .select({ id: catalogItems.id })
     .from(catalogItems)
@@ -166,24 +168,34 @@ export const groupingQueries = {
   },
 
   async validateCategoryParent(id: CategoryId | undefined, parentId: CategoryId | null) {
-    if (!parentId) return "valid" as const;
+    if (!parentId) {
+      return "valid" as const;
+    }
     let current: string | null = parentId;
     for (let depth = 0; depth < 100; depth += 1) {
-      if (current === id) return "cycle" as const;
+      if (current === id) {
+        return "cycle" as const;
+      }
       const [row] = await database()
         .select({ parentId: categories.parentId })
         .from(categories)
         .where(eq(categories.id, current))
         .limit(1);
-      if (!row) return "not_found" as const;
+      if (!row) {
+        return "not_found" as const;
+      }
       current = row.parentId;
-      if (!current) return "valid" as const;
+      if (!current) {
+        return "valid" as const;
+      }
     }
     return "cycle" as const;
   },
 
   async createCategory(input: CategoryInput) {
-    if (await categorySlugExists(input.slug)) return { kind: "duplicate_slug" as const };
+    if (await categorySlugExists(input.slug)) {
+      return { kind: "duplicate_slug" as const };
+    }
     const id = createCategoryId();
     const now = new Date();
     await database()
@@ -194,9 +206,15 @@ export const groupingQueries = {
 
   async updateCategory(id: CategoryId, input: CategoryInput) {
     const current = await findCategory(id);
-    if (!current) return { kind: "not_found" as const };
-    if (current.activatedAt && current.slug !== input.slug) return { kind: "slug_locked" as const };
-    if (await categorySlugExists(input.slug, id)) return { kind: "duplicate_slug" as const };
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.activatedAt && current.slug !== input.slug) {
+      return { kind: "slug_locked" as const };
+    }
+    if (await categorySlugExists(input.slug, id)) {
+      return { kind: "duplicate_slug" as const };
+    }
     await database()
       .update(categories)
       .set({ ...input, updatedAt: new Date() })
@@ -205,7 +223,9 @@ export const groupingQueries = {
   },
 
   async createCollection(input: CollectionInput) {
-    if (await collectionSlugExists(input.slug)) return { kind: "duplicate_slug" as const };
+    if (await collectionSlugExists(input.slug)) {
+      return { kind: "duplicate_slug" as const };
+    }
     const id = createCollectionId();
     const now = new Date();
     await database()
@@ -216,9 +236,15 @@ export const groupingQueries = {
 
   async updateCollection(id: CollectionId, input: CollectionInput) {
     const current = await findCollection(id);
-    if (!current) return { kind: "not_found" as const };
-    if (current.activatedAt && current.slug !== input.slug) return { kind: "slug_locked" as const };
-    if (await collectionSlugExists(input.slug, id)) return { kind: "duplicate_slug" as const };
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.activatedAt && current.slug !== input.slug) {
+      return { kind: "slug_locked" as const };
+    }
+    if (await collectionSlugExists(input.slug, id)) {
+      return { kind: "duplicate_slug" as const };
+    }
     await database()
       .update(collections)
       .set({ ...input, updatedAt: new Date() })
@@ -228,26 +254,30 @@ export const groupingQueries = {
 
   async createTag(input: TagInput) {
     const normalizedLabel = normalizedTagLabel(input.label);
-    if (await tagLabelExists(normalizedLabel)) return { kind: "duplicate_label" as const };
+    if (await tagLabelExists(normalizedLabel)) {
+      return { kind: "duplicate_label" as const };
+    }
     const id = createTagId();
     const now = new Date();
-    await database()
-      .insert(tags)
-      .values({
-        id,
-        label: input.label,
-        normalizedLabel,
-        state: "draft",
-        createdAt: now,
-        updatedAt: now,
-      });
+    await database().insert(tags).values({
+      id,
+      label: input.label,
+      normalizedLabel,
+      state: "draft",
+      createdAt: now,
+      updatedAt: now,
+    });
     return { kind: "changed" as const, value: await findTag(id) };
   },
 
   async updateTag(id: TagId, input: TagInput) {
-    if (!(await findTag(id))) return { kind: "not_found" as const };
+    if (!(await findTag(id))) {
+      return { kind: "not_found" as const };
+    }
     const normalizedLabel = normalizedTagLabel(input.label);
-    if (await tagLabelExists(normalizedLabel, id)) return { kind: "duplicate_label" as const };
+    if (await tagLabelExists(normalizedLabel, id)) {
+      return { kind: "duplicate_label" as const };
+    }
     await database()
       .update(tags)
       .set({ label: input.label, normalizedLabel, updatedAt: new Date() })
@@ -257,17 +287,24 @@ export const groupingQueries = {
 
   async transitionCategory(id: CategoryId, target: GroupingState) {
     const current = await findCategory(id);
-    if (!current) return { kind: "not_found" as const };
-    if (current.state === target) return { kind: "changed" as const, value: current };
-    if (target === "draft" || (current.state === "draft" && target === "archived"))
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.state === target) {
+      return { kind: "changed" as const, value: current };
+    }
+    if (target === "draft" || (current.state === "draft" && target === "archived")) {
       return { kind: "invalid_lifecycle" as const };
+    }
     if (target === "archived") {
       const activeChild = await database()
         .select({ id: categories.id })
         .from(categories)
         .where(and(eq(categories.parentId, id), eq(categories.state, "active")))
         .limit(1);
-      if (activeChild.length > 0) return { kind: "active_child" as const };
+      if (activeChild.length > 0) {
+        return { kind: "active_child" as const };
+      }
     }
     const now = new Date();
     await database()
@@ -289,10 +326,15 @@ export const groupingQueries = {
 
   async transitionCollection(id: CollectionId, target: GroupingState) {
     const current = await findCollection(id);
-    if (!current) return { kind: "not_found" as const };
-    if (current.state === target) return { kind: "changed" as const, value: current };
-    if (target === "draft" || (current.state === "draft" && target === "archived"))
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.state === target) {
+      return { kind: "changed" as const, value: current };
+    }
+    if (target === "draft" || (current.state === "draft" && target === "archived")) {
       return { kind: "invalid_lifecycle" as const };
+    }
     const now = new Date();
     await database()
       .update(collections)
@@ -313,10 +355,15 @@ export const groupingQueries = {
 
   async transitionTag(id: TagId, target: GroupingState) {
     const current = await findTag(id);
-    if (!current) return { kind: "not_found" as const };
-    if (current.state === target) return { kind: "changed" as const, value: current };
-    if (target === "draft" || (current.state === "draft" && target === "archived"))
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.state === target) {
+      return { kind: "changed" as const, value: current };
+    }
+    if (target === "draft" || (current.state === "draft" && target === "archived")) {
       return { kind: "invalid_lifecycle" as const };
+    }
     const now = new Date();
     await database()
       .update(tags)
@@ -336,32 +383,41 @@ export const groupingQueries = {
   },
 
   async replaceCategoryMembership(id: CategoryId, input: GroupingMembershipInput) {
-    if (!(await findCategory(id))) return { kind: "not_found" as const };
-    if (!(await validateProductIds(input.productIds)))
+    if (!(await findCategory(id))) {
+      return { kind: "not_found" as const };
+    }
+    if (!(await validateProductIds(input.productIds))) {
       return { kind: "product_not_found" as const };
+    }
     const remove = database()
       .delete(catalogItemCategories)
       .where(eq(catalogItemCategories.categoryId, id));
-    if (input.productIds.length === 0) await database().batch([remove]);
-    else
+    if (input.productIds.length === 0) {
+      await database().batch([remove]);
+    } else {
       await database().batch([
         remove,
         database()
           .insert(catalogItemCategories)
           .values(input.productIds.map((catalogItemId) => ({ categoryId: id, catalogItemId }))),
       ]);
+    }
     return { kind: "changed" as const, value: await findCategory(id) };
   },
 
   async replaceCollectionMembership(id: CollectionId, input: GroupingMembershipInput) {
-    if (!(await findCollection(id))) return { kind: "not_found" as const };
-    if (!(await validateProductIds(input.productIds)))
+    if (!(await findCollection(id))) {
+      return { kind: "not_found" as const };
+    }
+    if (!(await validateProductIds(input.productIds))) {
       return { kind: "product_not_found" as const };
+    }
     const remove = database()
       .delete(catalogItemCollections)
       .where(eq(catalogItemCollections.collectionId, id));
-    if (input.productIds.length === 0) await database().batch([remove]);
-    else
+    if (input.productIds.length === 0) {
+      await database().batch([remove]);
+    } else {
       await database().batch([
         remove,
         database()
@@ -374,22 +430,28 @@ export const groupingQueries = {
             })),
           ),
       ]);
+    }
     return { kind: "changed" as const, value: await findCollection(id) };
   },
 
   async replaceTagMembership(id: TagId, input: GroupingMembershipInput) {
-    if (!(await findTag(id))) return { kind: "not_found" as const };
-    if (!(await validateProductIds(input.productIds)))
+    if (!(await findTag(id))) {
+      return { kind: "not_found" as const };
+    }
+    if (!(await validateProductIds(input.productIds))) {
       return { kind: "product_not_found" as const };
+    }
     const remove = database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id));
-    if (input.productIds.length === 0) await database().batch([remove]);
-    else
+    if (input.productIds.length === 0) {
+      await database().batch([remove]);
+    } else {
       await database().batch([
         remove,
         database()
           .insert(catalogItemTags)
           .values(input.productIds.map((catalogItemId) => ({ tagId: id, catalogItemId }))),
       ]);
+    }
     return { kind: "changed" as const, value: await findTag(id) };
   },
 
