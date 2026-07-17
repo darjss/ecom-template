@@ -8,14 +8,18 @@ import {
   type ProductId,
   type UpdateProductInput,
 } from "@ecom/contracts";
-import { and, eq, exists, isNull, ne, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import {
   auditEvents,
   catalogCachePurgeDebts,
   catalogItems,
   inventoryEntries,
+  optionGroups,
+  optionValues,
   skus,
   stockItems,
+  variantOptionValues,
   variants,
 } from "../db/schema";
 import { database } from "../db/database";
@@ -130,6 +134,9 @@ export const catalogQueries = {
           id: variantId,
           productId: id,
           isDefault: true,
+          combinationKey: "__default__",
+          priceOverrideMnt: null,
+          imageMediaAssetId: null,
           state: "active",
           createdAt: now,
           updatedAt: now,
@@ -286,27 +293,151 @@ export const catalogQueries = {
     }
 
     const db = database();
-    const publicationVariant = db
-      .select({ id: variants.id })
-      .from(variants)
-      .innerJoin(skus, eq(skus.variantId, variants.id))
+    const publicationVariant = alias(variants, "publication_variant");
+    const publicationSku = alias(skus, "publication_sku");
+    const publicationGroup = alias(optionGroups, "publication_group");
+    const publicationMembership = alias(variantOptionValues, "publication_variant_option_value");
+    const publicationValue = alias(optionValues, "publication_value");
+    const duplicateMembership = alias(
+      variantOptionValues,
+      "duplicate_publication_variant_option_value",
+    );
+    const duplicateValue = alias(optionValues, "duplicate_publication_value");
+    const duplicateVariant = alias(variants, "duplicate_publication_variant");
+    const activeGroups = db
+      .select({ id: publicationGroup.id })
+      .from(publicationGroup)
+      .where(
+        and(eq(publicationGroup.productId, catalogItems.id), eq(publicationGroup.state, "active")),
+      );
+    const validSku = db
+      .select({ sku: publicationSku.sku })
+      .from(publicationSku)
       .where(
         and(
-          eq(variants.productId, catalogItems.id),
-          eq(variants.isDefault, true),
-          eq(variants.state, "active"),
-          sql`length(trim(${skus.sku})) > 0`,
+          eq(publicationSku.variantId, publicationVariant.id),
+          sql`length(trim(${publicationSku.sku})) > 0`,
         ),
       );
+    const missingGroup = db
+      .select({ id: publicationGroup.id })
+      .from(publicationGroup)
+      .where(
+        and(
+          eq(publicationGroup.productId, catalogItems.id),
+          eq(publicationGroup.state, "active"),
+          notExists(
+            db
+              .select({ id: publicationMembership.optionValueId })
+              .from(publicationMembership)
+              .innerJoin(
+                publicationValue,
+                eq(publicationValue.id, publicationMembership.optionValueId),
+              )
+              .where(
+                and(
+                  eq(publicationMembership.variantId, publicationVariant.id),
+                  eq(publicationValue.optionGroupId, publicationGroup.id),
+                  eq(publicationValue.state, "active"),
+                ),
+              ),
+          ),
+        ),
+      );
+    const invalidMembership = db
+      .select({ id: publicationMembership.optionValueId })
+      .from(publicationMembership)
+      .innerJoin(publicationValue, eq(publicationValue.id, publicationMembership.optionValueId))
+      .innerJoin(publicationGroup, eq(publicationGroup.id, publicationValue.optionGroupId))
+      .where(
+        and(
+          eq(publicationMembership.variantId, publicationVariant.id),
+          or(
+            ne(publicationGroup.productId, catalogItems.id),
+            ne(publicationGroup.state, "active"),
+            ne(publicationValue.state, "active"),
+          ),
+        ),
+      );
+    const repeatedGroup = db
+      .select({ optionGroupId: duplicateValue.optionGroupId })
+      .from(duplicateMembership)
+      .innerJoin(duplicateValue, eq(duplicateValue.id, duplicateMembership.optionValueId))
+      .where(eq(duplicateMembership.variantId, publicationVariant.id))
+      .groupBy(duplicateValue.optionGroupId)
+      .having(gt(count(), 1));
+    const invalidActiveVariant = db
+      .select({ id: publicationVariant.id })
+      .from(publicationVariant)
+      .where(
+        and(
+          eq(publicationVariant.productId, catalogItems.id),
+          eq(publicationVariant.state, "active"),
+          or(
+            sql`coalesce(${publicationVariant.priceOverrideMnt}, ${catalogItems.priceMnt}) <= 0`,
+            notExists(validSku),
+            and(eq(publicationVariant.isDefault, true), exists(activeGroups)),
+            and(eq(publicationVariant.isDefault, false), notExists(activeGroups)),
+            and(
+              eq(publicationVariant.isDefault, false),
+              or(exists(missingGroup), exists(invalidMembership), exists(repeatedGroup)),
+            ),
+          ),
+        ),
+      );
+    const activeDefaultVariant = db
+      .select({ id: publicationVariant.id })
+      .from(publicationVariant)
+      .where(
+        and(
+          eq(publicationVariant.productId, catalogItems.id),
+          eq(publicationVariant.isDefault, true),
+          eq(publicationVariant.state, "active"),
+          exists(validSku),
+        ),
+      );
+    const activeExplicitVariant = db
+      .select({ id: publicationVariant.id })
+      .from(publicationVariant)
+      .where(
+        and(
+          eq(publicationVariant.productId, catalogItems.id),
+          eq(publicationVariant.isDefault, false),
+          eq(publicationVariant.state, "active"),
+          exists(validSku),
+        ),
+      );
+    const duplicateCombination = db
+      .select({ id: duplicateVariant.id })
+      .from(duplicateVariant)
+      .innerJoin(
+        publicationVariant,
+        and(
+          eq(publicationVariant.productId, duplicateVariant.productId),
+          eq(publicationVariant.combinationKey, duplicateVariant.combinationKey),
+          sql`${publicationVariant.id} < ${duplicateVariant.id}`,
+        ),
+      )
+      .where(
+        and(
+          eq(duplicateVariant.productId, catalogItems.id),
+          eq(duplicateVariant.state, "active"),
+          eq(publicationVariant.state, "active"),
+        ),
+      );
+    const publicationIsValid = and(
+      sql`${catalogItems.priceMnt} > 0`,
+      notExists(invalidActiveVariant),
+      notExists(duplicateCombination),
+      or(
+        and(notExists(activeGroups), exists(activeDefaultVariant)),
+        and(exists(activeGroups), exists(activeExplicitVariant)),
+      ),
+    );
     const transitionPredicate =
       transition === "archive"
         ? and(eq(catalogItems.id, id), eq(catalogItems.state, expected))
-        : and(
-            eq(catalogItems.id, id),
-            eq(catalogItems.state, expected),
-            sql`${catalogItems.priceMnt} > 0`,
-            exists(publicationVariant),
-          );
+        : and(eq(catalogItems.id, id), eq(catalogItems.state, expected), publicationIsValid);
     const now = new Date();
     const correlationId = crypto.randomUUID();
     const debtRevision = crypto.randomUUID();
@@ -358,13 +489,24 @@ export const catalogQueries = {
                 .set({ lockedAt: now, updatedAt: now })
                 .where(
                   and(
-                    eq(skus.variantId, current.defaultVariantId),
                     isNull(skus.lockedAt),
                     exists(
                       db
-                        .select({ id: catalogItems.id })
-                        .from(catalogItems)
-                        .where(transitionPredicate),
+                        .select({ id: variants.id })
+                        .from(variants)
+                        .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+                        .where(
+                          and(
+                            eq(variants.id, skus.variantId),
+                            eq(variants.productId, id),
+                            exists(
+                              db
+                                .select({ id: catalogItems.id })
+                                .from(catalogItems)
+                                .where(transitionPredicate),
+                            ),
+                          ),
+                        ),
                     ),
                   ),
                 )

@@ -6,6 +6,12 @@ export {
   type CatalogMediaFailure,
 } from "./catalog-media/operations";
 export {
+  saveProductOptions,
+  setVariantState,
+  updateVariantPresentation,
+  type CatalogVariantFailure,
+} from "./catalog-variants/operations";
+export {
   adjustProductInventory,
   createProduct,
   listCatalog,

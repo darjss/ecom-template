@@ -14,6 +14,9 @@ import {
   MediaUploadResponseSchema,
   MediaWidthSchema,
   ProductIdSchema,
+  SaveProductOptionsInputSchema,
+  UpdateVariantPresentationInputSchema,
+  VariantIdSchema,
   UpdateProductInputSchema,
   HealthResponseSchema,
   StaffCreateInputSchema,
@@ -43,10 +46,14 @@ import {
   removeStaff,
   retryProductCachePurge,
   revokeStaff,
+  saveProductOptions,
+  setVariantState,
+  updateVariantPresentation,
   transitionProduct,
   updateProduct,
   type CatalogMediaFailure,
   type CatalogOperationFailure,
+  type CatalogVariantFailure,
   type CustomerSmsDelivery,
   type StaffOperationFailure,
   type StorefrontReader,
@@ -92,36 +99,44 @@ const MediaUploadBodySchema = v.strictObject({
 });
 
 const catalogError = (
-  failure: CatalogOperationFailure | CatalogMediaFailure,
+  failure: CatalogOperationFailure | CatalogMediaFailure | CatalogVariantFailure,
   status: (code: number, body: unknown) => unknown,
 ) => {
   const code = failure.code;
   const message =
     code === "duplicate_slug"
       ? "Product slug is already in use"
-      : code === "invalid_publication"
-        ? "Product publication invariants are not satisfied"
-        : code === "invalid_lifecycle"
-          ? "Product lifecycle transition is not valid"
-          : code === "reservation_blocked"
-            ? "Active reservations block this inventory adjustment"
-            : code === "inventory_inconsistent"
-              ? "Reserved inventory truth requires reconciliation"
-              : code === "inventory_limit"
-                ? "Inventory on-hand cannot exceed 1,000,000"
-                : code === "unsupported_media_type"
-                  ? "The declared image type must match JPEG, PNG, or WebP bytes"
-                  : code === "invalid_media_bytes"
-                    ? "The upload is not a valid JPEG, PNG, or WebP image"
-                    : code === "media_too_large"
-                      ? "The image must be no larger than 8 MiB"
-                      : code === "not_found"
-                        ? "Product was not found"
-                        : code === "forbidden"
-                          ? "Catalog authority is required"
-                          : code === "conflict"
-                            ? "Inventory changed concurrently"
-                            : "Catalog infrastructure is unavailable";
+      : code === "duplicate_combination"
+        ? "Each Variant combination must be unique"
+        : code === "invalid_combination"
+          ? "Variant choices must belong to this Product"
+          : code === "immutable_configuration"
+            ? "Published option and combination facts are immutable"
+            : code === "media_not_owned"
+              ? "Variant images must be attached to this Product"
+              : code === "invalid_publication"
+                ? "Product publication invariants are not satisfied"
+                : code === "invalid_lifecycle"
+                  ? "Product lifecycle transition is not valid"
+                  : code === "reservation_blocked"
+                    ? "Active reservations block this inventory adjustment"
+                    : code === "inventory_inconsistent"
+                      ? "Reserved inventory truth requires reconciliation"
+                      : code === "inventory_limit"
+                        ? "Inventory on-hand cannot exceed 1,000,000"
+                        : code === "unsupported_media_type"
+                          ? "The declared image type must match JPEG, PNG, or WebP bytes"
+                          : code === "invalid_media_bytes"
+                            ? "The upload is not a valid JPEG, PNG, or WebP image"
+                            : code === "media_too_large"
+                              ? "The image must be no larger than 8 MiB"
+                              : code === "not_found"
+                                ? "Product was not found"
+                                : code === "forbidden"
+                                  ? "Catalog authority is required"
+                                  : code === "conflict"
+                                    ? "Inventory changed concurrently"
+                                    : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403
@@ -407,6 +422,69 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         ? catalogError(result.error, status)
         : v.parse(CatalogProductResponseSchema, { data: result.value });
     })
+    .put("/catalog/products/:id/options", async ({ body, params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      const input = v.safeParse(SaveProductOptionsInputSchema, body);
+      if (!id.success || !input.success) {
+        return status(422, apiError("validation", "Valid bounded Product options are required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await saveProductOptions(authorization.actor, id.output, input.output);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .patch(
+      "/catalog/products/:id/variants/:variantId",
+      async ({ body, params, request, status }) => {
+        const id = v.safeParse(ProductIdSchema, params.id);
+        const variantId = v.safeParse(VariantIdSchema, params.variantId);
+        const input = v.safeParse(UpdateVariantPresentationInputSchema, body);
+        if (!id.success || !variantId.success || !input.success) {
+          return status(422, apiError("validation", "Valid Variant presentation is required"));
+        }
+        const authorization = await authorizeRoute(request, definition, status);
+        if (!authorization.authorized) {
+          return authorization.response;
+        }
+        const result = await updateVariantPresentation(
+          authorization.actor,
+          id.output,
+          variantId.output,
+          input.output,
+        );
+        return result.isErr()
+          ? catalogError(result.error, status)
+          : v.parse(CatalogProductResponseSchema, { data: result.value });
+      },
+    )
+    .post(
+      "/catalog/products/:id/variants/:variantId/:action",
+      async ({ params, request, status }) => {
+        const id = v.safeParse(ProductIdSchema, params.id);
+        const variantId = v.safeParse(VariantIdSchema, params.variantId);
+        const action = v.safeParse(v.picklist(["archive", "reactivate"]), params.action);
+        if (!id.success || !variantId.success || !action.success) {
+          return status(422, apiError("validation", "Valid Variant lifecycle facts are required"));
+        }
+        const authorization = await authorizeRoute(request, definition, status);
+        if (!authorization.authorized) {
+          return authorization.response;
+        }
+        const result = await setVariantState(
+          authorization.actor,
+          id.output,
+          variantId.output,
+          action.output === "archive" ? "archived" : "active",
+        );
+        return result.isErr()
+          ? catalogError(result.error, status)
+          : v.parse(CatalogProductResponseSchema, { data: result.value });
+      },
+    )
     .post("/catalog/products/:id/images", async ({ body, params, request, status }) => {
       const id = v.safeParse(ProductIdSchema, params.id);
       const multipart = v.safeParse(MediaUploadBodySchema, body);

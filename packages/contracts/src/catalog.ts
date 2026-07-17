@@ -20,6 +20,8 @@ export const BundleIdSchema = typeIdSchema("bundle", "Bundle ID");
 export const CatalogItemIdSchema = v.union([ProductIdSchema, BundleIdSchema]);
 export const CatalogItemKindSchema = v.picklist(["product", "bundle"]);
 export const VariantIdSchema = typeIdSchema("variant", "Variant ID");
+export const OptionGroupIdSchema = typeIdSchema("option_group", "Option Group ID");
+export const OptionValueIdSchema = typeIdSchema("option_value", "Option Value ID");
 export const MediaAssetIdSchema = typeIdSchema("media", "Media Asset ID");
 export const StockItemIdSchema = typeIdSchema("stock_item", "Stock Item ID");
 export const InventoryEntryIdSchema = typeIdSchema("inventory_entry", "Inventory Entry ID");
@@ -91,6 +93,46 @@ export const CachePurgeDebtSchema = v.strictObject({
   lastAttemptedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
 });
 
+export const OptionKeySchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  v.maxLength(48),
+);
+export const OptionLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
+export const OptionPositionSchema = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(99));
+export const OptionValueSchema = v.strictObject({
+  id: OptionValueIdSchema,
+  key: OptionKeySchema,
+  label: OptionLabelSchema,
+  position: OptionPositionSchema,
+  state: v.picklist(["active", "archived"]),
+});
+export const OptionGroupSchema = v.strictObject({
+  id: OptionGroupIdSchema,
+  key: OptionKeySchema,
+  label: OptionLabelSchema,
+  position: OptionPositionSchema,
+  state: v.picklist(["active", "archived"]),
+  values: v.pipe(v.array(OptionValueSchema), v.maxLength(12)),
+});
+export const VariantSchema = v.strictObject({
+  id: VariantIdSchema,
+  sku: SkuSchema,
+  isDefault: v.boolean(),
+  state: v.picklist(["active", "archived"]),
+  priceOverrideMnt: v.nullable(PriceMntSchema),
+  imageMediaAssetId: v.nullable(MediaAssetIdSchema),
+  optionValueIds: v.array(OptionValueIdSchema),
+  stockItemId: StockItemIdSchema,
+  onHandQuantity: InventoryQuantitySchema,
+  reservedQuantity: InventoryQuantitySchema,
+});
+export const ProductOptionConfigurationSchema = v.strictObject({
+  groups: v.pipe(v.array(OptionGroupSchema), v.maxLength(3)),
+  variants: v.pipe(v.array(VariantSchema), v.maxLength(101)),
+});
+
 export const ProductSchema = v.strictObject({
   id: ProductIdSchema,
   defaultVariantId: VariantIdSchema,
@@ -105,6 +147,7 @@ export const ProductSchema = v.strictObject({
   reservedQuantity: InventoryQuantitySchema,
   cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   images: v.array(CatalogImageSchema),
+  optionConfiguration: ProductOptionConfigurationSchema,
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   updatedAt: v.pipe(v.string(), v.isoTimestamp()),
 });
@@ -135,6 +178,34 @@ export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
   reason: InventoryReasonSchema,
 });
+const OptionValueDraftSchema = v.strictObject({
+  id: v.optional(OptionValueIdSchema),
+  key: OptionKeySchema,
+  label: OptionLabelSchema,
+  position: OptionPositionSchema,
+});
+const OptionGroupDraftSchema = v.strictObject({
+  id: v.optional(OptionGroupIdSchema),
+  key: OptionKeySchema,
+  label: OptionLabelSchema,
+  position: OptionPositionSchema,
+  values: v.pipe(v.array(OptionValueDraftSchema), v.minLength(1), v.maxLength(12)),
+});
+const VariantDraftSchema = v.strictObject({
+  id: v.optional(VariantIdSchema),
+  optionValueIds: v.pipe(v.array(OptionValueIdSchema), v.minLength(1), v.maxLength(3)),
+  priceOverrideMnt: v.nullable(PriceMntSchema),
+  imageMediaAssetId: v.nullable(MediaAssetIdSchema),
+  state: v.picklist(["active", "archived"]),
+});
+export const SaveProductOptionsInputSchema = v.strictObject({
+  groups: v.pipe(v.array(OptionGroupDraftSchema), v.maxLength(3)),
+  variants: v.pipe(v.array(VariantDraftSchema), v.maxLength(100)),
+});
+export const UpdateVariantPresentationInputSchema = v.strictObject({
+  priceOverrideMnt: v.nullable(PriceMntSchema),
+  imageMediaAssetId: v.nullable(MediaAssetIdSchema),
+});
 
 export const InventoryBlockingReservationSchema = v.strictObject({
   reservationId: InventoryReservationIdSchema,
@@ -146,6 +217,10 @@ export const CatalogFailureReasonSchema = v.picklist([
   "not_found",
   "invalid_lifecycle",
   "invalid_publication",
+  "immutable_configuration",
+  "duplicate_combination",
+  "invalid_combination",
+  "media_not_owned",
   "reservation_blocked",
   "inventory_inconsistent",
   "inventory_limit",
@@ -191,9 +266,39 @@ export const PublicProductSummarySchema = v.strictObject({
   priceMnt: PriceMntSchema,
   images: v.array(PublicCatalogImageSchema),
 });
+export const PublicVariantSchema = v.strictObject({
+  id: VariantIdSchema,
+  sku: SkuSchema,
+  priceMnt: PriceMntSchema,
+  image: v.nullable(PublicCatalogImageSchema),
+  optionValues: v.array(
+    v.strictObject({
+      groupId: OptionGroupIdSchema,
+      groupLabel: OptionLabelSchema,
+      valueId: OptionValueIdSchema,
+      valueLabel: OptionLabelSchema,
+    }),
+  ),
+});
+export const PublicOptionGroupSchema = v.strictObject({
+  id: OptionGroupIdSchema,
+  label: OptionLabelSchema,
+  position: OptionPositionSchema,
+  values: v.pipe(
+    v.array(
+      v.strictObject({
+        id: OptionValueIdSchema,
+        label: OptionLabelSchema,
+        position: OptionPositionSchema,
+      }),
+    ),
+    v.maxLength(12),
+  ),
+});
 export const PublicProductDetailSchema = v.strictObject({
   ...PublicProductSummarySchema.entries,
-  variantId: VariantIdSchema,
+  optionGroups: v.pipe(v.array(PublicOptionGroupSchema), v.maxLength(3)),
+  variants: v.pipe(v.array(PublicVariantSchema), v.minLength(1), v.maxLength(100)),
 });
 
 export type ProductId = v.InferOutput<typeof ProductIdSchema>;
@@ -201,6 +306,8 @@ export type BundleId = v.InferOutput<typeof BundleIdSchema>;
 export type CatalogItemId = v.InferOutput<typeof CatalogItemIdSchema>;
 export type CatalogItemKind = v.InferOutput<typeof CatalogItemKindSchema>;
 export type VariantId = v.InferOutput<typeof VariantIdSchema>;
+export type OptionGroupId = v.InferOutput<typeof OptionGroupIdSchema>;
+export type OptionValueId = v.InferOutput<typeof OptionValueIdSchema>;
 export type MediaAssetId = v.InferOutput<typeof MediaAssetIdSchema>;
 export type StockItemId = v.InferOutput<typeof StockItemIdSchema>;
 export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
@@ -208,6 +315,10 @@ export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
+export type SaveProductOptionsInput = v.InferOutput<typeof SaveProductOptionsInputSchema>;
+export type UpdateVariantPresentationInput = v.InferOutput<
+  typeof UpdateVariantPresentationInputSchema
+>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
 export type MediaContentType = v.InferOutput<typeof MediaContentTypeSchema>;
 export type MediaWidth = v.InferOutput<typeof MediaWidthSchema>;
@@ -225,11 +336,15 @@ export type PublicProductDetail = v.InferOutput<typeof PublicProductDetailSchema
 export const createProductId = () => typeidUnboxed("product");
 export const createBundleId = () => typeidUnboxed("bundle");
 export const createVariantId = () => typeidUnboxed("variant");
+export const createOptionGroupId = () => typeidUnboxed("option_group");
+export const createOptionValueId = () => typeidUnboxed("option_value");
 export const createMediaAssetId = () => typeidUnboxed("media");
 export const createStockItemId = () => typeidUnboxed("stock_item");
 export const createInventoryEntryId = () => typeidUnboxed("inventory_entry");
 export const parseProductId = (value: string) => fromString(value, "product");
 export const parseVariantId = (value: string) => fromString(value, "variant");
+export const parseOptionGroupId = (value: string) => fromString(value, "option_group");
+export const parseOptionValueId = (value: string) => fromString(value, "option_value");
 export const parseMediaAssetId = (value: string) => fromString(value, "media");
 export const parseStockItemId = (value: string) => fromString(value, "stock_item");
 export const parseInventoryEntryId = (value: string) => fromString(value, "inventory_entry");
