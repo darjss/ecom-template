@@ -1,0 +1,1214 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "c90c1190-78bf-4ac3-be8b-8b649d1671cd",
+  "prevId": "03d47d07-f0fa-4edb-902b-6a0f76c0aa6b",
+  "tables": {
+    "audit_events": {
+      "name": "audit_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_kind": {
+          "name": "actor_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "staff_role": {
+          "name": "staff_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telegram_operator_label": {
+          "name": "telegram_operator_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_channel": {
+          "name": "source_channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_kind": {
+          "name": "entity_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "command_correlation_id": {
+          "name": "command_correlation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata_json": {
+          "name": "metadata_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "audit_events_entity_timeline_idx": {
+          "name": "audit_events_entity_timeline_idx",
+          "columns": ["entity_kind", "entity_id", "created_at"],
+          "isUnique": false
+        },
+        "audit_events_actor_timeline_idx": {
+          "name": "audit_events_actor_timeline_idx",
+          "columns": ["actor_kind", "actor_id", "created_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audit_events_id_check": {
+          "name": "audit_events_id_check",
+          "value": "length(\"audit_events\".\"id\") = 32 AND substr(\"audit_events\".\"id\", 1, 6) = 'audit_' AND substr(\"audit_events\".\"id\", 7, 1) GLOB '[0-7]' AND substr(\"audit_events\".\"id\", 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
+        },
+        "audit_events_actor_check": {
+          "name": "audit_events_actor_check",
+          "value": "(\"audit_events\".\"actor_kind\" = 'staff' AND \"audit_events\".\"actor_id\" IS NOT NULL AND \"audit_events\".\"staff_role\" IS NOT NULL AND \"audit_events\".\"telegram_operator_label\" IS NULL AND \"audit_events\".\"telegram_user_id\" IS NULL) OR (\"audit_events\".\"actor_kind\" = 'telegram_operator' AND \"audit_events\".\"actor_id\" IS NULL AND \"audit_events\".\"staff_role\" IS NULL AND \"audit_events\".\"telegram_operator_label\" IS NOT NULL AND \"audit_events\".\"telegram_user_id\" IS NOT NULL) OR (\"audit_events\".\"actor_kind\" NOT IN ('staff', 'telegram_operator') AND \"audit_events\".\"staff_role\" IS NULL AND \"audit_events\".\"telegram_operator_label\" IS NULL AND \"audit_events\".\"telegram_user_id\" IS NULL)"
+        },
+        "audit_events_actor_kind_check": {
+          "name": "audit_events_actor_kind_check",
+          "value": "\"audit_events\".\"actor_kind\" IN ('system', 'staff', 'customer', 'provider', 'telegram_operator')"
+        },
+        "audit_events_staff_actor_id_check": {
+          "name": "audit_events_staff_actor_id_check",
+          "value": "\"audit_events\".\"actor_kind\" <> 'staff' OR (length(\"audit_events\".\"actor_id\") = 32 AND substr(\"audit_events\".\"actor_id\", 1, 6) = 'staff_' AND substr(\"audit_events\".\"actor_id\", 7, 1) GLOB '[0-7]' AND substr(\"audit_events\".\"actor_id\", 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*')"
+        },
+        "audit_events_staff_role_check": {
+          "name": "audit_events_staff_role_check",
+          "value": "\"audit_events\".\"staff_role\" IS NULL OR \"audit_events\".\"staff_role\" IN ('owner', 'manager', 'staff')"
+        },
+        "audit_events_telegram_operator_check": {
+          "name": "audit_events_telegram_operator_check",
+          "value": "\"audit_events\".\"actor_kind\" <> 'telegram_operator' OR (\"audit_events\".\"telegram_operator_label\" = trim(\"audit_events\".\"telegram_operator_label\") AND length(\"audit_events\".\"telegram_operator_label\") BETWEEN 1 AND 64 AND \"audit_events\".\"telegram_user_id\" > 0 AND \"audit_events\".\"telegram_user_id\" <= 9007199254740991)"
+        },
+        "audit_events_source_channel_check": {
+          "name": "audit_events_source_channel_check",
+          "value": "\"audit_events\".\"source_channel\" IN ('admin', 'storefront', 'provider_callback', 'workflow', 'telegram', 'provisioning')"
+        },
+        "audit_events_outcome_check": {
+          "name": "audit_events_outcome_check",
+          "value": "\"audit_events\".\"outcome\" IN ('accepted', 'rejected')"
+        },
+        "audit_events_correlation_length_check": {
+          "name": "audit_events_correlation_length_check",
+          "value": "length(\"audit_events\".\"command_correlation_id\") BETWEEN 1 AND 64"
+        },
+        "audit_events_metadata_check": {
+          "name": "audit_events_metadata_check",
+          "value": "\"audit_events\".\"metadata_json\" IS NULL OR (json_valid(\"audit_events\".\"metadata_json\") AND length(\"audit_events\".\"metadata_json\") <= 2048)"
+        },
+        "audit_events_fact_length_check": {
+          "name": "audit_events_fact_length_check",
+          "value": "length(\"audit_events\".\"action\") BETWEEN 1 AND 64 AND length(\"audit_events\".\"entity_kind\") BETWEEN 1 AND 64 AND length(\"audit_events\".\"entity_id\") BETWEEN 1 AND 128"
+        }
+      }
+    },
+    "customer_otp_challenges": {
+      "name": "customer_otp_challenges",
+      "columns": {
+        "normalized_phone": {
+          "name": "normalized_phone",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "digest": {
+          "name": "digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "customer_otp_challenges_request_id_unique": {
+          "name": "customer_otp_challenges_request_id_unique",
+          "columns": ["request_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "customer_otp_challenges_attempts_check": {
+          "name": "customer_otp_challenges_attempts_check",
+          "value": "\"customer_otp_challenges\".\"attempts\" BETWEEN 0 AND 4"
+        },
+        "customer_otp_challenges_digest_check": {
+          "name": "customer_otp_challenges_digest_check",
+          "value": "length(\"customer_otp_challenges\".\"digest\") = 64"
+        },
+        "customer_otp_challenges_request_id_check": {
+          "name": "customer_otp_challenges_request_id_check",
+          "value": "length(\"customer_otp_challenges\".\"request_id\") = 36"
+        },
+        "customer_otp_challenges_expiry_check": {
+          "name": "customer_otp_challenges_expiry_check",
+          "value": "\"customer_otp_challenges\".\"created_at\" < \"customer_otp_challenges\".\"expires_at\""
+        }
+      }
+    },
+    "customers": {
+      "name": "customers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normalized_phone": {
+          "name": "normalized_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auth_user_id": {
+          "name": "auth_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "customers_normalized_phone_unique": {
+          "name": "customers_normalized_phone_unique",
+          "columns": ["normalized_phone"],
+          "isUnique": true
+        },
+        "customers_auth_user_id_unique": {
+          "name": "customers_auth_user_id_unique",
+          "columns": ["auth_user_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "customers_phone_check": {
+          "name": "customers_phone_check",
+          "value": "\"customers\".\"normalized_phone\" GLOB '+976[5-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"
+        },
+        "customers_id_check": {
+          "name": "customers_id_check",
+          "value": "length(\"customers\".\"id\") = 35 AND substr(\"customers\".\"id\", 1, 9) = 'customer_' AND substr(\"customers\".\"id\", 10, 1) GLOB '[0-7]' AND substr(\"customers\".\"id\", 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
+        }
+      }
+    },
+    "staff_members": {
+      "name": "staff_members",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normalized_email": {
+          "name": "normalized_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auth_user_id": {
+          "name": "auth_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "session_generation": {
+          "name": "session_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "staff_members_normalized_email_unique": {
+          "name": "staff_members_normalized_email_unique",
+          "columns": ["normalized_email"],
+          "isUnique": true
+        },
+        "staff_members_auth_user_id_unique": {
+          "name": "staff_members_auth_user_id_unique",
+          "columns": ["auth_user_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "staff_members_status_check": {
+          "name": "staff_members_status_check",
+          "value": "\"staff_members\".\"status\" IN ('pending', 'active', 'revoked')"
+        },
+        "staff_members_role_check": {
+          "name": "staff_members_role_check",
+          "value": "\"staff_members\".\"role\" IS NULL OR \"staff_members\".\"role\" IN ('owner', 'manager', 'staff')"
+        },
+        "staff_members_id_check": {
+          "name": "staff_members_id_check",
+          "value": "length(\"staff_members\".\"id\") = 32 AND substr(\"staff_members\".\"id\", 1, 6) = 'staff_' AND substr(\"staff_members\".\"id\", 7, 1) GLOB '[0-7]' AND substr(\"staff_members\".\"id\", 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
+        },
+        "staff_members_lifecycle_check": {
+          "name": "staff_members_lifecycle_check",
+          "value": "(\"staff_members\".\"status\" = 'pending' AND \"staff_members\".\"approved_at\" IS NULL AND \"staff_members\".\"revoked_at\" IS NULL) OR (\"staff_members\".\"status\" = 'active' AND \"staff_members\".\"role\" IS NOT NULL AND \"staff_members\".\"approved_at\" IS NOT NULL AND \"staff_members\".\"revoked_at\" IS NULL) OR (\"staff_members\".\"status\" = 'revoked' AND \"staff_members\".\"approved_at\" IS NOT NULL AND \"staff_members\".\"revoked_at\" IS NOT NULL)"
+        },
+        "staff_members_lifecycle_order_check": {
+          "name": "staff_members_lifecycle_order_check",
+          "value": "\"staff_members\".\"created_at\" <= \"staff_members\".\"updated_at\" AND (\"staff_members\".\"approved_at\" IS NULL OR (\"staff_members\".\"created_at\" <= \"staff_members\".\"approved_at\" AND \"staff_members\".\"approved_at\" <= \"staff_members\".\"updated_at\")) AND (\"staff_members\".\"revoked_at\" IS NULL OR (\"staff_members\".\"approved_at\" <= \"staff_members\".\"revoked_at\" AND \"staff_members\".\"revoked_at\" <= \"staff_members\".\"updated_at\"))"
+        }
+      }
+    },
+    "staff_session_cleanup_debts": {
+      "name": "staff_session_cleanup_debts",
+      "columns": {
+        "auth_user_id": {
+          "name": "auth_user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "session_generation": {
+          "name": "session_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "staff_session_cleanup_debts_staff_id_check": {
+          "name": "staff_session_cleanup_debts_staff_id_check",
+          "value": "length(\"staff_session_cleanup_debts\".\"staff_id\") = 32 AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 1, 6) = 'staff_' AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 7, 1) GLOB '[0-7]' AND substr(\"staff_session_cleanup_debts\".\"staff_id\", 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
+        },
+        "staff_session_cleanup_debts_generation_check": {
+          "name": "staff_session_cleanup_debts_generation_check",
+          "value": "\"staff_session_cleanup_debts\".\"session_generation\" >= 0"
+        },
+        "staff_session_cleanup_debts_operation_check": {
+          "name": "staff_session_cleanup_debts_operation_check",
+          "value": "\"staff_session_cleanup_debts\".\"operation\" IN ('approve', 'role_change', 'revoke', 'remove', 'provision')"
+        }
+      }
+    },
+    "system_metadata": {
+      "name": "system_metadata",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "customer_auth_accounts": {
+      "name": "customer_auth_accounts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "customer_auth_accounts_userId_idx": {
+          "name": "customer_auth_accounts_userId_idx",
+          "columns": ["user_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_auth_accounts_user_id_customer_auth_users_id_fk": {
+          "name": "customer_auth_accounts_user_id_customer_auth_users_id_fk",
+          "tableFrom": "customer_auth_accounts",
+          "tableTo": "customer_auth_users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "customer_auth_sessions": {
+      "name": "customer_auth_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "customer_auth_sessions_token_unique": {
+          "name": "customer_auth_sessions_token_unique",
+          "columns": ["token"],
+          "isUnique": true
+        },
+        "customer_auth_sessions_userId_idx": {
+          "name": "customer_auth_sessions_userId_idx",
+          "columns": ["user_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "customer_auth_sessions_user_id_customer_auth_users_id_fk": {
+          "name": "customer_auth_sessions_user_id_customer_auth_users_id_fk",
+          "tableFrom": "customer_auth_sessions",
+          "tableTo": "customer_auth_users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "customer_auth_users": {
+      "name": "customer_auth_users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "customer_auth_users_email_unique": {
+          "name": "customer_auth_users_email_unique",
+          "columns": ["email"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "customer_auth_verifications": {
+      "name": "customer_auth_verifications",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "customer_auth_verifications_identifier_idx": {
+          "name": "customer_auth_verifications_identifier_idx",
+          "columns": ["identifier"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "staff_auth_accounts": {
+      "name": "staff_auth_accounts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "staff_auth_accounts_userId_idx": {
+          "name": "staff_auth_accounts_userId_idx",
+          "columns": ["user_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "staff_auth_accounts_user_id_staff_auth_users_id_fk": {
+          "name": "staff_auth_accounts_user_id_staff_auth_users_id_fk",
+          "tableFrom": "staff_auth_accounts",
+          "tableTo": "staff_auth_users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "staff_auth_sessions": {
+      "name": "staff_auth_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "generation": {
+          "name": "generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "staff_auth_sessions_token_unique": {
+          "name": "staff_auth_sessions_token_unique",
+          "columns": ["token"],
+          "isUnique": true
+        },
+        "staff_auth_sessions_userId_idx": {
+          "name": "staff_auth_sessions_userId_idx",
+          "columns": ["user_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "staff_auth_sessions_user_id_staff_auth_users_id_fk": {
+          "name": "staff_auth_sessions_user_id_staff_auth_users_id_fk",
+          "tableFrom": "staff_auth_sessions",
+          "tableTo": "staff_auth_users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "staff_auth_users": {
+      "name": "staff_auth_users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "staff_auth_users_email_unique": {
+          "name": "staff_auth_users_email_unique",
+          "columns": ["email"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "staff_auth_verifications": {
+      "name": "staff_auth_verifications",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "staff_auth_verifications_identifier_idx": {
+          "name": "staff_auth_verifications_identifier_idx",
+          "columns": ["identifier"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

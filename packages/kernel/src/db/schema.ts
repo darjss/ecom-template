@@ -4,6 +4,70 @@ import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-cor
 export * from "../auth/customer.generated";
 export * from "../auth/staff.generated";
 
+export const customers = sqliteTable(
+  "customers",
+  {
+    id: text("id").primaryKey(),
+    normalizedPhone: text("normalized_phone").notNull().unique(),
+    authUserId: text("auth_user_id").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "customers_phone_check",
+      sql`${table.normalizedPhone} GLOB '+976[5-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'`,
+    ),
+    check(
+      "customers_id_check",
+      sql`length(${table.id}) = 35 AND substr(${table.id}, 1, 9) = 'customer_' AND substr(${table.id}, 10, 1) GLOB '[0-7]' AND substr(${table.id}, 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("customers_auth_identity_check", sql`${table.authUserId} = ${table.id}`),
+  ],
+);
+
+export const customerOtpRateCounters = sqliteTable(
+  "customer_otp_rate_counters",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("customer_otp_rate_counters_count_check", sql`${table.count} > 0`),
+    index("customer_otp_rate_counters_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const customerOtpRateAdmissions = sqliteTable(
+  "customer_otp_rate_admissions",
+  {
+    requestId: text("request_id").primaryKey(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("customer_otp_rate_admissions_request_id_check", sql`length(${table.requestId}) = 36`),
+    index("customer_otp_rate_admissions_created_idx").on(table.createdAt),
+  ],
+);
+
+export const customerOtpChallenges = sqliteTable(
+  "customer_otp_challenges",
+  {
+    normalizedPhone: text("normalized_phone").primaryKey(),
+    digest: text("digest").notNull(),
+    requestId: text("request_id").notNull().unique(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("customer_otp_challenges_attempts_check", sql`${table.attempts} BETWEEN 0 AND 4`),
+    check("customer_otp_challenges_digest_check", sql`length(${table.digest}) = 64`),
+    check("customer_otp_challenges_request_id_check", sql`length(${table.requestId}) = 36`),
+    check("customer_otp_challenges_expiry_check", sql`${table.createdAt} < ${table.expiresAt}`),
+  ],
+);
+
 export const staffMembers = sqliteTable(
   "staff_members",
   {

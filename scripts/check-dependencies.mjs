@@ -179,6 +179,7 @@ const rawSchemaLocationAllowed = (path) =>
 const cloudflareLocationAllowed = (path) =>
   /^apps\/[^/]+\/src\/worker\.ts$/.test(path) ||
   path.startsWith("packages/api/src/") ||
+  path.startsWith("packages/integrations/src/") ||
   path.startsWith("packages/kernel/src/");
 
 for (const sourceRoot of ["apps", "packages"]) {
@@ -225,7 +226,7 @@ for (const sourceRoot of ["apps", "packages"]) {
         const detail =
           owner && browserPackages.has(owner)
             ? `browser package @ecom/${owner} cannot import Worker bindings`
-            : "Worker bindings belong only in a Store src/worker.ts or owning packages/api and packages/kernel server modules";
+            : "Worker bindings belong only in a Store src/worker.ts or owning API, integration, and kernel server modules";
         fail(`${path}: ${detail}`);
       }
     }

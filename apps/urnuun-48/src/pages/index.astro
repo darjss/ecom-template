@@ -1,5 +1,6 @@
 ---
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import { CustomerAuthIsland } from "@ecom/storefront";
 import { CartIsland } from "@ecom/storefront/cart";
 import StoreLayout from "../layouts/StoreLayout.astro";
 import { storefront } from "../api";
@@ -61,6 +62,13 @@ const categories = ["Хүнс", "Цэвэрлэгээ", "Цүнх, хадгал�
         <p class="availability"><span></span>Бэлэн, захиалахад дахин шалгана</p>
         <CartIsland {...featuredItem} storageKey={storeDefinition.cartStorageKey} client:only="solid-js" />
       </div>
+    </section>
+    <section class="customer-auth" aria-labelledby="customer-auth-title">
+      <div>
+        <h2 id="customer-auth-title">Захиалгын түүхээ хадгалах</h2>
+        <p>Утасны дугаараа нэг удаагийн кодоор баталгаажуулбал энэ дэлгүүрийн захиалгуудаа дараа нь харж болно. Худалдан авалт хийхэд нэвтрэх шаардлагагүй.</p>
+      </div>
+      <CustomerAuthIsland client:only="solid-js" />
     </section>
   </main>
   <footer><span>Өрнүүн 48</span><span>{summary.location}</span></footer>

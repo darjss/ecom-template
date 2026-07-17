@@ -57,6 +57,27 @@
       "when": 1784264098885,
       "tag": "0007_organic_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784275906476,
+      "tag": "0008_dry_naoko",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784278308202,
+      "tag": "0009_sudden_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784278662858,
+      "tag": "0010_red_pestilence",
+      "breakpoints": true
     }
   ]
 }
