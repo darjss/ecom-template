@@ -66,18 +66,25 @@ export const readPersonalizations = async (catalogItemIds: readonly CatalogItemI
       PersonalizationDefinitionsSchema,
       definitions
         .filter((definition) => definition.catalogItemId === catalogItemId)
-        .map(({ catalogItemId: _catalogItemId, ...definition }) => ({
-          ...definition,
-          values: values
-            .filter((value) => value.personalizationId === definition.id)
-            .map(
-              ({
-                catalogItemId: _valueCatalogItemId,
-                personalizationId: _personalizationId,
-                ...value
-              }) => value,
-            ),
-        })),
+        .map(
+          ({
+            catalogItemId: _catalogItemId,
+            createdAt: _createdAt,
+            updatedAt: _updatedAt,
+            ...definition
+          }) => ({
+            ...definition,
+            values: values
+              .filter((value) => value.personalizationId === definition.id)
+              .map(
+                ({
+                  catalogItemId: _valueCatalogItemId,
+                  personalizationId: _personalizationId,
+                  ...value
+                }) => value,
+              ),
+          }),
+        ),
     ),
   }));
 };
