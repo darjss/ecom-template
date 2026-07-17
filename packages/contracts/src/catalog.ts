@@ -1,5 +1,6 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
+import type { ClientRequestError } from "./client-error";
 
 const typeIdSchema = (prefix: string, label: string) =>
   v.pipe(
@@ -27,7 +28,7 @@ export const CatalogSlugSchema = v.pipe(
   v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   v.maxLength(100),
 );
-export const SkuSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64));
+export const SkuSchema = v.pipe(v.string(), v.regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/), v.maxLength(64));
 export const PriceMntSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -83,29 +84,23 @@ export const CatalogProductResponseSchema = v.strictObject({
     cachePurgeRequestId: CachePurgeRequestIdSchema,
   }),
 });
-export const CatalogIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const CreateProductInputSchema = v.strictObject({
-  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
   priceMnt: PriceMntSchema,
-  sku: SkuSchema,
   openingQuantity: InventoryQuantitySchema,
   inventoryReason: InventoryReasonSchema,
 });
 export const UpdateProductInputSchema = v.strictObject({
-  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.pipe(v.string(), v.maxLength(5_000)),
   priceMnt: PriceMntSchema,
-  sku: SkuSchema,
 });
 export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
   reason: InventoryReasonSchema,
-  idempotencyKey: CatalogIdempotencyKeySchema,
 });
 
 export const InventoryBlockingReservationSchema = v.strictObject({
@@ -115,15 +110,12 @@ export const InventoryBlockingReservationSchema = v.strictObject({
 });
 export const CatalogFailureReasonSchema = v.picklist([
   "duplicate_slug",
-  "duplicate_sku",
   "not_found",
   "invalid_lifecycle",
   "invalid_publication",
-  "sku_locked",
   "reservation_blocked",
   "inventory_inconsistent",
   "inventory_limit",
-  "idempotency_conflict",
   "committed_but_not_purged",
 ]);
 export const CatalogApiErrorSchema = v.strictObject({
@@ -141,12 +133,6 @@ export const CatalogApiErrorSchema = v.strictObject({
     blockers: v.optional(v.array(InventoryBlockingReservationSchema)),
   }),
 });
-export const CatalogClientErrorSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("network"), message: v.string() }),
-  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
-  v.strictObject({ kind: v.literal("api"), error: CatalogApiErrorSchema.entries.error }),
-]);
-
 export const PublicProductSummarySchema = v.strictObject({
   id: ProductIdSchema,
   slug: CatalogSlugSchema,
@@ -166,10 +152,11 @@ export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
 export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
-export type InventoryAdjustmentIdempotencyKey = v.InferOutput<typeof CatalogIdempotencyKeySchema>;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
-export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;
+export type CatalogClientError = ClientRequestError<
+  v.InferOutput<typeof CatalogApiErrorSchema>["error"]
+>;
 export type PublicProductSummary = v.InferOutput<typeof PublicProductSummarySchema>;
 export type PublicProductDetail = v.InferOutput<typeof PublicProductDetailSchema>;
 

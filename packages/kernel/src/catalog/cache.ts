@@ -1,6 +1,7 @@
 import type { Product } from "@ecom/contracts";
 import { env } from "cloudflare:workers";
 import { createLogger } from "evlog";
+import ky from "ky";
 import {
   parseCachePurgeEnvironment,
   parseCachePurgeRequestId,
@@ -14,15 +15,16 @@ const purgeCatalogCache = async (productId: string) => {
     return { kind: "failed" as const, requestId: null };
   }
   try {
-    const response = await fetch(
+    const response = await ky.post(
       `https://api.cloudflare.com/client/v4/zones/${configuration.output.CLOUDFLARE_ZONE_ID}/purge_cache`,
       {
-        method: "POST",
         headers: {
           authorization: `Bearer ${configuration.output.CLOUDFLARE_CACHE_PURGE_TOKEN}`,
-          "content-type": "application/json",
         },
-        body: JSON.stringify({ tags: ["catalog", `product:${productId}`] }),
+        json: { tags: ["catalog", `product:${productId}`] },
+        retry: 0,
+        throwHttpErrors: false,
+        timeout: 10_000,
       },
     );
     const body = parseCachePurgeResponse(await response.json());

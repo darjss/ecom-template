@@ -31,15 +31,15 @@ Extend [`packages/kernel/src/db/schema.ts`](../../packages/kernel/src/db/schema.
 
 ### 4. Implement one direct kernel operation
 
-Implement a named feature operation that invokes its persistence object directly. Return Better Result for narrow expected tagged failures; reserve thrown defects for genuinely unexpected states. Keep cross-feature calls in process through other operations, never through the Store's HTTP API. Import fixed Cloudflare bindings only in their owning server modules.
+Implement a named feature operation that invokes its persistence object directly. Return Better Result for narrow expected tagged failures; reserve thrown defects for genuinely unexpected states. Keep cross-feature calls in process through other operations, never through the Store's HTTP API. Import fixed Cloudflare bindings only in their owning server modules. Use Ky directly for handwritten outbound HTTP, parse external bodies from unknown with Valibot, and enable retries only when the owning business operation permits replay.
 
-[`packages/kernel/src/db/health.ts`](../../packages/kernel/src/db/health.ts) is the nearest direct Better Result operation. It proves explicit success/failure narrowing for a bounded infrastructure read only. It does not demonstrate domain authorization, idempotency, current-state predicates, transactions, or a commerce mutation. The first accepted implementation of those behaviors becomes the exemplar.
+[`packages/kernel/src/db/health.ts`](../../packages/kernel/src/db/health.ts) is the nearest direct Better Result operation. It proves explicit success/failure narrowing for a bounded infrastructure read only. It does not demonstrate domain authorization, current-state predicates, transactions, or a commerce mutation. The first accepted implementation of those behaviors becomes the exemplar.
 
 ### 5. Map once in a thin Elysia route
 
 Parse the request, invoke the operation, and map its Result exactly once to a route-specific success DTO or closed error envelope with a meaningful HTTP status. Keep authorization at the accepted command boundary and make private routes `private, no-store`.
 
-[`packages/api/src/index.ts`](../../packages/api/src/index.ts) demonstrates the complete Elysia app, the thin `/api/health` mapping, validated success and 503 envelopes, Staff routing, and private cache policy. Health is bootstrap infrastructure: it does not prove a commerce command, transactional status conflicts, or idempotency.
+[`packages/api/src/index.ts`](../../packages/api/src/index.ts) demonstrates the complete Elysia app, the thin `/api/health` mapping, validated success and 503 envelopes, Staff routing, and private cache policy. Health is bootstrap infrastructure: it does not prove a commerce command, transactional status conflicts.
 
 ### 6. Preserve producer-derived client typing
 
@@ -62,7 +62,7 @@ Consume the client configuration from shared Admin or Storefront behavior. TanSt
 - [`packages/storefront/src/CartIsland.tsx`](../../packages/storefront/src/CartIsland.tsx) and [`packages/client/src/cart/index.tsx`](../../packages/client/src/cart/index.tsx) demonstrate local Cart ownership.
 - [`apps/urnuun-48/src/pages/index.astro`](../../apps/urnuun-48/src/pages/index.astro) uses the direct [`StorefrontReader`](../../packages/kernel/src/storefront/reader.ts) and composes a Solid island without an HTTP self-call.
 
-These surfaces are bootstrap presentation, not proof of authoritative Catalog availability or Checkout.
+These surfaces are bootstrap presentation, not proof of authoritative Catalog availability or Checkout. Style application and component surfaces with Tailwind v4 utilities, preferring established tokens and utilities over arbitrary values. Raw CSS belongs only to global theme, token, and base output or a capability Tailwind cannot express, never to page or component styles or relocated utility rules.
 
 ### 9. Regenerate and prove the real path
 

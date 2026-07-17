@@ -207,9 +207,12 @@ for (const sourceRoot of ["apps", "packages"]) {
       if (
         (specifier === "better-result" || specifier.startsWith("better-result/")) &&
         owner !== "kernel" &&
-        owner !== "integrations"
+        owner !== "integrations" &&
+        owner !== "client"
       ) {
-        fail(`${path}: better-result is owned only by packages/kernel and packages/integrations`);
+        fail(
+          `${path}: better-result is owned only by packages/kernel, packages/integrations, and packages/client`,
+        );
       }
       if (
         (specifier === "drizzle-orm" || specifier.startsWith("drizzle-orm/")) &&

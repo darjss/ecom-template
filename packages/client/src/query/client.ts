@@ -1,25 +1,9 @@
-import {
-  CatalogClientErrorSchema,
-  ClientErrorSchema,
-  CustomerAuthClientErrorSchema,
-  StaffClientErrorSchema,
-} from "@ecom/contracts";
+import { ClientErrorSchema } from "@ecom/contracts";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/solid-query";
 import { toast } from "solid-sonner";
 import * as v from "valibot";
 
-const parseClientError = (error: unknown) => {
-  const common = v.safeParse(ClientErrorSchema, error);
-  if (common.success) {
-    return common;
-  }
-  const staff = v.safeParse(StaffClientErrorSchema, error);
-  if (staff.success) {
-    return staff;
-  }
-  const customer = v.safeParse(CustomerAuthClientErrorSchema, error);
-  return customer.success ? customer : v.safeParse(CatalogClientErrorSchema, error);
-};
+const parseClientError = (error: unknown) => v.safeParse(ClientErrorSchema, error);
 
 const retrySafeFailure = (failureCount: number, error: unknown) => {
   if (failureCount >= 1) {
@@ -37,14 +21,6 @@ const presentGlobalError = (error: unknown) => {
   const parsed = parseClientError(error);
   if (!parsed.success) {
     toast.error("Тодорхойгүй алдаа гарлаа.");
-    return;
-  }
-  if (
-    "domain" in parsed.output &&
-    parsed.output.domain === "customer_auth" &&
-    parsed.output.kind === "api" &&
-    parsed.output.error.code === "validation"
-  ) {
     return;
   }
   if (parsed.output.kind === "network") {

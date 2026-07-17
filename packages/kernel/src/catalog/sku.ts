@@ -1,7 +1,9 @@
-import { fullUnicodeCaseFold } from "./sku-case-fold";
+import type { VariantId } from "@ecom/contracts";
+
+export const skuFromVariantId = (variantId: VariantId) =>
+  `SKU-${variantId.slice("variant_".length).toUpperCase()}`;
 
 export const compactSku = (value: string) =>
-  fullUnicodeCaseFold(value.normalize("NFKC"))
-    .normalize("NFC")
-    .trim()
+  value
+    .replaceAll(/[A-Z]/g, (character) => String.fromCharCode(character.charCodeAt(0) + 32))
     .replaceAll(/[-/\p{White_Space}]/gu, "");

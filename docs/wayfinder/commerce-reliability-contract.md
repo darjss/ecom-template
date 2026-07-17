@@ -13,27 +13,11 @@ The concrete v1 provider decision is recorded separately in issue #32: both Byl 
 
 ## Reliability target
 
-The system guarantees exactly-once **business effects**, not exactly-once delivery. HTTP requests, provider callbacks, Workflow steps, and scheduled invocations may repeat. Repetition must not create a second Order, confirm money twice, consume or release inventory twice, redeem a Discount twice, or send a second logical notification.
+The system uses atomic transactions, current-state predicates, and direct uniqueness constraints for commercial truth. HTTP mutations are not automatically retried: repeating a request may repeat an effect when its state predicate still permits it.
 
-Every consequential mutation commits its domain state, balances, ledger entries, required audit evidence, and durable notification intent in one D1 transaction. External calls remain at-least-once and use deterministic references plus idempotent kernel commands.
+Every consequential mutation commits its domain state, balances, ledger entries, and required audit evidence in one D1 transaction. When that state requires a notification, its causal entity and deterministic task identity are sufficient for Workflow handoff and scheduled reconciliation; no separate notification intent row is added. Provider references use direct uniqueness constraints, and state transitions use current-state predicates. There is no shared replay-record table, request hashing, or result recovery.
 
-D1 is authoritative for commerce. KV is not used for idempotency because it is eventually consistent and cannot atomically commit a key with Order, Payment, or inventory changes.
-
-## Minimal idempotency
-
-Use one small shared D1 idempotency implementation rather than a command framework. A record contains:
-
-- operation scope;
-- caller-provided or deterministic key;
-- normalized request hash;
-- resulting aggregate reference;
-- creation time.
-
-`(scope, key)` is unique within the Store database. Repeating the same key and request returns the existing result. Reusing a key with a different request hash returns a typed conflict. The record is written in the same transaction as the business mutation.
-
-Use it for checkout and other externally retried commands. Provider references also have direct uniqueness constraints. Workflow steps use deterministic keys derived from Workflow instance identity and step purpose. Current-state predicates, direct uniqueness constraints, and command idempotency protect staff actions and scheduled transitions; there are no general aggregate Revision fields.
-
-Order-creating keys live with their Orders. Provider transaction references and financial evidence are retained for the Store lifetime.
+D1 is authoritative for commerce. Provider transaction references and financial evidence are retained for the Store lifetime.
 
 ## Explicit full-stack errors
 
@@ -107,7 +91,7 @@ notification:<notification-id>:telegram
 reconcile:<scheduled-window>
 ```
 
-Use Workflow steps for durable provider inspection, the fifteen-minute automated-payment deadline, notification delivery, retries, and repair work. Side effects occur only inside `step.do`, and every step invokes an idempotent adapter operation or kernel command. Workflow state coordinates execution but never becomes commerce truth.
+Use Workflow steps for durable provider inspection, the fifteen-minute automated-payment deadline, notification delivery, retries, and repair work. Side effects occur only inside `step.do`, and every step invokes an adapter operation or current-state kernel command. Workflow state coordinates execution but never becomes commerce truth.
 
 Use `ctx.waitUntil()` only for short non-critical work such as analytics and best-effort cache cleanup. It is not sufficient for Payment, inventory, required notification, or reconciliation work because it supplies no durable retry or recovery record.
 
@@ -119,10 +103,10 @@ D1 commit and Workflow creation cannot be atomic. The minimum recovery contract 
 
 1. Commit authoritative business state and deterministic task identity in D1.
 2. Await Workflow creation when the request must prove durable handoff.
-3. If handoff fails after commit, return a retryable infrastructure failure; retrying the original idempotent request returns the committed business result and retries the missing Workflow creation.
-4. A Store Cron trigger starts a bounded reconciliation Workflow that finds overdue or incomplete authoritative state and idempotently starts or repairs missing work.
+3. If handoff fails after commit, return a retryable infrastructure failure; scheduled reconciliation discovers the committed state and starts the missing Workflow.
+4. A Store Cron trigger starts a bounded reconciliation Workflow that finds overdue or incomplete authoritative state and starts or repairs missing work from authoritative state.
 
-Notification delivery has a narrow delivery record created with the causal transaction. It records logical notification identity, channel, status, attempts, and sanitized last failure. It is not a general outbox or command queue.
+Notification delivery adds no generic outbox or delivery table. The causal Order, Payment, or Fulfillment state plus its deterministic notification task identity is the recovery record used to create or repair the Workflow.
 
 ## Adapter scope
 

@@ -16,7 +16,7 @@ The Store runs two separately configured Better Auth instances. They share infra
 | Guest tracking | Order-specific bearer token | public tracking path | Read one Guest Order only |
 | Telegram | Founder-allowlisted Telegram operator | bot webhook | Store-local financial companion actions |
 
-Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store `EPHEMERAL_KV` binding is sufficient; logical key prefixes isolate Staff, Customer, verification, rate-limit, Demo Admin, cache, and short-lived action records. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
+Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store `EPHEMERAL_KV` binding is sufficient; logical key prefixes isolate Staff, Customer, verification, rate-limit, Demo Admin, cache, and short-lived action records. KV owns best-effort Customer OTP send rate limits; D1 retains atomic challenge consumption. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
 
 ## Staff identity and approval
 
@@ -37,7 +37,7 @@ After bootstrap, Staff entry has two paths:
 
 Only Owners may approve, reject, revoke, or delete Staff records; change Staff roles; create another Owner; or change authentication settings. Multiple Owners are allowed. Admin must refuse to revoke, demote, or delete the final active Owner.
 
-A role change or revocation deletes every Staff Auth session for that Staff Member. Staff sessions contain the role snapshot used for authorization, last 14 days, and use Better Auth's rolling refresh near expiry. Staff Auth must not use a client cookie cache that can remain valid after server-side session deletion. Normal requests validate the revocable KV-backed session and do not query D1 again solely for role authorization.
+Approval, role change, revocation, and removal delete every Staff Auth session for that Staff Member immediately before mutation and again after the committed target state. Repeating a target-state command repeats session cleanup. Staff sessions contain the role snapshot used for authorization, last 14 days, and use Better Auth's rolling refresh near expiry. Staff Auth must not use a client cookie cache that can remain valid after server-side session deletion. Normal requests validate the revocable KV-backed session and do not query D1 again solely for role authorization.
 
 ## Staff roles
 
@@ -55,7 +55,7 @@ V1 has exactly three roles:
 
 Manager may perform every normal Store operation, including financial actions, but may not manage identity or authentication authority. Staff may manage catalog, CMS, inventory, and non-financial Order operations, but may not perform financial actions, manage Staff, change auth/payment/deployment settings, or invoke Owner/Manager-only overrides. The previously proposed Fulfillment Staff role is excluded.
 
-Authorization is enforced by the shared-kernel command boundary, not merely by hiding Admin controls. Provider callbacks and Telegram handlers invoke the same authorized, idempotent commerce commands as web Admin.
+Authorization is enforced by the shared-kernel command boundary, not merely by hiding Admin controls. Provider callbacks and Telegram handlers invoke the same authorized commerce commands as web Admin.
 
 ## Customer identity and OTP
 
@@ -97,7 +97,7 @@ Telegram bank-transfer Confirm and Reject actions:
 1. verify the Store's Telegram webhook secret and reject replayed updates;
 2. require an exact allowlisted Telegram user ID;
 3. consume one opaque bounded action reference created for that Payment message;
-4. revalidate Payment state, expected amount, and command idempotency;
+4. revalidate Payment state and expected amount;
 5. execute the same shared-kernel Confirm or Reject command used by web Admin;
 6. record the configured operator label and Telegram user ID as consequential evidence.
 

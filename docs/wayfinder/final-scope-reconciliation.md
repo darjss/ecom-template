@@ -17,7 +17,7 @@ The minimum safety boundary remains:
 - authenticate the webhook as Telegram traffic with the Store's webhook secret;
 - accept financial callbacks only from an exact allowlisted Telegram user ID;
 - use one opaque, bounded action reference created for that Payment message;
-- make replay harmless through current-state predicates and scoped D1 idempotency;
+- apply current-state predicates before the financial transition;
 - reload the Payment, Order, expected amount, and current state before mutation;
 - invoke the same kernel Confirm or Reject command used by web Admin;
 - record the configured Telegram operator label and user ID as consequential financial evidence.
@@ -26,7 +26,7 @@ The closed actor kind used by Payment Entries and consequential Audit Events inc
 
 One button tap executes the action. There is no Admin enrollment flow, one-time enrollment link, `telegram_bindings` table, Staff-role revalidation, or second confirmation tap. Telegram notifications and all financial actions remain available in web Admin.
 
-This supersedes the enrollment, Staff-binding, role-revalidation, and second-tap clauses in the authentication and interface contracts. It does not weaken webhook authentication, input validation, idempotency, state revalidation, or audit evidence.
+This supersedes the enrollment, Staff-binding, role-revalidation, and second-tap clauses in the authentication and interface contracts. It does not weaken webhook authentication, input validation, state revalidation, or audit evidence.
 
 ## Customer identity remains in v1
 
@@ -84,7 +84,7 @@ Logical prefixes isolate:
 - Telegram action references;
 - other explicitly disposable short-lived state.
 
-Cloudflare's CDN/Workers Cache owns public storefront caching. D1 owns commerce and durable application truth. KV does not cache Catalog/CMS HTML, stock, Orders, Payments, inventory, durable jobs, or idempotency records.
+Cloudflare's CDN/Workers Cache owns public storefront caching. D1 owns commerce and durable application truth. KV does not cache Catalog/CMS HTML, stock, Orders, Payments, inventory, or durable jobs.
 
 Provisioning, Wrangler templates, generated binding types, delivery journals, `store:doctor`, cleanup, and live proof create and verify one KV resource. This supersedes the `session KV` plus `cache KV` clauses in the provisioning and operations contracts.
 
@@ -123,7 +123,7 @@ TanStack Query owns remote state; TanStack Form owns editable form state; the UR
 
 ## Bootstrap dependency and tooling baseline
 
-The bootstrap installs the important approved dependencies rather than inviting later agents to choose competing foundations. This includes Better Result, TypeID, Evlog, date-fns with timezone support, Motion, Solar Icons for Solid, `es-toolkit`, `dismatch`, `@solid-primitives/storage`, `json-canonicalize`, Culori, and Micromark alongside the accepted Astro, Solid, Elysia/Eden, Drizzle, Better Auth, Valibot, TanStack, Zaidan, Kobalte, Corvu, and Tailwind stack. Canonical JSON is owned by idempotency hashing, Culori by the Theme compiler, and Micromark by constrained CMS rendering. Major additions require explicit review; do not add competing utility, validation, state, icon, date, logging, animation, or pattern-matching systems ad hoc.
+The bootstrap installs the important approved dependencies rather than inviting later agents to choose competing foundations. This includes Better Result, TypeID, Evlog, date-fns with timezone support, Motion, Solar Icons for Solid, `es-toolkit`, `dismatch`, `@solid-primitives/storage`, Culori, Micromark, and Ky alongside the accepted Astro, Solid, Elysia/Eden, Drizzle, Better Auth, Valibot, TanStack, Zaidan, Kobalte, Corvu, and Tailwind stack. Culori is owned by the Theme compiler, Micromark by constrained CMS rendering, and Ky by handwritten outbound HTTP. Framework fetch handlers and transports remain framework interfaces. External bodies remain unknown until Valibot parsing, and retries are enabled only when the owning business operation permits replay. Major additions require explicit review; do not add competing utility, validation, state, icon, date, logging, HTTP, animation, or pattern-matching systems ad hoc.
 
 TypeScript 7 is canonical. A side-by-side TypeScript 6 compatibility package exists only while Astro's programmatic language tooling requires the old API. Oxfmt owns formatting. Oxlint begins with Letstri's initializer and incorporates applicable Antfu general and Solid rules. A narrow Antfu ESLint pass handles only `.astro` until Oxlint supports that parser. Biome and a duplicate general ESLint pass are excluded. Knip, Sherif, dependency-direction checks, format, lint, TypeScript/Astro checks, and build run in CI.
 
@@ -131,7 +131,7 @@ TypeScript 7 is canonical. A side-by-side TypeScript 6 compatibility package exi
 
 Өрнүүн 48 remains the fictional Reference Store. Shared `storefront` and `admin` packages provide polished, functional defaults that a Store may ship unchanged. Store-specific Astro routes may replace presentation while preserving shared readers, DTOs, availability, Cart, Checkout, navigation safety, forms, errors, and accessibility behavior.
 
-Solar Icons replaces Lucide under a controlled family policy. Storefront navigation uses a consistent ambient layer of Astro View Transition motion. Persist continuity elements where correct, use shared product imagery and Motion-driven interaction feedback, and animate header, mobile navigation, Cart, search, variants, add-to-cart, and Checkout without delaying input or obscuring information. Reduced-motion behavior removes spatial movement while preserving state feedback.
+Solar Icons replaces Lucide under a controlled family policy. Tailwind v4 utilities are mandatory for application and component styling, using established tokens and utilities before arbitrary values. Raw CSS is limited to global theme, token, and base output or capabilities Tailwind cannot express; it never owns page or component styles or relocated utility rules. Storefront navigation uses a consistent ambient layer of Astro View Transition motion. Persist continuity elements where correct, use shared product imagery and Motion-driven interaction feedback, and animate header, mobile navigation, Cart, search, variants, add-to-cart, and Checkout without delaying input or obscuring information. Reduced-motion behavior removes spatial movement while preserving state feedback.
 
 ## Proportional operations and launch proof
 
@@ -177,10 +177,10 @@ The following final decisions resolve stale clauses in earlier artifacts:
 - Live availability uses `GET /api/catalog/availability?variantIds=...`, is batched, and is `private, no-store`.
 - Public search uses one `CatalogItemSearchResult` discriminated by `kind: product | bundle`. Published Products and Bundles share one FTS projection and endpoint. A Variant SKU resolves to its Product; a Bundle SKU resolves to its Bundle. Category and Collection shortcuts remain separate result kinds, not separate indexes.
 - Elysia HTTP uses route-specific success DTOs and one closed `ApiErrorEnvelope` with meaningful HTTP status codes. Internal kernel operations may use typed Results, but the HTTP adapter maps them once. Serialized Result containers, client `Result.deserialize`, Result instances inside Query data, and a second transport-level `InfrastructureFailure` hierarchy are not part of the wire protocol. Route-specific tagged failures enter typed Query `isError` states instead.
-- Customer OTP has one policy: five-minute single-use code; replacement invalidates the previous code; five verification attempts; 30-second resend cooldown; at most five sends per normalized phone per day; and at most ten sends per IP per 15 minutes. All counters use the prefixed `EPHEMERAL_KV` namespace. Earlier overlapping hourly phone/IP windows are removed.
-- Ordinary Catalog, settings, and typed CMS Draft writes are last-write-wins. General aggregate Revision columns and expected-Revision HTTP contracts are absent. Consequential state transitions retain atomic current-state predicates and idempotency where retries occur.
+- Customer OTP has one policy: five-minute single-use code; replacement invalidates the previous code; five verification attempts; 30-second resend cooldown; at most five sends per normalized phone per day; and at most ten sends per IP per 15 minutes. Send rate-limit counters use the prefixed `EPHEMERAL_KV` namespace with accepted best-effort eventual consistency; D1 retains atomic challenge consumption. Earlier overlapping hourly phone/IP windows are removed.
+- Ordinary Catalog, settings, and typed CMS Draft writes are last-write-wins. General aggregate Revision columns and expected-Revision HTTP contracts are absent. Consequential state transitions retain atomic current-state predicates.
 - Cloudflare Workflow may coordinate payment expiry, provider inspection, notifications, and repair, but D1 remains the only commerce truth. The accepted schema has no generic job table, outbox, notification-delivery table, or Failed Notifications subsystem.
-- A committed commerce mutation followed by failed Workflow creation returns an explicit retryable partial outcome when the request observes the failure. Retrying the original idempotent command may start missing work. A bounded scheduled reconciliation pass detects overdue authoritative Payment, Reservation, and unresolved business state and idempotently starts or repairs required Workflow work.
+- A committed commerce mutation followed by failed Workflow creation returns an explicit retryable partial outcome when the request observes the failure. A bounded scheduled reconciliation pass detects overdue authoritative Payment, Reservation, and unresolved business state and starts or repairs required Workflow work.
 - Notification failure never changes commerce state. Workflow retries and Cloudflare Workflow visibility are sufficient in v1; Admin attention is driven only by unresolved authoritative business state, not by a duplicate notification queue.
 
 ## Decisions explicitly retained
@@ -193,7 +193,7 @@ The following reviewed scope remains intentional rather than accidental complexi
 - privacy-masked sampled PostHog session replay;
 - one independently deployed Worker, D1, KV, R2, secrets, and custom Store app per Store;
 - relational money, inventory, Payment, Order, SKU, Discount, identity, and evidence models;
-- anonymous-first Checkout, Guest Tracking Links, atomic inventory safety, idempotent external commands, and checkout revalidation;
+- anonymous-first Checkout, Guest Tracking Links, atomic inventory safety, current-state external commands, and checkout revalidation;
 - one fictional Reference Store canary, resumable provisioning, and one-Store-at-a-time human delivery.
 
 ## `/to-spec` handoff rule

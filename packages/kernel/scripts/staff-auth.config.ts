@@ -20,8 +20,8 @@ export const auth = betterAuth({
         required: false,
         input: false,
       },
-      generation: {
-        type: "number",
+      staffId: {
+        type: "string",
         required: false,
         input: false,
       },

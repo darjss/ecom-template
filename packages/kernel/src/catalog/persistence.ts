@@ -4,271 +4,252 @@ import {
   createProductId,
   createStockItemId,
   createVariantId,
-  ProductIdSchema,
   type CreateProductInput,
   type ProductId,
   type UpdateProductInput,
 } from "@ecom/contracts";
-import { env } from "cloudflare:workers";
-import { getTableName } from "drizzle-orm";
-import { canonicalize } from "json-canonicalize";
-import * as v from "valibot";
+import { and, eq, exists, isNull, ne, sql } from "drizzle-orm";
 import {
+  auditEvents,
   catalogCachePurgeDebts,
   catalogItems,
-  idempotencyRecords,
   inventoryEntries,
-  inventoryReservationItems,
-  inventoryReservations,
   skus,
   stockItems,
   variants,
 } from "../db/schema";
+import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
-import { acceptedProductAudit, catalogActorBindings, recordRejectedAttempt } from "./audit";
-import { findCatalogProductById } from "./product-projection";
-import { catalogReaderQueries } from "./reader-persistence";
-import { compactSku } from "./sku";
-
-export const catalogTableNames = {
-  cachePurgeDebts: getTableName(catalogCachePurgeDebts),
-  catalogItems: getTableName(catalogItems),
-  variants: getTableName(variants),
-  skus: getTableName(skus),
-  stockItems: getTableName(stockItems),
-  inventoryReservations: getTableName(inventoryReservations),
-  inventoryReservationItems: getTableName(inventoryReservationItems),
-  inventoryEntries: getTableName(inventoryEntries),
-  idempotencyRecords: getTableName(idempotencyRecords),
-};
-
-const createIdempotencyScope = "catalog.product.create";
-const updateIdempotencyScope = "catalog.product.update";
-const CachePurgeDebtRevisionSchema = v.strictObject({ revision: v.string() });
-const ReturnedProductStateSchema = v.strictObject({
-  state: v.picklist(["draft", "published", "archived"]),
-});
-const ReturnedCatalogIdempotencySchema = v.strictObject({
-  requestHash: v.string(),
-  resultId: ProductIdSchema,
-});
-const cachePurgeDebtUpsert = (acceptancePredicate: string) =>
-  `INSERT INTO ${catalogTableNames.cachePurgeDebts} (product_id, revision, attempt_count, request_id, command_committed_at, last_attempted_at) SELECT id, ?, 0, NULL, ?, NULL FROM ${catalogTableNames.catalogItems} WHERE ${acceptancePredicate} ON CONFLICT(product_id) DO UPDATE SET revision = excluded.revision, attempt_count = 0, request_id = NULL, command_committed_at = excluded.command_committed_at, last_attempted_at = NULL RETURNING revision`;
-
-const hashCatalogIntent = async (intent: Readonly<Record<string, unknown>>) => {
-  const bytes = new TextEncoder().encode(canonicalize(intent));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-};
-
-const createRequestHash = (actor: StaffActor, input: CreateProductInput) =>
-  hashCatalogIntent({
-    actorStaffId: actor.staffId,
-    description: input.description,
-    inventoryReason: input.inventoryReason,
-    name: input.name,
-    openingQuantity: input.openingQuantity,
-    priceMnt: input.priceMnt,
-    sku: input.sku,
-    slug: input.slug,
-  });
-
-const updateRequestHash = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
-  hashCatalogIntent({
-    actorStaffId: actor.staffId,
-    description: input.description,
-    name: input.name,
-    priceMnt: input.priceMnt,
-    productId: id,
-    sku: input.sku,
-    slug: input.slug,
-  });
-
-const readCatalogIdempotency = async (scope: string, key: string) => {
-  const result = await env.DB.prepare(
-    `SELECT request_hash AS requestHash, result_id AS resultId FROM ${catalogTableNames.idempotencyRecords} WHERE scope = ? AND key = ? LIMIT 1`,
-  )
-    .bind(scope, key)
-    .all();
-  const row = result.results.at(0);
-  return row ? v.parse(ReturnedCatalogIdempotencySchema, row) : undefined;
-};
+import { catalogReaderQueries, findCatalogProductById } from "../catalog-reader/persistence";
+import { compactSku, skuFromVariantId } from "./sku";
 
 const existsById = async (id: ProductId) => {
-  const result = await env.DB.prepare("SELECT id FROM catalog_items WHERE id = ? LIMIT 1")
-    .bind(id)
-    .all();
-  return result.results.length === 1;
+  const rows = await database()
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(eq(catalogItems.id, id))
+    .limit(1);
+  return rows.length === 1;
 };
 
-const findConflict = async (slug: string, sku: string, excludedId?: ProductId) => {
-  const slugResult = await env.DB.prepare(
-    `SELECT id FROM catalog_items WHERE slug = ?${excludedId ? " AND id <> ?" : ""}`,
-  )
-    .bind(...(excludedId ? [slug, excludedId] : [slug]))
-    .all();
-  if (slugResult.results.length > 0) {
-    return "duplicate_slug" as const;
-  }
-  const skuResult = await env.DB.prepare(
-    `SELECT s.variant_id FROM skus s JOIN variants v ON v.id = s.variant_id WHERE s.sku_compact = ?${excludedId ? " AND v.product_id <> ?" : ""}`,
-  )
-    .bind(...(excludedId ? [compactSku(sku), excludedId] : [compactSku(sku)]))
-    .all();
-  return skuResult.results.length > 0 ? ("duplicate_sku" as const) : undefined;
+const hasDuplicateSlug = async (slug: string, excludedId?: ProductId) => {
+  const rows = await database()
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(
+      excludedId
+        ? and(eq(catalogItems.slug, slug), ne(catalogItems.id, excludedId))
+        : eq(catalogItems.slug, slug),
+    )
+    .limit(1);
+  return rows.length === 1;
 };
+
+export const recordRejectedAttempt = async (
+  actor: StaffActor,
+  action: string,
+  entityKind: "product" | "stock_item",
+  entityId: string,
+  reason: string,
+) => {
+  await database().insert(auditEvents).values({
+    id: createAuditEventId(),
+    actorKind: "staff",
+    actorId: actor.staffId,
+    staffRole: actor.role,
+    sourceChannel: "admin",
+    action,
+    outcome: "rejected",
+    entityKind,
+    entityId,
+    reason,
+    commandCorrelationId: crypto.randomUUID(),
+    createdAt: new Date(),
+  });
+};
+
+const acceptedAuditSelection = (
+  actor: StaffActor,
+  action: string,
+  id: ProductId,
+  correlationId: string,
+  now: Date,
+) => ({
+  id: sql<string>`${createAuditEventId()}`.as("id"),
+  actorKind: sql<"staff">`'staff'`.as("actor_kind"),
+  actorId: sql<string>`${actor.staffId}`.as("actor_id"),
+  staffRole: sql<typeof actor.role>`${actor.role}`.as("staff_role"),
+  telegramOperatorLabel: sql<null>`NULL`.as("telegram_operator_label"),
+  telegramUserId: sql<null>`NULL`.as("telegram_user_id"),
+  sourceChannel: sql<"admin">`'admin'`.as("source_channel"),
+  action: sql<string>`${action}`.as("action"),
+  outcome: sql<"accepted">`'accepted'`.as("outcome"),
+  entityKind: sql<string>`'product'`.as("entity_kind"),
+  entityId: sql<string>`${id}`.as("entity_id"),
+  reason: sql<null>`NULL`.as("reason"),
+  commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
+  metadataJson: sql<null>`NULL`.as("metadata_json"),
+  createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+});
+
+const cacheDebtSelection = (id: ProductId, revision: string, now: Date) => ({
+  productId: sql<string>`${id}`.as("product_id"),
+  revision: sql<string>`${revision}`.as("revision"),
+  attemptCount: sql<number>`0`.as("attempt_count"),
+  requestId: sql<null>`NULL`.as("request_id"),
+  commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+  lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+});
 
 export const catalogQueries = {
   ...catalogReaderQueries,
 
   async create(actor: StaffActor, input: CreateProductInput) {
-    const hash = await createRequestHash(actor, input);
-    const replay = await readCatalogIdempotency(createIdempotencyScope, input.idempotencyKey);
-    if (replay) {
-      return replay.requestHash === hash
-        ? { product: await findCatalogProductById(replay.resultId) }
-        : { conflict: "idempotency_conflict" as const };
-    }
-
-    const id = v.parse(ProductIdSchema, createProductId());
+    const id = createProductId();
     const variantId = createVariantId();
+    const sku = skuFromVariantId(variantId);
     const stockItemId = createStockItemId();
-    const inventoryEntryId = createInventoryEntryId();
     const correlationId = crypto.randomUUID();
-    const now = Date.now();
+    const now = new Date();
+    const db = database();
+
     try {
-      await env.DB.batch([
-        env.DB.prepare(
-          "INSERT INTO catalog_items (id, kind, slug, state, name, description, price_mnt, created_at, updated_at) VALUES (?, 'product', ?, 'draft', ?, ?, ?, ?, ?)",
-        ).bind(id, input.slug, input.name, input.description, input.priceMnt, now, now),
-        env.DB.prepare(
-          "INSERT INTO variants (id, product_id, is_default, state, created_at, updated_at) VALUES (?, ?, 1, 'active', ?, ?)",
-        ).bind(variantId, id, now, now),
-        env.DB.prepare(
-          "INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES (?, ?, 'variant', ?, NULL, NULL, ?, ?)",
-        ).bind(input.sku, compactSku(input.sku), variantId, now, now),
-        env.DB.prepare(
-          "INSERT INTO stock_items (id, variant_id, on_hand_quantity, reserved_quantity, updated_at) VALUES (?, ?, ?, 0, ?)",
-        ).bind(stockItemId, variantId, input.openingQuantity, now),
-        env.DB.prepare(
-          "INSERT INTO inventory_entries (id, stock_item_id, kind, on_hand_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) VALUES (?, ?, 'opening', ?, 'staff', ?, ?, ?, ?, ?)",
-        ).bind(
-          inventoryEntryId,
+      await db.batch([
+        db.insert(catalogItems).values({
+          id,
+          kind: "product",
+          slug: input.slug,
+          state: "draft",
+          name: input.name,
+          description: input.description,
+          priceMnt: input.priceMnt,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(variants).values({
+          id: variantId,
+          productId: id,
+          isDefault: true,
+          state: "active",
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(skus).values({
+          sku,
+          skuCompact: compactSku(sku),
+          ownerKind: "variant",
+          variantId,
+          bundleId: null,
+          lockedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(stockItems).values({
+          id: stockItemId,
+          variantId,
+          onHandQuantity: input.openingQuantity,
+          reservedQuantity: 0,
+          updatedAt: now,
+        }),
+        db.insert(inventoryEntries).values({
+          id: createInventoryEntryId(),
           stockItemId,
-          input.openingQuantity,
-          ...catalogActorBindings(actor),
-          input.inventoryReason,
-          correlationId,
-          now,
-        ),
-        acceptedProductAudit(actor, "catalog.product.create", id, correlationId, now),
-        env.DB.prepare(
-          `INSERT INTO ${catalogTableNames.idempotencyRecords} (scope, key, request_hash, result_kind, result_id, created_at) VALUES (?, ?, ?, 'catalog_product', ?, ?)`,
-        ).bind(createIdempotencyScope, input.idempotencyKey, hash, id, now),
+          kind: "opening",
+          onHandDelta: input.openingQuantity,
+          actorKind: "staff",
+          staffId: actor.staffId,
+          staffRole: actor.role,
+          reason: input.inventoryReason,
+          commandCorrelationId: correlationId,
+          createdAt: now,
+        }),
+        db.insert(auditEvents).values({
+          id: createAuditEventId(),
+          actorKind: "staff",
+          actorId: actor.staffId,
+          staffRole: actor.role,
+          sourceChannel: "admin",
+          action: "catalog.product.create",
+          outcome: "accepted",
+          entityKind: "product",
+          entityId: id,
+          commandCorrelationId: correlationId,
+          createdAt: now,
+        }),
       ]);
     } catch {
-      const committed = await readCatalogIdempotency(createIdempotencyScope, input.idempotencyKey);
-      if (committed) {
-        return committed.requestHash === hash
-          ? { product: await findCatalogProductById(committed.resultId) }
-          : { conflict: "idempotency_conflict" as const };
-      }
       return {
-        conflict: (await findConflict(input.slug, input.sku)) ?? ("infrastructure" as const),
+        conflict: (await hasDuplicateSlug(input.slug))
+          ? ("duplicate_slug" as const)
+          : ("infrastructure" as const),
       };
     }
+
     return { product: await findCatalogProductById(id) };
   },
 
   async update(actor: StaffActor, id: ProductId, input: UpdateProductInput) {
-    const hash = await updateRequestHash(actor, id, input);
-    const replay = await readCatalogIdempotency(updateIdempotencyScope, input.idempotencyKey);
-    if (replay) {
-      if (replay.requestHash !== hash) {
-        return { kind: "idempotency_conflict" as const };
-      }
-      const product = await findCatalogProductById(replay.resultId);
-      return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
-    }
-
     const correlationId = crypto.randomUUID();
     const debtRevision = crypto.randomUUID();
-    const now = Date.now();
-    const catalogAcceptance = `(catalog_items.state = 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.locked_at IS NULL)) OR (catalog_items.state <> 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.sku = ?))`;
-    const publicAcceptance =
-      "id = ? AND state <> 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.sku = ?)";
-    let results;
+    const now = new Date();
+    const db = database();
+    const productPredicate = eq(catalogItems.id, id);
+    const publicPredicate = and(productPredicate, ne(catalogItems.state, "draft"));
+
     try {
-      results = await env.DB.batch([
-        env.DB.prepare(
-          `INSERT INTO ${catalogTableNames.idempotencyRecords} (scope, key, request_hash, result_kind, result_id, created_at) SELECT ?, ?, ?, 'catalog_product', id, ? FROM catalog_items WHERE id = ? AND (${catalogAcceptance})`,
-        ).bind(updateIdempotencyScope, input.idempotencyKey, hash, now, id, input.sku),
-        env.DB.prepare(
-          `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', 'catalog.product.update', 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE id = ? AND (${catalogAcceptance})`,
-        ).bind(
-          createAuditEventId(),
-          ...catalogActorBindings(actor),
-          correlationId,
-          now,
-          id,
-          input.sku,
+      const results = await db.batch([
+        db
+          .update(catalogItems)
+          .set({
+            slug: input.slug,
+            name: input.name,
+            description: input.description,
+            priceMnt: input.priceMnt,
+            updatedAt: now,
+          })
+          .where(productPredicate)
+          .returning({ state: catalogItems.state }),
+        db.insert(auditEvents).select(
+          db
+            .select(acceptedAuditSelection(actor, "catalog.product.update", id, correlationId, now))
+            .from(catalogItems)
+            .where(productPredicate),
         ),
-        env.DB.prepare(
-          `UPDATE catalog_items SET slug = ?, name = ?, description = ?, price_mnt = ?, updated_at = ? WHERE id = ? AND (${catalogAcceptance}) RETURNING state`,
-        ).bind(input.slug, input.name, input.description, input.priceMnt, now, id, input.sku),
-        env.DB.prepare(
-          "UPDATE skus SET sku = ?, sku_compact = ?, updated_at = ? WHERE variant_id = (SELECT id FROM variants WHERE product_id = ? AND is_default = 1) AND locked_at IS NULL AND EXISTS (SELECT 1 FROM catalog_items WHERE id = ? AND state = 'draft') RETURNING sku",
-        ).bind(input.sku, compactSku(input.sku), now, id, id),
-        env.DB.prepare(cachePurgeDebtUpsert(publicAcceptance)).bind(
-          debtRevision,
-          now,
-          id,
-          input.sku,
-        ),
-      ]);
-    } catch {
-      const committed = await readCatalogIdempotency(updateIdempotencyScope, input.idempotencyKey);
-      if (committed) {
-        if (committed.requestHash !== hash) {
-          return { kind: "idempotency_conflict" as const };
-        }
-        const product = await findCatalogProductById(committed.resultId);
+        db
+          .insert(catalogCachePurgeDebts)
+          .select(
+            db
+              .select(cacheDebtSelection(id, debtRevision, now))
+              .from(catalogItems)
+              .where(publicPredicate),
+          )
+          .onConflictDoUpdate({
+            target: catalogCachePurgeDebts.productId,
+            set: {
+              revision: debtRevision,
+              attemptCount: 0,
+              requestId: null,
+              commandCommittedAt: now,
+              lastAttemptedAt: null,
+            },
+          }),
+      ] as const);
+      const changed = results[0].at(0);
+      if (changed) {
+        const product = await findCatalogProductById(id);
         return product
           ? { kind: "changed" as const, product }
           : { kind: "infrastructure" as const };
       }
-      return { kind: (await findConflict(input.slug, input.sku, id)) ?? "infrastructure" };
+    } catch {
+      return {
+        kind: (await hasDuplicateSlug(input.slug, id))
+          ? ("duplicate_slug" as const)
+          : ("infrastructure" as const),
+      };
     }
 
-    const stateRow = results.at(2)?.results.at(0);
-    const acceptedState = stateRow
-      ? v.parse(ReturnedProductStateSchema, stateRow).state
-      : undefined;
-    const stateEffectsMatch =
-      acceptedState === "draft"
-        ? results.at(3)?.results.length === 1 && results.at(4)?.results.length === 0
-        : acceptedState === "published" || acceptedState === "archived"
-          ? results.at(3)?.results.length === 0 && results.at(4)?.results.length === 1
-          : false;
-    if (
-      results.at(0)?.meta.changes === 1 &&
-      results.at(1)?.meta.changes === 1 &&
-      stateEffectsMatch
-    ) {
-      const product = await findCatalogProductById(id);
-      return product?.sku === input.sku
-        ? { kind: "changed" as const, product }
-        : { kind: "infrastructure" as const };
-    }
-    const committed = await readCatalogIdempotency(updateIdempotencyScope, input.idempotencyKey);
-    if (committed) {
-      if (committed.requestHash !== hash) {
-        return { kind: "idempotency_conflict" as const };
-      }
-      const product = await findCatalogProductById(committed.resultId);
-      return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
-    }
-    return { kind: (await existsById(id)) ? ("sku_locked" as const) : ("not_found" as const) };
+    return { kind: "not_found" as const };
   },
 
   async transition(
@@ -286,6 +267,7 @@ export const catalogQueries = {
       }
       return { kind };
     }
+
     const expected =
       transition === "publish" ? "draft" : transition === "archive" ? "published" : "archived";
     const next = transition === "archive" ? "archived" : "published";
@@ -302,83 +284,118 @@ export const catalogQueries = {
       );
       return { kind: "invalid_lifecycle" as const };
     }
-    if (current.priceMnt <= 0 || current.sku.length === 0) {
-      await recordRejectedAttempt(
-        actor,
-        `catalog.product.${transition}`,
-        "product",
-        id,
-        "invalid_publication",
+
+    const db = database();
+    const publicationVariant = db
+      .select({ id: variants.id })
+      .from(variants)
+      .innerJoin(skus, eq(skus.variantId, variants.id))
+      .where(
+        and(
+          eq(variants.productId, catalogItems.id),
+          eq(variants.isDefault, true),
+          eq(variants.state, "active"),
+          sql`length(trim(${skus.sku})) > 0`,
+        ),
       );
-      return { kind: "invalid_publication" as const };
-    }
-    const now = Date.now();
-    const correlationId = crypto.randomUUID();
     const transitionPredicate =
       transition === "archive"
-        ? "id = ? AND state = ?"
-        : "id = ? AND state = ? AND price_mnt > 0 AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND v.state = 'active' AND length(trim(s.sku)) > 0)";
-    const statements = [];
-    if (transition === "publish") {
-      statements.push(
-        env.DB.prepare(
-          "UPDATE skus AS s SET locked_at = COALESCE(locked_at, ?), updated_at = ? WHERE s.variant_id = ? AND EXISTS (SELECT 1 FROM catalog_items ci JOIN variants v ON v.product_id = ci.id WHERE ci.id = ? AND ci.state = 'draft' AND ci.price_mnt > 0 AND v.id = s.variant_id AND v.is_default = 1 AND v.state = 'active' AND length(trim(s.sku)) > 0) RETURNING sku",
-        ).bind(now, now, current.defaultVariantId, id),
-      );
-    }
-    statements.push(
-      env.DB.prepare(
-        `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', ?, 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE ${transitionPredicate}`,
-      ).bind(
-        createAuditEventId(),
-        ...catalogActorBindings(actor),
-        `catalog.product.${transition}`,
-        correlationId,
-        now,
-        id,
-        expected,
-      ),
-      env.DB.prepare(cachePurgeDebtUpsert(transitionPredicate)).bind(
-        crypto.randomUUID(),
-        now,
-        id,
-        expected,
-      ),
-      env.DB.prepare(
-        `UPDATE catalog_items SET state = ?, updated_at = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END, archived_at = CASE WHEN ? = 'archived' THEN ? ELSE NULL END WHERE ${transitionPredicate} RETURNING id`,
-      ).bind(next, now, next, now, next, now, id, expected),
+        ? and(eq(catalogItems.id, id), eq(catalogItems.state, expected))
+        : and(
+            eq(catalogItems.id, id),
+            eq(catalogItems.state, expected),
+            sql`${catalogItems.priceMnt} > 0`,
+            exists(publicationVariant),
+          );
+    const now = new Date();
+    const correlationId = crypto.randomUUID();
+    const debtRevision = crypto.randomUUID();
+    const action = `catalog.product.${transition}`;
+    const auditStatement = db.insert(auditEvents).select(
+      db
+        .select(acceptedAuditSelection(actor, action, id, correlationId, now))
+        .from(catalogItems)
+        .where(transitionPredicate),
     );
-    const results = await env.DB.batch(statements);
-    const publicationLockChanged = transition !== "publish" || results.at(0)?.results.length === 1;
-    const auditIndex = transition === "publish" ? 1 : 0;
-    const debtIndex = auditIndex + 1;
-    const transitionIndex = debtIndex + 1;
-    if (
-      publicationLockChanged &&
-      results.at(auditIndex)?.meta.changes === 1 &&
-      results.at(transitionIndex)?.results.length === 1 &&
-      results.at(debtIndex)?.results.length === 1
-    ) {
+    const debtStatement = db
+      .insert(catalogCachePurgeDebts)
+      .select(
+        db
+          .select(cacheDebtSelection(id, debtRevision, now))
+          .from(catalogItems)
+          .where(transitionPredicate),
+      )
+      .onConflictDoUpdate({
+        target: catalogCachePurgeDebts.productId,
+        set: {
+          revision: debtRevision,
+          attemptCount: 0,
+          requestId: null,
+          commandCommittedAt: now,
+          lastAttemptedAt: null,
+        },
+      });
+    const transitionStatement = db
+      .update(catalogItems)
+      .set({
+        state: next,
+        updatedAt: now,
+        publishedAt:
+          next === "published"
+            ? sql`coalesce(${catalogItems.publishedAt}, ${now.getTime()})`
+            : undefined,
+        archivedAt: next === "archived" ? now : null,
+      })
+      .where(transitionPredicate)
+      .returning({ id: catalogItems.id });
+
+    const transitioned =
+      transition === "publish"
+        ? (
+            await db.batch([
+              db
+                .update(skus)
+                .set({ lockedAt: now, updatedAt: now })
+                .where(
+                  and(
+                    eq(skus.variantId, current.defaultVariantId),
+                    isNull(skus.lockedAt),
+                    exists(
+                      db
+                        .select({ id: catalogItems.id })
+                        .from(catalogItems)
+                        .where(transitionPredicate),
+                    ),
+                  ),
+                )
+                .returning({ sku: skus.sku }),
+              auditStatement,
+              debtStatement,
+              transitionStatement,
+            ] as const)
+          )[3]
+        : (await db.batch([auditStatement, debtStatement, transitionStatement] as const))[2];
+    if (transitioned.length === 1) {
       return { kind: "changed" as const, product: await findCatalogProductById(id) };
     }
+
     const resolved = await findCatalogProductById(id);
     if (resolved?.state === next) {
       return { kind: "changed" as const, product: resolved };
     }
     const kind =
       resolved && resolved.state !== expected ? "invalid_lifecycle" : "invalid_publication";
-    await recordRejectedAttempt(actor, `catalog.product.${transition}`, "product", id, kind);
+    await recordRejectedAttempt(actor, action, "product", id, kind);
     return { kind };
   },
 
   async findCachePurgeDebt(id: ProductId) {
-    const result = await env.DB.prepare(
-      `SELECT revision FROM ${catalogTableNames.cachePurgeDebts} WHERE product_id = ? LIMIT 1`,
-    )
-      .bind(id)
-      .all();
-    const row = result.results.at(0);
-    return row ? v.parse(CachePurgeDebtRevisionSchema, row) : undefined;
+    const rows = await database()
+      .select({ revision: catalogCachePurgeDebts.revision })
+      .from(catalogCachePurgeDebts)
+      .where(eq(catalogCachePurgeDebts.productId, id))
+      .limit(1);
+    return rows.at(0);
   },
 
   async recordCachePurgeOutcome(
@@ -388,18 +405,33 @@ export const catalogQueries = {
     requestId: string | null,
   ) {
     if (outcome === "purged") {
-      const result = await env.DB.prepare(
-        `DELETE FROM ${catalogTableNames.cachePurgeDebts} WHERE product_id = ? AND revision = ? RETURNING product_id`,
-      )
-        .bind(id, revision)
-        .all();
-      return result.results.length === 1;
+      const rows = await database()
+        .delete(catalogCachePurgeDebts)
+        .where(
+          and(
+            eq(catalogCachePurgeDebts.productId, id),
+            eq(catalogCachePurgeDebts.revision, revision),
+          ),
+        )
+        .returning({ productId: catalogCachePurgeDebts.productId });
+      return rows.length === 1;
     }
-    const result = await env.DB.prepare(
-      `UPDATE ${catalogTableNames.cachePurgeDebts} SET attempt_count = attempt_count + 1, request_id = ?, last_attempted_at = ? WHERE product_id = ? AND revision = ? AND attempt_count < 1000000 RETURNING product_id`,
-    )
-      .bind(requestId, Date.now(), id, revision)
-      .all();
-    return result.results.length === 1;
+
+    const rows = await database()
+      .update(catalogCachePurgeDebts)
+      .set({
+        attemptCount: sql`${catalogCachePurgeDebts.attemptCount} + 1`,
+        requestId,
+        lastAttemptedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(catalogCachePurgeDebts.productId, id),
+          eq(catalogCachePurgeDebts.revision, revision),
+          sql`${catalogCachePurgeDebts.attemptCount} < 1000000`,
+        ),
+      )
+      .returning({ productId: catalogCachePurgeDebts.productId });
+    return rows.length === 1;
   },
 };

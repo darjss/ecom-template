@@ -1,19 +1,8 @@
 import { execFile, spawn } from "node:child_process";
-import type { Dirent } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import {
-  chmod,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  realpath,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import { parse as parseYaml } from "yaml";
@@ -21,17 +10,14 @@ import * as v from "valibot";
 import {
   D1DatabaseIdSchema,
   D1DatabaseNameSchema,
-  DeliveryAuditEventIdSchema,
   DeliveryJournalSchema,
   DeliveryManifestSchema,
   DeploymentTargetNameSchema,
-  DeliveryStaffIdSchema,
   DevProcessRecordSchema,
   ProofRecordSchema,
   StoreNameSchema,
   StoreSlugSchema,
   type DeliveryManifest,
-  type DeliveryJournal,
 } from "./index";
 import { parsePortlessOrigin, readCommitIdentity, resolveLocalStore } from "./portless";
 
@@ -130,30 +116,6 @@ const WranglerConfigSchema = v.object({
     }),
   ),
 });
-const RemoteD1ListSchema = v.array(
-  v.object({ uuid: D1DatabaseIdSchema, name: v.pipe(v.string(), v.minLength(1)) }),
-);
-
-const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const hasCanonicalStaffIdSql =
-  "length(staff_members.id) = 32 AND substr(staff_members.id, 1, 6) = 'staff_' AND substr(staff_members.id, 7, 1) GLOB '[0-7]' AND substr(staff_members.id, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'";
-
-const createOwnerStatement = async (email: string) => {
-  const [{ stdout: staffIdSource }, { stdout: auditIdSource }] = await Promise.all([
-    execFileOutput("pnpm", ["--silent", "staff:id:create"]),
-    execFileOutput("pnpm", ["--silent", "audit:id:create"]),
-  ]);
-  const staffId = v.parse(DeliveryStaffIdSchema, staffIdSource.trim());
-  const auditId = v.parse(DeliveryAuditEventIdSchema, auditIdSource.trim());
-  const correlationId = randomUUID();
-  const now = Date.now();
-  const matchingStaffSql = `normalized_email = ${sqlString(email)}`;
-  const staffNeedsOwnerProvisioningSql = `NOT (${hasCanonicalStaffIdSql}) OR staff_members.status <> 'active' OR staff_members.role IS NOT 'owner' OR staff_members.approved_at IS NULL OR staff_members.revoked_at IS NOT NULL`;
-  const ownerProvisioningChangesAuthoritySql = `NOT EXISTS (SELECT 1 FROM staff_members WHERE ${matchingStaffSql}) OR EXISTS (SELECT 1 FROM staff_members WHERE ${matchingStaffSql} AND (${staffNeedsOwnerProvisioningSql}))`;
-  const finalStaffId = `coalesce((SELECT CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE ${sqlString(staffId)} END FROM staff_members WHERE ${matchingStaffSql}), ${sqlString(staffId)})`;
-  const metadata = `json_object('before', (SELECT json_object('status', status, 'role', role) FROM staff_members WHERE ${matchingStaffSql}), 'after', json_object('status', 'active', 'role', 'owner'))`;
-  return `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ${sqlString(auditId)}, 'system', NULL, NULL, 'provisioning', 'staff.provision_owner', 'accepted', 'staff_member', ${finalStaffId}, NULL, ${sqlString(correlationId)}, ${metadata}, ${now} WHERE ${ownerProvisioningChangesAuthoritySql}; INSERT INTO staff_session_cleanup_debts (auth_user_id, staff_id, session_generation, operation, created_at, updated_at) SELECT auth_user_id, ${finalStaffId}, session_generation + 1, 'provision', ${now}, ${now} FROM staff_members WHERE ${matchingStaffSql} AND auth_user_id IS NOT NULL AND (${ownerProvisioningChangesAuthoritySql}) ON CONFLICT(auth_user_id) DO UPDATE SET staff_id = excluded.staff_id, session_generation = excluded.session_generation, operation = excluded.operation, updated_at = excluded.updated_at; INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET id = CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE excluded.id END, status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at WHERE ${ownerProvisioningChangesAuthoritySql}`;
-};
 
 const readAppD1Resource = async (slug: string) => {
   const source = await readFile(join("apps", slug, "wrangler.jsonc"), "utf8");
@@ -174,362 +136,278 @@ const readAppD1Resource = async (slug: string) => {
   return { name: resource.database_name, databaseId: resource.database_id };
 };
 
-const parseDeliveryJournal = (source: string) => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
-  }
-  const result = v.safeParse(DeliveryJournalSchema, parsed);
-  if (!result.success) {
-    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
-  }
-  return result.output;
-};
-
-const isMissingFile = (error: unknown) =>
-  typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
-
-type CanonicalDirectory = {
-  readonly path: string;
-  readonly realPath: string;
-};
-
-const resolveCanonicalDirectory = async (
-  directory: string,
-  missingAllowed: boolean,
-  invalidMessage: string,
-): Promise<CanonicalDirectory | undefined> => {
-  const path = resolvePath(directory);
-  let status;
-  try {
-    status = await lstat(path);
-  } catch (error) {
-    if (missingAllowed && isMissingFile(error)) {
-      return undefined;
-    }
-    throw new Error(invalidMessage, { cause: error });
-  }
-  if (status.isSymbolicLink() || !status.isDirectory()) {
-    throw new Error(invalidMessage);
-  }
-  try {
-    return { path, realPath: await realpath(path) };
-  } catch {
-    throw new Error(invalidMessage);
-  }
-};
-
-const isContainedPath = (root: string, path: string) => {
-  const remainder = relative(root, path);
-  return (
-    remainder === "" ||
-    (remainder !== ".." && !remainder.startsWith(`..${sep}`) && !isAbsolute(remainder))
-  );
-};
-
-const readCanonicalDeliveryJournal = async (
-  targetName: string,
-  missingAllowed: boolean,
-  knownRoot?: CanonicalDirectory,
-) => {
-  const validTargetName = v.parse(DeploymentTargetNameSchema, targetName);
-  const root =
-    knownRoot ??
-    (await resolveCanonicalDirectory(
-      ".delivery",
-      missingAllowed,
-      "Canonical delivery journal evidence root is invalid",
-    ));
-  if (!root) {
-    return undefined;
-  }
-  const path = resolvePath(root.path, `${validTargetName}.journal.json`);
-  if (!isContainedPath(root.path, path)) {
-    throw new Error("Canonical delivery journal evidence path is invalid");
-  }
-  let status;
-  try {
-    status = await lstat(path);
-  } catch (error) {
-    if (missingAllowed && isMissingFile(error)) {
-      return undefined;
-    }
-    throw new Error("Remote Owner target lacks a deployed delivery journal", { cause: error });
-  }
-  if (status.isSymbolicLink() || !status.isFile()) {
-    throw new Error("Canonical delivery journal evidence file is invalid");
-  }
-  let canonicalPath: string;
-  try {
-    canonicalPath = await realpath(path);
-  } catch {
-    throw new Error("Canonical delivery journal evidence file is invalid");
-  }
-  if (!isContainedPath(root.realPath, canonicalPath)) {
-    throw new Error("Canonical delivery journal evidence path is invalid");
-  }
-  let source: string;
-  try {
-    source = await readFile(canonicalPath, "utf8");
-  } catch {
-    throw new Error("Canonical delivery journal evidence file is invalid");
-  }
-  return parseDeliveryJournal(source);
-};
-
 const readDeliveryJournal = async (targetName: string) => {
-  const journal = await readCanonicalDeliveryJournal(targetName, false);
-  if (!journal) {
-    throw new Error("Remote Owner target lacks a deployed delivery journal");
-  }
-  return journal;
+  const source = await readFile(journalPath(targetName), "utf8");
+  return v.parse(DeliveryJournalSchema, JSON.parse(source));
 };
 
-const privateManifestLimit = 100;
+const RemoteD1InfoSchema = v.object({
+  uuid: D1DatabaseIdSchema,
+  name: D1DatabaseNameSchema,
+});
+const WorkerDeploymentSchema = v.object({
+  versions: v.array(
+    v.object({
+      version_id: v.pipe(v.string(), v.uuid()),
+      percentage: v.number(),
+    }),
+  ),
+});
+const WorkerVersionSchema = v.object({
+  annotations: v.record(v.string(), v.string()),
+});
 
-const readPrivateManifestPaths = async () => {
-  const root = await resolveCanonicalDirectory(
-    ".private",
-    true,
-    "Canonical private delivery evidence root is invalid",
-  );
-  if (!root) {
-    return [];
-  }
-  const paths: string[] = [];
-  const visit = async (directory: string): Promise<void> => {
-    let entries: Dirent[];
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      throw new Error("Canonical private delivery evidence cannot be read");
-    }
-    for (const entry of entries) {
-      const path = resolvePath(directory, entry.name);
-      let status;
-      try {
-        status = await lstat(path);
-      } catch {
-        throw new Error("Canonical private delivery evidence cannot be read");
-      }
-      if (entry.isSymbolicLink() || status.isSymbolicLink()) {
-        continue;
-      }
-      if (entry.isDirectory() && status.isDirectory()) {
-        let canonicalPath: string;
-        try {
-          canonicalPath = await realpath(path);
-        } catch {
-          throw new Error("Canonical private delivery evidence cannot be read");
-        }
-        if (!isContainedPath(root.realPath, canonicalPath)) {
-          throw new Error("Canonical private delivery evidence escapes its root");
-        }
-        await visit(canonicalPath);
-      } else if (entry.isFile() && status.isFile() && /\.ya?ml$/.test(entry.name)) {
-        let canonicalPath: string;
-        try {
-          canonicalPath = await realpath(path);
-        } catch {
-          throw new Error("Canonical private Production manifest evidence is malformed");
-        }
-        if (!isContainedPath(root.realPath, canonicalPath)) {
-          throw new Error("Canonical private delivery evidence escapes its root");
-        }
-        paths.push(canonicalPath);
-        if (paths.length > privateManifestLimit) {
-          throw new Error("Canonical private delivery evidence exceeds its bounded file limit");
-        }
-      }
-    }
-  };
-  await visit(root.realPath);
-  return paths.toSorted();
-};
-
-const resolveCanonicalRemoteTarget = async (slug: string) => {
-  const privateManifestPaths = await readPrivateManifestPaths();
-  const deliveryRoot = await resolveCanonicalDirectory(
-    ".delivery",
-    true,
-    "Canonical delivery journal evidence root is invalid",
-  );
-  const candidates: Array<Awaited<ReturnType<typeof readTarget>>> = [];
-  for (const path of privateManifestPaths) {
-    let input: ManifestInput;
-    try {
-      input = await readManifestPath(path);
-    } catch {
-      throw new Error("Canonical private Production manifest evidence is malformed");
-    }
-    for (const [targetName, target] of Object.entries(input.manifest.targets)) {
-      if (target.kind !== "production" || targetSlug(target.app) !== slug) {
-        continue;
-      }
-      if (!deliveryRoot) {
-        continue;
-      }
-      const journal = await readCanonicalDeliveryJournal(targetName, true, deliveryRoot);
-      if (!journal) {
-        continue;
-      }
-      if (
-        journal.target !== targetName ||
-        journal.app !== target.app ||
-        journal.manifestDigest !== input.digest ||
-        !journal.completedSteps.includes("remote-deploy")
-      ) {
-        throw new Error(
-          "Canonical remote Owner evidence does not match its target, app, manifest, or deployment step",
-        );
-      }
-      candidates.push({ targetName, target, manifestDigest: input.digest });
-    }
-  }
-  const candidate = candidates.length === 1 ? candidates.at(0) : undefined;
-  if (!candidate) {
-    throw new Error(
-      candidates.length === 0
-        ? `Store ${slug} has no canonical private Production Owner target evidence`
-        : `Store ${slug} has ambiguous private Production Owner target evidence`,
-    );
-  }
-  return candidate;
-};
-
-const isCommitAncestor = (ancestor: string, descendant: string) =>
-  new Promise<boolean>((resolve, reject) => {
-    const child = spawn("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-      stdio: "ignore",
-    });
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve(true);
-      } else if (code === 1) {
-        resolve(false);
-      } else {
-        reject(new Error("Recorded deployment commit is invalid or unavailable"));
-      }
-    });
-  });
-
-const verifyRemoteD1Resource = async (
-  app: string,
-  recorded: DeliveryJournal["resources"]["d1"],
+const verifyRemoteOwnerTarget = async (
+  workerName: string,
+  commit: string,
+  d1: { readonly name: string; readonly databaseId: string },
 ) => {
-  const { stdout } = await execFileOutput("pnpm", [
-    "--filter",
-    app,
+  const { stdout: d1Source } = await execFileOutput("pnpm", [
     "exec",
     "wrangler",
     "d1",
-    "list",
+    "info",
+    d1.name,
     "--json",
   ]);
-  const parsed: unknown = JSON.parse(stdout);
-  const resources = v.parse(RemoteD1ListSchema, parsed);
-  const candidates = resources.filter(
-    ({ name, uuid }) => name === recorded.name || uuid === recorded.databaseId,
-  );
-  const verified = candidates.length === 1 ? candidates.at(0) : undefined;
-  if (!verified || verified.name !== recorded.name || verified.uuid !== recorded.databaseId) {
-    throw new Error("Remote D1 identity does not match the recorded delivery resource");
+  const remoteD1 = v.parse(RemoteD1InfoSchema, JSON.parse(d1Source));
+  if (remoteD1.name !== d1.name || remoteD1.uuid !== d1.databaseId) {
+    throw new Error("Deployed D1 resource does not match the delivery journal");
   }
+
+  const { stdout: deploymentSource } = await execFileOutput("pnpm", [
+    "exec",
+    "wrangler",
+    "deployments",
+    "status",
+    "--name",
+    workerName,
+    "--json",
+  ]);
+  const deployment = v.parse(WorkerDeploymentSchema, JSON.parse(deploymentSource));
+  const activeVersion = deployment.versions.find(({ percentage }) => percentage === 100);
+  if (!activeVersion || deployment.versions.length !== 1) {
+    throw new Error("Deployed Worker does not have one active version");
+  }
+  const { stdout: versionSource } = await execFileOutput("pnpm", [
+    "exec",
+    "wrangler",
+    "versions",
+    "view",
+    activeVersion.version_id,
+    "--name",
+    workerName,
+    "--json",
+  ]);
+  const version = v.parse(WorkerVersionSchema, JSON.parse(versionSource));
+  if (
+    version.annotations["workers/message"] !== commit &&
+    version.annotations["workers/tag"] !== commit
+  ) {
+    throw new Error("Deployed Worker commit does not match the delivery journal");
+  }
+};
+
+const ownerProvisioningWorker = (token: string) => `
+import { provisionOwner } from "../../packages/kernel/src/index";
+
+export default {
+  async fetch(request) {
+    if (request.headers.get("authorization") !== ${JSON.stringify(`Bearer ${token}`)}) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+    const result = await provisionOwner(await request.text());
+    if (result.isOk()) {
+      return new Response("ok");
+    }
+    return new Response(
+      result.error.code === "linked_identity"
+        ? "Use Staff Admin to change authority for a linked identity"
+        : "Owner provisioning is unavailable",
+      { status: result.error.code === "linked_identity" ? 409 : 503 },
+    );
+  },
+};
+`;
+
+const provisionOwner = async (
+  email: string,
+  configPath: string,
+  mode: "local" | "remote",
+  persistPath?: string,
+) => {
+  await mkdir(".delivery", { recursive: true });
+  const directory = await mkdtemp(join(process.cwd(), ".delivery", "owner-provisioning-"));
+  const entryPath = join(directory, "worker.ts");
+  const token = randomUUID();
+  const port = 18_000 + (process.pid % 1_000);
+  await writeFile(entryPath, ownerProvisioningWorker(token), { flag: "wx", mode: 0o600 });
+  const commandArgs = [
+    "exec",
+    "wrangler",
+    "dev",
+    entryPath,
+    "--config",
+    configPath,
+    "--ip",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ];
+  if (mode === "remote") {
+    commandArgs.push("--remote");
+  } else if (persistPath) {
+    commandArgs.push("--persist-to", persistPath);
+  }
+  const child = spawn("pnpm", commandArgs, {
+    detached: true,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  const closed = new Promise<void>((resolve) => {
+    child.once("close", () => resolve());
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr = `${stderr}${chunk}`.slice(-4_000);
+  });
+  try {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) {
+        throw new Error(
+          stderr.trim().replaceAll(token, "[redacted]") ||
+            "Owner provisioning Worker failed to start",
+        );
+      }
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}` },
+          body: email,
+          signal: AbortSignal.timeout(2_000),
+        });
+        if (!response.ok) {
+          throw new Error(`Owner provisioning failed with HTTP ${response.status}`);
+        }
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Owner provisioning failed")) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+    throw new Error(
+      stderr.trim().replaceAll(token, "[redacted]") ||
+        "Owner provisioning Worker did not become ready",
+    );
+  } finally {
+    if (child.pid) {
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        if (child.exitCode === null) {
+          child.kill();
+        }
+      }
+    }
+    let shutdownTimeout: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      closed,
+      new Promise<void>((resolve) => {
+        shutdownTimeout = setTimeout(resolve, 5_000);
+      }),
+    ]);
+    if (shutdownTimeout) {
+      clearTimeout(shutdownTimeout);
+    }
+    if (child.exitCode === null && child.pid) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+        }
+      }
+      await closed;
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+
+const writeOwnerConfig = async (
+  directory: string,
+  d1: { readonly name: string; readonly databaseId: string },
+) => {
+  const configPath = join(directory, "wrangler.json");
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      name: "owner-provisioning",
+      compatibility_date: "2026-07-08",
+      d1_databases: [{ binding: "DB", database_name: d1.name, database_id: d1.databaseId }],
+    }),
+    { flag: "wx", mode: 0o600 },
+  );
+  return configPath;
 };
 
 const addOwner = async () => {
   const slug = v.parse(StoreSlugSchema, requireOption("--store"));
   const email = v.parse(SqlEmailSchema, requireOption("--email"));
-  const hasManifestOverride = args.includes("--manifest");
-  const hasTargetOverride = args.includes("--target");
   if (args.includes("--local")) {
-    if (hasManifestOverride || hasTargetOverride) {
+    if (args.includes("--manifest") || args.includes("--target")) {
       throw new Error("Owner provisioning accepts either --local or a manifest target, not both");
     }
     const localStore = await resolveLocalStore(slug);
-    const statement = await createOwnerStatement(email);
-    await run("pnpm", [
-      "--filter",
-      `@shops/${localStore.slug}`,
-      "exec",
-      "wrangler",
-      "d1",
-      "execute",
-      "DB",
-      "--local",
-      "--command",
-      statement,
-    ]);
+    const directory = await mkdtemp(join(tmpdir(), "ecom-owner-provisioning-"));
+    try {
+      await chmod(directory, 0o700);
+      const configPath = await writeOwnerConfig(
+        directory,
+        await readAppD1Resource(localStore.slug),
+      );
+      await provisionOwner(
+        email,
+        configPath,
+        "local",
+        join("apps", localStore.slug, ".wrangler", "state"),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
     write(`Provisioned active Owner ${email} for local Store ${localStore.slug}`);
     return;
   }
 
-  if (hasManifestOverride !== hasTargetOverride) {
-    throw new Error("Remote Owner manifest and target overrides must be provided together");
+  if (!args.includes("--manifest") || !args.includes("--target")) {
+    throw new Error("Remote Owner provisioning requires --manifest <path> and --target <name>");
   }
-  const { targetName, target, manifestDigest } = hasManifestOverride
-    ? await readTarget()
-    : await resolveCanonicalRemoteTarget(slug);
-  if (target.kind === "prospect-demo") {
-    throw new Error("Owner provisioning is unavailable for prospect-demo targets");
-  }
-  if (target.kind === "local" || targetSlug(target.app) !== slug) {
-    throw new Error("Remote Owner target does not match the selected deployed Store");
+  const { targetName, target, manifestDigest } = await readTarget();
+  if (target.kind !== "production" || targetSlug(target.app) !== slug) {
+    throw new Error("Owner provisioning requires the selected Store's Production target");
   }
   const journal = await readDeliveryJournal(targetName);
-  const commit = await readCommitIdentity();
-  const expectedD1Name = `${target.resourcePrefix}-db`;
-  const compatibleCommit = await isCommitAncestor(journal.commit, commit);
   if (
     journal.target !== targetName ||
     journal.app !== target.app ||
-    !compatibleCommit ||
     journal.manifestDigest !== manifestDigest ||
-    journal.resources.d1.name !== expectedD1Name ||
+    journal.resources.d1.name !== `${target.resourcePrefix}-db` ||
     !journal.completedSteps.includes("remote-deploy")
   ) {
-    throw new Error(
-      "Remote Owner target does not match the journal target, app, manifest, commit, or D1 name",
-    );
+    throw new Error("Remote Owner target does not match its manifest and delivery journal");
   }
-  await verifyRemoteD1Resource(target.app, journal.resources.d1);
-  const remoteConfigDirectory = await mkdtemp(join(tmpdir(), "ecom-owner-provisioning-"));
+
+  await verifyRemoteOwnerTarget(target.workerName, journal.commit, journal.resources.d1);
+
+  const directory = await mkdtemp(join(tmpdir(), "ecom-owner-provisioning-"));
   try {
-    await chmod(remoteConfigDirectory, 0o700);
-    const remoteConfigPath = join(remoteConfigDirectory, "wrangler.json");
-    await writeFile(
-      remoteConfigPath,
-      JSON.stringify({
-        name: "owner-provisioning",
-        compatibility_date: "2026-07-08",
-        d1_databases: [
-          {
-            binding: "DB",
-            database_name: journal.resources.d1.name,
-            database_id: journal.resources.d1.databaseId,
-          },
-        ],
-      }),
-      { flag: "wx", mode: 0o600 },
-    );
-    const statement = await createOwnerStatement(email);
-    await run("pnpm", [
-      "exec",
-      "wrangler",
-      "d1",
-      "execute",
-      "DB",
-      "--config",
-      remoteConfigPath,
-      "--remote",
-      "--command",
-      statement,
-    ]);
+    await chmod(directory, 0o700);
+    const configPath = await writeOwnerConfig(directory, journal.resources.d1);
+    await provisionOwner(email, configPath, "remote");
   } finally {
-    await rm(remoteConfigDirectory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
   }
   write(`Provisioned active Owner ${email} for deployed target ${targetName}`);
 };

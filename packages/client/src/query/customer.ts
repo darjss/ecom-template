@@ -1,23 +1,31 @@
-import type { CustomerAuthClientError, CustomerSessionResponse } from "@ecom/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
+import type { InferErr, InferOk } from "better-result";
 import {
   requestCustomerAuthMutation,
   requestCustomerSession,
   type CustomerAuthMutation,
-  type CustomerAuthMutationResult,
 } from "../customer/request";
+import { unwrapRequestResult } from "../request";
 
 const customerSessionKey = ["customer", "session"] as const;
 
+type CustomerSessionResult = Awaited<ReturnType<typeof requestCustomerSession>>;
+type CustomerMutationResult = Awaited<ReturnType<typeof requestCustomerAuthMutation>>;
+
 export const customerSessionQueryOptions = () =>
-  queryOptions<CustomerSessionResponse, CustomerAuthClientError>({
+  queryOptions<InferOk<CustomerSessionResult>, InferErr<CustomerSessionResult>>({
     queryKey: customerSessionKey,
-    queryFn: requestCustomerSession,
+    queryFn: async () => unwrapRequestResult(await requestCustomerSession()),
   });
 
 export const customerAuthMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<CustomerAuthMutationResult, CustomerAuthClientError, CustomerAuthMutation>({
-    mutationFn: requestCustomerAuthMutation,
+  mutationOptions<
+    InferOk<CustomerMutationResult>,
+    InferErr<CustomerMutationResult>,
+    CustomerAuthMutation
+  >({
+    mutationFn: async (mutation) =>
+      unwrapRequestResult(await requestCustomerAuthMutation(mutation)),
     onSuccess: async (_result, mutation) => {
       if (mutation.kind !== "request_otp") {
         await queryClient.invalidateQueries({ queryKey: customerSessionKey });

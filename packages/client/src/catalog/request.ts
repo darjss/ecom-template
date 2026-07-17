@@ -1,36 +1,22 @@
 import {
   CatalogApiErrorSchema,
-  CatalogClientErrorSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
-  type CatalogClientError,
   type CreateProductInput,
   type InventoryAdjustmentInput,
   type ProductId,
   type UpdateProductInput,
 } from "@ecom/contracts";
-import * as v from "valibot";
 import { createApiClient } from "../eden";
+import { requestResult } from "../request";
 
-const clientError = (error: CatalogClientError) => v.parse(CatalogClientErrorSchema, error);
-const parseFailure = (source: unknown) => {
-  const parsed = v.safeParse(CatalogApiErrorSchema, source);
-  return parsed.success
-    ? clientError({ kind: "api", error: parsed.output.error })
-    : clientError({ kind: "contract", message: "Invalid Catalog API error response" });
-};
-
-export const requestCatalog = async () => {
-  const response = await createApiClient().api.catalog.products.get();
-  if (response.error) {
-    throw parseFailure(response.error.value);
-  }
-  const parsed = v.safeParse(CatalogListResponseSchema, response.data);
-  if (!parsed.success) {
-    throw clientError({ kind: "contract", message: "Invalid Catalog response" });
-  }
-  return parsed.output;
-};
+export const requestCatalog = () =>
+  requestResult(
+    () => createApiClient().api.catalog.products.get(),
+    CatalogListResponseSchema,
+    CatalogApiErrorSchema,
+    "Invalid Catalog response",
+  );
 
 export type CatalogMutation =
   | ({ readonly kind: "create" } & CreateProductInput)
@@ -47,48 +33,41 @@ const requestInventoryAdjustment = (
   input: InventoryAdjustmentInput,
 ) => client.api.catalog.products({ id })["inventory-adjustments"].post(input);
 
-export const requestCatalogMutation = async (mutation: CatalogMutation) => {
+export const requestCatalogMutation = (mutation: CatalogMutation) => {
   const client = createApiClient();
-  const response =
+  const request = () =>
     mutation.kind === "create"
-      ? await client.api.catalog.products.post({
-          idempotencyKey: mutation.idempotencyKey,
+      ? client.api.catalog.products.post({
           name: mutation.name,
           slug: mutation.slug,
           description: mutation.description,
           priceMnt: mutation.priceMnt,
-          sku: mutation.sku,
           openingQuantity: mutation.openingQuantity,
           inventoryReason: mutation.inventoryReason,
         })
       : mutation.kind === "update"
-        ? await client.api.catalog.products({ id: mutation.id }).patch({
-            idempotencyKey: mutation.idempotencyKey,
+        ? client.api.catalog.products({ id: mutation.id }).patch({
             name: mutation.name,
             slug: mutation.slug,
             description: mutation.description,
             priceMnt: mutation.priceMnt,
-            sku: mutation.sku,
           })
         : mutation.kind === "publish"
-          ? await client.api.catalog.products({ id: mutation.id }).publish.post()
+          ? client.api.catalog.products({ id: mutation.id }).publish.post()
           : mutation.kind === "archive"
-            ? await client.api.catalog.products({ id: mutation.id }).archive.post()
+            ? client.api.catalog.products({ id: mutation.id }).archive.post()
             : mutation.kind === "reactivate"
-              ? await client.api.catalog.products({ id: mutation.id }).reactivate.post()
+              ? client.api.catalog.products({ id: mutation.id }).reactivate.post()
               : mutation.kind === "retry-cache-purge"
-                ? await client.api.catalog.products({ id: mutation.id })["cache-purge"].retry.post()
-                : await requestInventoryAdjustment(client, mutation.id, {
+                ? client.api.catalog.products({ id: mutation.id })["cache-purge"].retry.post()
+                : requestInventoryAdjustment(client, mutation.id, {
                     delta: mutation.delta,
                     reason: mutation.reason,
-                    idempotencyKey: mutation.idempotencyKey,
                   });
-  if (response.error) {
-    throw parseFailure(response.error.value);
-  }
-  const parsed = v.safeParse(CatalogProductResponseSchema, response.data);
-  if (!parsed.success) {
-    throw clientError({ kind: "contract", message: "Invalid Catalog mutation response" });
-  }
-  return parsed.output;
+  return requestResult(
+    request,
+    CatalogProductResponseSchema,
+    CatalogApiErrorSchema,
+    "Invalid Catalog mutation response",
+  );
 };

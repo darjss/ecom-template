@@ -79,7 +79,7 @@ The following stable keys are canonical:
 - `wf29.customer.link`
 - `wf29.stock.race`
 
-Each scenario resets clean resources and invokes ordinary shared-kernel commands. Generated database IDs remain runtime values. Stable scenario keys provide lookup and idempotency, not persisted IDs. The exact commands and assertions remain those in the [fixture research matrix](./reference-store-catalog-media-research.md).
+Each scenario resets clean resources and invokes ordinary shared-kernel commands. Generated database IDs remain runtime values. Stable scenario keys provide lookup, not persisted IDs. The exact commands and assertions remain those in the [fixture research matrix](./reference-store-catalog-media-research.md).
 
 ## Review outcome
 

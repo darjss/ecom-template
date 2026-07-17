@@ -9,7 +9,6 @@ import {
   ProductIdSchema,
   UpdateProductInputSchema,
   HealthResponseSchema,
-  StaffCleanupResponseSchema,
   StaffCreateInputSchema,
   StaffIdSchema,
   StaffLifecycleApiErrorSchema,
@@ -27,7 +26,6 @@ import {
   changeStaffRole,
   createStaff,
   createStaffAuth,
-  createStoreBackground,
   createStorefrontReader,
   listCatalog,
   listStaff,
@@ -35,14 +33,12 @@ import {
   readStaffAuthSession,
   removeStaff,
   retryProductCachePurge,
-  retryStaffSessionCleanup,
   revokeStaff,
   transitionProduct,
   updateProduct,
   type CatalogOperationFailure,
   type CustomerSmsDelivery,
   type StaffOperationFailure,
-  type StoreBackground,
   type StorefrontReader,
 } from "@ecom/kernel";
 import { Elysia } from "elysia";
@@ -84,29 +80,23 @@ const catalogError = (
   const message =
     code === "duplicate_slug"
       ? "Product slug is already in use"
-      : code === "duplicate_sku"
-        ? "SKU is permanently assigned"
-        : code === "sku_locked"
-          ? "A published SKU cannot be changed"
-          : code === "invalid_publication"
-            ? "Product publication invariants are not satisfied"
-            : code === "invalid_lifecycle"
-              ? "Product lifecycle transition is not valid"
-              : code === "reservation_blocked"
-                ? "Active reservations block this inventory adjustment"
-                : code === "inventory_inconsistent"
-                  ? "Reserved inventory truth requires reconciliation"
-                  : code === "inventory_limit"
-                    ? "Inventory on-hand cannot exceed 1,000,000"
-                    : code === "idempotency_conflict"
-                      ? "The idempotency key belongs to another Catalog command"
-                      : code === "not_found"
-                        ? "Product was not found"
-                        : code === "forbidden"
-                          ? "Catalog authority is required"
-                          : code === "conflict"
-                            ? "Inventory changed concurrently"
-                            : "Catalog infrastructure is unavailable";
+      : code === "invalid_publication"
+        ? "Product publication invariants are not satisfied"
+        : code === "invalid_lifecycle"
+          ? "Product lifecycle transition is not valid"
+          : code === "reservation_blocked"
+            ? "Active reservations block this inventory adjustment"
+            : code === "inventory_inconsistent"
+              ? "Reserved inventory truth requires reconciliation"
+              : code === "inventory_limit"
+                ? "Inventory on-hand cannot exceed 1,000,000"
+                : code === "not_found"
+                  ? "Product was not found"
+                  : code === "forbidden"
+                    ? "Catalog authority is required"
+                    : code === "conflict"
+                      ? "Inventory changed concurrently"
+                      : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403
@@ -187,11 +177,7 @@ const mapFailure = (
   if (failure.code === "session_revocation_failed") {
     return status(
       503,
-      apiError(
-        "unavailable",
-        "Staff authority changed, but disposable session cleanup is incomplete",
-        "session_revocation_failed",
-      ),
+      apiError("unavailable", "Staff sessions could not be revoked", "session_revocation_failed"),
     );
   }
   return status(503, apiError("unavailable", "Staff authority is unavailable"));
@@ -279,16 +265,6 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });
-    })
-    .post("/staff/session-cleanup/retry", async ({ request, status }) => {
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await retryStaffSessionCleanup(authorization.actor, authorization.origin);
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffCleanupResponseSchema, { data: result.value });
     })
     .post("/staff/:id/approve", async ({ body, params, request, status }) => {
       const input = v.safeParse(StaffMutationInputSchema, body);
@@ -503,7 +479,6 @@ export type StoreElysiaApp = ReturnType<typeof createApi>;
 export type StoreBackend = {
   readonly api: StoreElysiaApp;
   readonly storefront: StorefrontReader;
-  readonly background: StoreBackground;
 };
 
 export const resolveStaffRequest = async (request: Request, input: unknown) => {
@@ -532,6 +507,5 @@ export const createStoreBackend = (input: StoreBackendInput): StoreBackend => {
       location: definition.profile.location,
       status: "open",
     }),
-    background: createStoreBackground(),
   };
 };

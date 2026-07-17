@@ -1,4 +1,4 @@
-import { StaffRoleSchema } from "@ecom/contracts";
+import { StaffIdSchema, StaffRoleSchema } from "@ecom/contracts";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { env } from "cloudflare:workers";
@@ -24,12 +24,6 @@ const readStaffAuthEnvironment = () =>
   });
 
 const staffStorageKey = (key: string) => `staff:${key}`;
-const StaffSessionGenerationSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
-const StaffCleanupSessionSchema = v.object({
-  token: v.pipe(v.string(), v.minLength(1)),
-  generation: v.optional(v.unknown()),
-});
-const staffSessionCleanupLimit = 100;
 
 export const createStaffAuth = (origin: string) => {
   const environment = readStaffAuthEnvironment();
@@ -79,7 +73,7 @@ export const createStaffAuth = (origin: string) => {
       cookieCache: { enabled: false },
       additionalFields: {
         role: { type: "string", required: false, input: false },
-        generation: { type: "number", required: false, input: false },
+        staffId: { type: "string", required: false, input: false },
       },
     },
     databaseHooks: {
@@ -95,7 +89,7 @@ export const createStaffAuth = (origin: string) => {
               data: {
                 ...session,
                 role: member?.status === "active" ? member.role : null,
-                generation: member?.sessionGeneration ?? null,
+                staffId: member?.id ?? null,
               },
             };
           },
@@ -149,93 +143,35 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
   };
 
   const role = v.safeParse(StaffRoleSchema, session.session.role);
-  if (!role.success) {
-    const applicant = await staffQueries.resolveApplicant(session.user.id, session.user.email);
-    if (applicant.kind === "infrastructure_unavailable" || !(await deleteSession())) {
-      return { kind: "unavailable" as const };
-    }
-    return applicant.kind === "identity_conflict"
-      ? { kind: "identity_conflict" as const }
-      : { kind: "awaiting_approval" as const };
-  }
-
-  const generation = v.safeParse(StaffSessionGenerationSchema, session.session.generation);
-  if (!generation.success) {
-    return (await deleteSession())
-      ? { kind: "unauthorized" as const }
-      : { kind: "unavailable" as const };
-  }
-  const authorityAttempt = await (async () => {
-    try {
-      return {
-        success: true as const,
-        authority: await staffQueries.readCurrentSessionAuthority(
-          session.user.id,
-          session.user.email,
-          generation.output,
-        ),
-      };
-    } catch {
-      return { success: false as const };
-    }
-  })();
-  if (!authorityAttempt.success) {
-    return { kind: "unavailable" as const };
-  }
-  if (authorityAttempt.authority.kind !== "current") {
+  const staffId = v.safeParse(StaffIdSchema, session.session.staffId);
+  if (!role.success || !staffId.success) {
     if (!(await deleteSession())) {
       return { kind: "unavailable" as const };
     }
-    return authorityAttempt.authority.kind === "identity_conflict"
-      ? { kind: "identity_conflict" as const }
-      : { kind: "unauthorized" as const };
+    return staffId.success
+      ? { kind: "awaiting_approval" as const }
+      : { kind: "identity_conflict" as const };
   }
+
   return {
     kind: "active" as const,
     actor: {
-      staffId: authorityAttempt.authority.staffId,
+      staffId: staffId.output,
       authUserId: session.user.id,
       role: role.output,
     },
   };
 };
 
-export const cleanupStaffUserSessions = async (
-  origin: string,
-  authUserId: string,
-  expectedGeneration: number,
-  mode: "stale" | "all",
-) => {
+export const deleteStaffUserSessions = async (origin: string, authUserId: string) => {
   const auth = createStaffAuth(origin);
   if (!auth) {
     return false;
   }
   const adapter = (await auth.$context).internalAdapter;
-  const requiresDeletion = (generation: unknown) => {
-    if (mode === "all") {
-      return true;
-    }
-    const parsed = v.safeParse(StaffSessionGenerationSchema, generation);
-    return !parsed.success || parsed.output < expectedGeneration;
-  };
-  const sessions = v.safeParse(
-    v.array(StaffCleanupSessionSchema),
-    await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
-  );
-  if (!sessions.success) {
-    return false;
-  }
-  const targets = sessions.output
-    .filter((session) => requiresDeletion(session.generation))
-    .slice(0, staffSessionCleanupLimit);
-  for (const session of targets) {
+  const sessions = await adapter.listSessions(authUserId, { onlyActiveSessions: true });
+  for (const session of sessions) {
     await adapter.deleteSession(session.token);
   }
-  const remaining = v.safeParse(
-    v.array(StaffCleanupSessionSchema),
-    await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
-  );
-  return (
-    remaining.success && remaining.output.every((session) => !requiresDeletion(session.generation))
-  );
+  return (await adapter.listSessions(authUserId, { onlyActiveSessions: true })).length === 0;
 };

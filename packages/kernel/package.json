@@ -14,7 +14,7 @@
     "drizzle-orm": "0.45.2",
     "es-toolkit": "1.49.0",
     "evlog": "2.21.0",
-    "json-canonicalize": "2.0.0",
+    "ky": "2.0.2",
     "valibot": "1.4.2"
   },
   "devDependencies": {

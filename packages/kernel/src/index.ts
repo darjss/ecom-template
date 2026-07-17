@@ -10,7 +10,6 @@ export {
   type CatalogMutationResult,
   type CatalogOperationFailure,
 } from "./catalog/operations";
-export { createStoreBackground, type StoreBackground } from "./background/index";
 export {
   readCustomerSession,
   requestCustomerOtp,
@@ -25,11 +24,11 @@ export {
   createStaff,
   hasStaffCapability,
   listStaff,
+  provisionOwner,
   removeStaff,
-  retryStaffSessionCleanup,
   revokeStaff,
+  type OwnerProvisioningFailure,
   type StaffActor,
-  type StaffCleanupResult,
   type StaffCapability,
   type StaffOperationFailure,
 } from "./staff/operations";

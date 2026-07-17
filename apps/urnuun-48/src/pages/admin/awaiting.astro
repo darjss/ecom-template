@@ -4,12 +4,23 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 Astro.response.headers.set("Cache-Control", "private, no-store");
 ---
 <AdminLayout title="Зөвшөөрөл хүлээж байна · Өрнүүн 48">
-  <main id="admin-content" class="login-shell">
-    <section class="login-panel" aria-labelledby="awaiting-title">
-      <p class="eyebrow">Өрнүүн 48 · Удирдлага</p>
-      <h1 id="awaiting-title">Зөвшөөрөл хүлээж байна</h1>
-      <p>Таны баталгаажсан Google хаягийн хүсэлтийг бүртгэлээ. Дэлгүүрийн Owner зөвшөөрсний дараа дахин нэвтэрнэ үү.</p>
-      <a class="store-link-back" href="/">Дэлгүүр рүү буцах</a>
+  <main id="admin-content" class="grid min-h-screen place-items-center p-6">
+    <section
+      class="w-full max-w-lg rounded-(--radius) border border-black/15 bg-(--paper) p-8 sm:p-16"
+      aria-labelledby="awaiting-title"
+    >
+      <p class="mb-2 text-xs font-extrabold tracking-widest text-(--muted) uppercase">
+        Өрнүүн 48 · Удирдлага
+      </p>
+      <h1 id="awaiting-title" class="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
+        Зөвшөөрөл хүлээж байна
+      </h1>
+      <p class="mt-5 mb-8 leading-relaxed text-(--muted)">
+        Таны баталгаажсан Google хаягийн хүсэлтийг бүртгэлээ. Дэлгүүрийн Owner зөвшөөрсний дараа дахин нэвтэрнэ үү.
+      </p>
+      <a class="mt-6 block w-max text-(--muted) underline-offset-4" href="/">
+        Дэлгүүр рүү буцах
+      </a>
     </section>
   </main>
 </AdminLayout>
