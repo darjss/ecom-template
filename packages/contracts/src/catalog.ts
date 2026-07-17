@@ -95,6 +95,7 @@ export const CreateProductInputSchema = v.strictObject({
   inventoryReason: InventoryReasonSchema,
 });
 export const UpdateProductInputSchema = v.strictObject({
+  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.pipe(v.string(), v.maxLength(5_000)),

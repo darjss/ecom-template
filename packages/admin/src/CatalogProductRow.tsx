@@ -3,7 +3,7 @@ import type { CatalogClientError, Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
-import { Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -14,6 +14,10 @@ const mutationErrorMessage = (error: CatalogClientError) =>
 const ProductEditForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
+  const [pendingCommand, setPendingCommand] = createSignal<{
+    signature: string;
+    idempotencyKey: string;
+  }>();
   const form = createForm(() => ({
     defaultValues: {
       name: props.product.name,
@@ -23,7 +27,27 @@ const ProductEditForm = (props: { product: Product }) => {
       sku: props.product.sku,
     },
     onSubmit: async ({ value }) => {
-      await mutation.mutateAsync({ kind: "update", id: props.product.id, ...value });
+      const input = {
+        name: value.name.trim(),
+        slug: value.slug.trim(),
+        description: value.description,
+        priceMnt: value.priceMnt,
+        sku: value.sku.trim(),
+      };
+      const signature = JSON.stringify(input);
+      const existing = pendingCommand();
+      const command =
+        existing?.signature === signature
+          ? existing
+          : { signature, idempotencyKey: crypto.randomUUID() };
+      setPendingCommand(command);
+      await mutation.mutateAsync({
+        kind: "update",
+        id: props.product.id,
+        idempotencyKey: command.idempotencyKey,
+        ...input,
+      });
+      setPendingCommand(undefined);
     },
   }));
   return (

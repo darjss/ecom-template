@@ -63,6 +63,7 @@ export const requestCatalogMutation = async (mutation: CatalogMutation) => {
         })
       : mutation.kind === "update"
         ? await client.api.catalog.products({ id: mutation.id }).patch({
+            idempotencyKey: mutation.idempotencyKey,
             name: mutation.name,
             slug: mutation.slug,
             description: mutation.description,
