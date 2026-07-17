@@ -15,15 +15,18 @@ export const staffQueryOptions = () =>
     queryFn: requestStaffList,
   });
 
+const refetchAuthoritativeStaff = async (queryClient: QueryClient) => {
+  await queryClient.invalidateQueries({ queryKey: staffQueryKey, refetchType: "none" });
+  await queryClient.refetchQueries({ queryKey: staffQueryKey, type: "active" });
+};
+
 export const staffMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<StaffMutationResult, StaffClientError, StaffMutation>({
     mutationFn: requestStaffMutation,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: staffQueryKey });
-    },
+    onSuccess: async () => refetchAuthoritativeStaff(queryClient),
     onError: async (error) => {
       if (error.kind === "api" && error.error.reason === "session_revocation_failed") {
-        await queryClient.invalidateQueries({ queryKey: staffQueryKey });
+        await refetchAuthoritativeStaff(queryClient);
       }
     },
   });
