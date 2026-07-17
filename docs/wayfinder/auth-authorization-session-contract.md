@@ -16,7 +16,7 @@ The Store runs two separately configured Better Auth instances. They share infra
 | Guest tracking | Order-specific bearer token | public tracking path | Read one Guest Order only |
 | Telegram | Founder-allowlisted Telegram operator | bot webhook | Store-local financial companion actions |
 
-Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store `EPHEMERAL_KV` binding is sufficient; logical key prefixes isolate Staff, Customer, verification, Demo Admin, cache, and short-lived action records. D1 owns Customer OTP send rate limits. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
+Staff Auth and Customer Auth use distinct Better Auth model/table names, cookie prefixes, KV key prefixes, and secrets. All auth cookies are Secure, HttpOnly, SameSite=Lax, and host-only. One Store `EPHEMERAL_KV` binding is sufficient; logical key prefixes isolate Staff, Customer, verification, rate-limit, Demo Admin, cache, and short-lived action records. KV owns best-effort Customer OTP send rate limits; D1 retains atomic challenge consumption. Base URL and trusted-origin handling follow the host-validation and Portless contract approved in #16.
 
 ## Staff identity and approval
 

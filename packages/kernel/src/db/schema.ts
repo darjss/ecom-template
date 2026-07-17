@@ -33,31 +33,6 @@ export const customers = sqliteTable(
   ],
 );
 
-export const customerOtpRateCounters = sqliteTable(
-  "customer_otp_rate_counters",
-  {
-    key: text("key").primaryKey(),
-    count: integer("count").notNull(),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check("customer_otp_rate_counters_count_check", sql`${table.count} > 0`),
-    index("customer_otp_rate_counters_expiry_idx").on(table.expiresAt),
-  ],
-);
-
-export const customerOtpRateAdmissions = sqliteTable(
-  "customer_otp_rate_admissions",
-  {
-    requestId: text("request_id").primaryKey(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check("customer_otp_rate_admissions_request_id_check", sql`length(${table.requestId}) = 36`),
-    index("customer_otp_rate_admissions_created_idx").on(table.createdAt),
-  ],
-);
-
 export const customerOtpChallenges = sqliteTable(
   "customer_otp_challenges",
   {

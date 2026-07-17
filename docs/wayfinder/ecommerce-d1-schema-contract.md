@@ -377,7 +377,7 @@ Two Better Auth configurations generate separate physical table sets:
 
 The Staff user schema supports verified Google email. The Customer user schema adds unique normalized phone and phone-verification fields required by the Better Auth phone plugin. Table and field names come from explicit `modelName`/field configuration in `scripts/auth-schema.config.ts`; implementation must run the generator after configuring both instances instead of hand-maintaining auth columns.
 
-Sessions and Better Auth verification records use the approved separately prefixed KV secondary-storage namespaces. Customer OTP challenge attempts and atomic send rate-limit counters use D1. The generated D1 tables remain independently namespaced for Better Auth compatibility and migrations; runtime configuration must not allow one instance to read the other namespace.
+Sessions, Better Auth verification records, and Customer OTP send rate-limit counters use the approved separately prefixed KV secondary-storage namespaces. Customer OTP challenge digests and attempt consumption remain in D1 for atomic single-use verification. The generated D1 tables remain independently namespaced for Better Auth compatibility and migrations; runtime configuration must not allow one instance to read the other namespace.
 
 ### `staff_members`
 

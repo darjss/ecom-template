@@ -6,6 +6,10 @@ import { establishCustomerAuthSession, readCustomerAuthSession } from "../auth/c
 import { customerQueries } from "./persistence";
 
 const CustomerSecretSchema = v.pipe(v.string(), v.minLength(32));
+const StoredRateCounterSchema = v.object({
+  count: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  expiresAt: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
 const otpLifetimeMs = 5 * 60 * 1_000;
 const phoneDailyWindowMs = 24 * 60 * 60 * 1_000;
 const ipWindowMs = 15 * 60 * 1_000;
@@ -63,32 +67,61 @@ const windowState = (now: number, size: number, offset = 0) => {
   return { id: start, expiresAt: start + size };
 };
 
-const applySendLimits = async (phoneKey: string, ipKey: string, requestId: string, now: number) => {
+const applySendLimits = async (phoneKey: string, ipKey: string, now: number) => {
   const day = windowState(now, phoneDailyWindowMs, ulaanbaatarOffsetMs);
   const ipWindow = windowState(now, ipWindowMs);
-  const cooldown = {
-    key: `customer:otp:cooldown:${phoneKey}`,
-    expiresAt: now + cooldownMs,
-  };
-  const phoneDay = {
-    key: `customer:otp:phone-day:${day.id}:${phoneKey}`,
-    expiresAt: day.expiresAt,
-  };
-  const ipRateWindow = {
-    key: `customer:otp:ip-window:${ipWindow.id}:${ipKey}`,
-    expiresAt: ipWindow.expiresAt,
-  };
-  const admission = await customerQueries.admitOtpSend({
-    requestId,
+  const counters = [
+    {
+      key: `customer:otp:cooldown:${phoneKey}`,
+      limit: 1,
+      expiresAt: now + cooldownMs,
+    },
+    {
+      key: `customer:otp:phone-day:${day.id}:${phoneKey}`,
+      limit: 5,
+      expiresAt: day.expiresAt,
+    },
+    {
+      key: `customer:otp:ip-window:${ipWindow.id}:${ipKey}`,
+      limit: 10,
+      expiresAt: ipWindow.expiresAt,
+    },
+  ];
+  const states = await Promise.all(
+    counters.map(async (counter) => {
+      const value = await env.EPHEMERAL_KV.get(counter.key, "json");
+      const stored =
+        value === null ? { count: 0, expiresAt: 0 } : v.parse(StoredRateCounterSchema, value);
+      return {
+        ...counter,
+        count: stored.expiresAt > now ? stored.count : 0,
+        storedExpiresAt: stored.expiresAt,
+      };
+    }),
+  );
+  const retryAt = states.reduce(
+    (latest, state) =>
+      state.count >= state.limit ? Math.max(latest, state.storedExpiresAt) : latest,
     now,
-    cooldown,
-    phoneDay,
-    ipWindow: ipRateWindow,
-  });
-  if (!admission.admitted) {
-    return { limited: true as const, retryAfterSeconds: admission.retryAfterSeconds };
+  );
+  if (retryAt > now) {
+    return {
+      limited: true as const,
+      retryAfterSeconds: Math.max(1, Math.ceil((retryAt - now) / 1_000)),
+    };
   }
 
+  await Promise.all(
+    states.map((state) =>
+      env.EPHEMERAL_KV.put(
+        state.key,
+        JSON.stringify({ count: state.count + 1, expiresAt: state.expiresAt }),
+        {
+          expirationTtl: Math.max(60, Math.ceil((state.expiresAt - now) / 1_000)),
+        },
+      ),
+    ),
+  );
   return { limited: false as const };
 };
 
@@ -113,7 +146,7 @@ export const requestCustomerOtp = async (
       hmac(secret.output, `ip:${ipAddress}`),
     ]);
     const requestId = crypto.randomUUID();
-    const limit = await applySendLimits(phoneKey, ipKey, requestId, Date.now());
+    const limit = await applySendLimits(phoneKey, ipKey, Date.now());
     if (limit.limited) {
       return Result.err({ code: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds });
     }
