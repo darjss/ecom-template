@@ -15,6 +15,48 @@
       "when": 1784178111251,
       "tag": "0001_melodic_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784211018764,
+      "tag": "0002_familiar_morg",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784215310378,
+      "tag": "0003_plain_wiccan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784217146368,
+      "tag": "0004_typical_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784262717818,
+      "tag": "0005_lethal_serpent_society",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784264075524,
+      "tag": "0006_kind_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784264098885,
+      "tag": "0007_organic_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

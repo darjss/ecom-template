@@ -1,5 +1,9 @@
 import { handle } from "@astrojs/cloudflare/handler";
-import { authorizeStaffRequest, resolveStoreRequestOrigin } from "@ecom/api";
+import {
+  resolveStaffRequest,
+  resolveStoreRequestOrigin,
+  staffPresentationRoleHeader,
+} from "@ecom/api";
 import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
 import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
@@ -50,16 +54,40 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
   }
 
   const pathname = new URL(request.url).pathname;
+  let presentationRequest: Request = request;
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     return privateResponse(await api.fetch(request));
   }
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
-    let authorized = false;
     try {
-      authorized = await authorizeStaffRequest(request, {
+      const staff = await resolveStaffRequest(request, {
         profile: storeDefinition.profile,
         providers: storeDefinition.providers,
       });
+      if (staff.kind === "awaiting_approval") {
+        const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
+        return privateResponse(await handle(awaitingRequest, environment, context));
+      }
+      if (staff.kind === "unavailable") {
+        return privateResponse(
+          Response.json(
+            { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
+            { status: 503 },
+          ),
+        );
+      }
+      if (staff.kind !== "active") {
+        return new Response(null, {
+          status: 303,
+          headers: {
+            location: new URL("/admin/login", origin).toString(),
+            "cache-control": "private, no-store",
+          },
+        });
+      }
+      const presentationHeaders = new Headers(request.headers);
+      presentationHeaders.set(staffPresentationRoleHeader, staff.actor.role);
+      presentationRequest = new Request(request, { headers: presentationHeaders });
     } catch {
       return privateResponse(
         Response.json(
@@ -68,15 +96,6 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
         ),
       );
     }
-    if (!authorized) {
-      return new Response(null, {
-        status: 303,
-        headers: {
-          location: new URL("/admin/login", origin).toString(),
-          "cache-control": "private, no-store",
-        },
-      });
-    }
   }
-  return classifyResponse(request, await handle(request, environment, context));
+  return classifyResponse(request, await handle(presentationRequest, environment, context));
 };

@@ -14,6 +14,18 @@ export const auth = betterAuth({
   },
   session: {
     modelName: "staff_auth_sessions",
+    additionalFields: {
+      role: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      generation: {
+        type: "number",
+        required: false,
+        input: false,
+      },
+    },
   },
   account: {
     modelName: "staff_auth_accounts",

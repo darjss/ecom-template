@@ -1,0 +1,1 @@
+ALTER TABLE `staff_auth_sessions` ADD `role` text;

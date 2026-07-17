@@ -1,13 +1,18 @@
-import { ClientErrorSchema } from "@ecom/contracts";
+import { ClientErrorSchema, StaffClientErrorSchema } from "@ecom/contracts";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/solid-query";
 import { toast } from "solid-sonner";
 import * as v from "valibot";
+
+const parseClientError = (error: unknown) => {
+  const common = v.safeParse(ClientErrorSchema, error);
+  return common.success ? common : v.safeParse(StaffClientErrorSchema, error);
+};
 
 const retrySafeFailure = (failureCount: number, error: unknown) => {
   if (failureCount >= 1) {
     return false;
   }
-  const parsed = v.safeParse(ClientErrorSchema, error);
+  const parsed = parseClientError(error);
   return (
     parsed.success &&
     (parsed.output.kind === "network" ||
@@ -16,7 +21,7 @@ const retrySafeFailure = (failureCount: number, error: unknown) => {
 };
 
 const presentGlobalError = (error: unknown) => {
-  const parsed = v.safeParse(ClientErrorSchema, error);
+  const parsed = parseClientError(error);
   if (!parsed.success) {
     toast.error("Тодорхойгүй алдаа гарлаа.");
     return;
