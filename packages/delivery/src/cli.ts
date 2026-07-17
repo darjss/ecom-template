@@ -473,6 +473,9 @@ const addOwner = async () => {
   const { targetName, target, manifestDigest } = hasManifestOverride
     ? await readTarget()
     : await resolveCanonicalRemoteTarget(slug);
+  if (target.kind === "prospect-demo") {
+    throw new Error("Owner provisioning is unavailable for prospect-demo targets");
+  }
   if (target.kind === "local" || targetSlug(target.app) !== slug) {
     throw new Error("Remote Owner target does not match the selected deployed Store");
   }
