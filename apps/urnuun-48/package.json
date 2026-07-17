@@ -17,6 +17,7 @@
     "@astrojs/solid-js": "7.0.1",
     "@ecom/admin": "workspace:*",
     "@ecom/api": "workspace:*",
+    "@ecom/integrations": "workspace:*",
     "@ecom/storefront": "workspace:*",
     "@ecom/ui": "workspace:*",
     "@tailwindcss/vite": "4.3.2",

@@ -57,6 +57,13 @@
       "when": 1784264098885,
       "tag": "0007_organic_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784275906476,
+      "tag": "0008_dry_naoko",
+      "breakpoints": true
     }
   ]
 }

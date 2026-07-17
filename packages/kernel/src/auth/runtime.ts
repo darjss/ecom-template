@@ -7,7 +7,7 @@ import { database } from "../db/database";
 import { staffQueries } from "../staff/persistence";
 import * as staffSchema from "./staff.generated";
 
-const AuthEnvironmentSchema = v.strictObject({
+const StaffAuthEnvironmentSchema = v.strictObject({
   staffSecret: v.pipe(v.string(), v.minLength(32)),
   googleClientId: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1))),
   googleClientSecret: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1))),
@@ -16,8 +16,8 @@ const AuthEnvironmentSchema = v.strictObject({
 const optionalCredential = (value: string | undefined) =>
   value === undefined || value.trim() === "" ? undefined : value;
 
-const readAuthEnvironment = () =>
-  v.safeParse(AuthEnvironmentSchema, {
+const readStaffAuthEnvironment = () =>
+  v.safeParse(StaffAuthEnvironmentSchema, {
     staffSecret: env.BETTER_AUTH_STAFF_SECRET,
     googleClientId: optionalCredential(env.GOOGLE_CLIENT_ID),
     googleClientSecret: optionalCredential(env.GOOGLE_CLIENT_SECRET),
@@ -32,7 +32,7 @@ const StaffCleanupSessionSchema = v.object({
 const staffSessionCleanupLimit = 100;
 
 export const createStaffAuth = (origin: string) => {
-  const environment = readAuthEnvironment();
+  const environment = readStaffAuthEnvironment();
   if (!environment.success) {
     return undefined;
   }

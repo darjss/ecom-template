@@ -26,12 +26,14 @@ import {
   removeStaff,
   retryStaffSessionCleanup,
   revokeStaff,
+  type CustomerSmsDelivery,
   type StaffOperationFailure,
   type StoreBackground,
   type StorefrontReader,
 } from "@ecom/kernel";
 import { Elysia } from "elysia";
 import * as v from "valibot";
+import { createCustomerAuthRoutes } from "./customer-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 
 export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
@@ -152,12 +154,13 @@ const authorizeRoute = async (
   };
 };
 
-const createApi = (definition: StoreDefinition) =>
+const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery) =>
   new Elysia({ aot: false, prefix: "/api" })
     .onAfterHandle(({ responseValue, set }) => {
       set.headers["cache-control"] = "private, no-store";
       return responseValue;
     })
+    .use(createCustomerAuthRoutes(definition, smsGateway))
     .all("/auth/staff/*", async ({ body, request }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
       if (!origin) {
@@ -316,10 +319,19 @@ export const resolveStaffRequest = async (request: Request, input: unknown) => {
 
 export { resolveStoreRequestOrigin } from "./request-origin";
 
-export const createStoreBackend = (input: unknown): StoreBackend => {
-  const definition = v.parse(StoreDefinitionSchema, input);
+export type StoreBackendInput = {
+  readonly profile: unknown;
+  readonly providers: unknown;
+  readonly smsGateway: CustomerSmsDelivery;
+};
+
+export const createStoreBackend = (input: StoreBackendInput): StoreBackend => {
+  const definition = v.parse(StoreDefinitionSchema, {
+    profile: input.profile,
+    providers: input.providers,
+  });
   return {
-    api: createApi(definition),
+    api: createApi(definition, input.smsGateway),
     storefront: createStorefrontReader({
       storeName: definition.profile.name,
       location: definition.profile.location,

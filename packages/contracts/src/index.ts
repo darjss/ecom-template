@@ -174,6 +174,49 @@ export const StaffSessionStateSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("unauthorized") }),
 ]);
 
+export const MongolianPhoneSchema = v.pipe(v.string(), v.regex(/^\+976[5-9]\d{7}$/));
+export const CustomerOtpCodeSchema = v.pipe(v.string(), v.regex(/^\d{4}$/));
+export const CustomerOtpRequestSchema = v.strictObject({
+  phone: v.pipe(v.string(), v.trim(), v.minLength(8), v.maxLength(32)),
+});
+export const CustomerOtpVerifySchema = v.strictObject({
+  phone: v.pipe(v.string(), v.trim(), v.minLength(8), v.maxLength(32)),
+  code: CustomerOtpCodeSchema,
+});
+export const CustomerOtpAcceptedResponseSchema = v.strictObject({
+  data: v.strictObject({ accepted: v.literal(true) }),
+});
+export const CustomerSessionResponseSchema = v.strictObject({
+  data: v.variant("kind", [
+    v.strictObject({ kind: v.literal("anonymous") }),
+    v.strictObject({ kind: v.literal("authenticated"), phone: MongolianPhoneSchema }),
+  ]),
+});
+export const CustomerAuthApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.picklist(["unauthorized", "validation", "rate_limited", "unavailable"]),
+    message: v.string(),
+    retryAfterSeconds: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  }),
+});
+export const CustomerAuthClientErrorSchema = v.variant("kind", [
+  v.strictObject({
+    kind: v.literal("network"),
+    domain: v.literal("customer_auth"),
+    message: v.string(),
+  }),
+  v.strictObject({
+    kind: v.literal("contract"),
+    domain: v.literal("customer_auth"),
+    message: v.string(),
+  }),
+  v.strictObject({
+    kind: v.literal("api"),
+    domain: v.literal("customer_auth"),
+    error: CustomerAuthApiErrorSchema.entries.error,
+  }),
+]);
+
 export const HealthApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.literal("unavailable"),
@@ -247,6 +290,12 @@ export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSc
 export type StaffCleanupResponse = v.InferOutput<typeof StaffCleanupResponseSchema>;
 export type StaffClientError = v.InferOutput<typeof StaffClientErrorSchema>;
 export type StaffSessionState = v.InferOutput<typeof StaffSessionStateSchema>;
+export type MongolianPhone = v.InferOutput<typeof MongolianPhoneSchema>;
+export type CustomerOtpRequest = v.InferOutput<typeof CustomerOtpRequestSchema>;
+export type CustomerOtpVerify = v.InferOutput<typeof CustomerOtpVerifySchema>;
+export type CustomerOtpAcceptedResponse = v.InferOutput<typeof CustomerOtpAcceptedResponseSchema>;
+export type CustomerSessionResponse = v.InferOutput<typeof CustomerSessionResponseSchema>;
+export type CustomerAuthClientError = v.InferOutput<typeof CustomerAuthClientErrorSchema>;
 export type ApiError = v.InferOutput<typeof ApiErrorSchema>;
 export type HealthApiError = v.InferOutput<typeof HealthApiErrorSchema>;
 export type HealthResponse = v.InferOutput<typeof HealthResponseSchema>;
@@ -258,6 +307,7 @@ export type CartLine = v.InferOutput<typeof CartLineSchema>;
 export type ClientError = v.InferOutput<typeof ClientErrorSchema>;
 
 export const createStaffId = () => typeidUnboxed("staff");
+export const createCustomerId = () => typeidUnboxed("customer");
 export const createAuditEventId = () => typeidUnboxed("audit");
 export const parseStaffId = (value: string) => fromString(value, "staff");
 export const createCatalogItemId = () => typeidUnboxed("product");
