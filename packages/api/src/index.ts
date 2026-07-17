@@ -99,7 +99,7 @@ const catalogError = (
                   : code === "inventory_limit"
                     ? "Inventory on-hand cannot exceed 1,000,000"
                     : code === "idempotency_conflict"
-                      ? "The idempotency key belongs to another inventory command"
+                      ? "The idempotency key belongs to another Catalog command"
                       : code === "not_found"
                         ? "Product was not found"
                         : code === "forbidden"

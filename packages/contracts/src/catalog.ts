@@ -83,7 +83,9 @@ export const CatalogProductResponseSchema = v.strictObject({
     cachePurgeRequestId: CachePurgeRequestIdSchema,
   }),
 });
+export const CatalogIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const CreateProductInputSchema = v.strictObject({
+  idempotencyKey: CatalogIdempotencyKeySchema,
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
   description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
@@ -99,11 +101,10 @@ export const UpdateProductInputSchema = v.strictObject({
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
 });
-export const InventoryAdjustmentIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
   reason: InventoryReasonSchema,
-  idempotencyKey: InventoryAdjustmentIdempotencyKeySchema,
+  idempotencyKey: CatalogIdempotencyKeySchema,
 });
 
 export const InventoryBlockingReservationSchema = v.strictObject({
@@ -164,9 +165,7 @@ export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
 export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
-export type InventoryAdjustmentIdempotencyKey = v.InferOutput<
-  typeof InventoryAdjustmentIdempotencyKeySchema
->;
+export type InventoryAdjustmentIdempotencyKey = v.InferOutput<typeof CatalogIdempotencyKeySchema>;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
 export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;

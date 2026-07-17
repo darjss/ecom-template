@@ -2,11 +2,15 @@ import { catalogMutationOptions } from "@ecom/client";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
-import { Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
 export const CreateProductForm = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
+  const [pendingCommand, setPendingCommand] = createSignal<{
+    signature: string;
+    idempotencyKey: string;
+  }>();
   const form = createForm(() => ({
     defaultValues: {
       name: "",
@@ -18,8 +22,29 @@ export const CreateProductForm = () => {
       inventoryReason: "Анхны үлдэгдэл",
     },
     onSubmit: async ({ value }) => {
-      await mutation.mutateAsync({ kind: "create", ...value });
+      const input = {
+        name: value.name.trim(),
+        slug: value.slug.trim(),
+        description: value.description,
+        priceMnt: value.priceMnt,
+        sku: value.sku.trim(),
+        openingQuantity: value.openingQuantity,
+        inventoryReason: value.inventoryReason.trim(),
+      };
+      const signature = JSON.stringify(input);
+      const existing = pendingCommand();
+      const command =
+        existing?.signature === signature
+          ? existing
+          : { signature, idempotencyKey: crypto.randomUUID() };
+      setPendingCommand(command);
+      await mutation.mutateAsync({
+        kind: "create",
+        idempotencyKey: command.idempotencyKey,
+        ...input,
+      });
       form.reset();
+      setPendingCommand(undefined);
     },
   }));
   return (

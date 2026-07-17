@@ -52,6 +52,7 @@ export const requestCatalogMutation = async (mutation: CatalogMutation) => {
   const response =
     mutation.kind === "create"
       ? await client.api.catalog.products.post({
+          idempotencyKey: mutation.idempotencyKey,
           name: mutation.name,
           slug: mutation.slug,
           description: mutation.description,
