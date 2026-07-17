@@ -123,6 +123,14 @@ const findTag = async (id: TagId) => {
   const [row] = await database().select().from(tags).where(eq(tags.id, id)).limit(1);
   return row ? tagDto(row, await tagCatalogItemIds(row.id)) : undefined;
 };
+const categoryHasActiveChild = async (id: CategoryId) =>
+  (
+    await database()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.parentId, id), eq(categories.state, "active")))
+      .limit(1)
+  ).length > 0;
 
 const categorySlugExists = async (slug: string, excludedId?: CategoryId) => {
   const where = excludedId
@@ -482,15 +490,8 @@ export const groupingQueries = {
     if (target === "draft" || (current.state === "draft" && target === "archived")) {
       return { kind: "invalid_lifecycle" as const };
     }
-    if (target === "archived") {
-      const activeChild = await database()
-        .select({ id: categories.id })
-        .from(categories)
-        .where(and(eq(categories.parentId, id), eq(categories.state, "active")))
-        .limit(1);
-      if (activeChild.length > 0) {
-        return { kind: "active_child" as const };
-      }
+    if (target === "archived" && (await categoryHasActiveChild(id))) {
+      return { kind: "active_child" as const };
     }
     const db = database();
     const activeChild = alias(categories, "category_active_child");
@@ -548,9 +549,35 @@ export const groupingQueries = {
     if (changed.length === 1) {
       return { kind: "changed" as const, value: await findCategory(id) };
     }
-    return {
-      kind: target === "archived" ? ("active_child" as const) : ("inactive_ancestor" as const),
-    };
+    const resolved = await findCategory(id);
+    if (!resolved) {
+      return { kind: "not_found" as const };
+    }
+    if (resolved.state === target) {
+      return { kind: "changed" as const, value: resolved };
+    }
+    if (target === "archived" && (await categoryHasActiveChild(id))) {
+      return { kind: "active_child" as const };
+    }
+    const resolvedParent = await groupingQueries.validateCategoryParent(
+      resolved.id,
+      resolved.parentId,
+    );
+    if (resolvedParent.kind !== "valid") {
+      return {
+        kind:
+          resolvedParent.kind === "cycle"
+            ? ("category_cycle" as const)
+            : ("parent_not_found" as const),
+      };
+    }
+    if (
+      target === "active" &&
+      resolvedParent.lineage.some((ancestor) => ancestor.state !== "active")
+    ) {
+      return { kind: "inactive_ancestor" as const };
+    }
+    return { kind: "concurrent_parent_change" as const };
   },
 
   async transitionCollection(id: CollectionId, target: GroupingState) {

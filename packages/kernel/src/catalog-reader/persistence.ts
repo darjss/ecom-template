@@ -118,11 +118,15 @@ export const catalogReaderQueries = {
           : eq(catalogItems.state, "published"),
       )
       .orderBy(desc(catalogItems.createdAt));
+    const catalogItemIds = rows.map((row) => v.parse(CatalogItemIdSchema, row.id));
+    const images = await catalogMediaQueries.listPublicForCatalogItems(catalogItemIds);
     return rows.map((row) =>
       v.parse(PublicCatalogItemSummarySchema, {
         ...row,
         id: v.parse(CatalogItemIdSchema, row.id),
-        images: [],
+        images: images
+          .filter(({ catalogItemId }) => catalogItemId === row.id)
+          .map(({ image }) => image),
       }),
     );
   },

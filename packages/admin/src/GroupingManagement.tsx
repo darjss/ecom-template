@@ -98,12 +98,16 @@ const GroupingEditor = (props: { grouping: Grouping; categories: readonly Catego
     },
     onSubmit: async ({ value }) => updateMutation.mutateAsync(value),
   }));
-  const changeState = () => lifecycleMutation.mutate(nextState(props.grouping.state));
+  const changeState = () => {
+    updateMutation.reset();
+    lifecycleMutation.mutate(nextState(props.grouping.state));
+  };
   return (
     <form
       class="grid gap-3 md:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_auto_auto]"
       onSubmit={async (event) => {
         event.preventDefault();
+        lifecycleMutation.reset();
         await submitAndFocusExpectedError(
           event.currentTarget,
           () => form.handleSubmit(),
@@ -272,6 +276,9 @@ const CatalogCachePurgeWarning = (props: { attemptCount: number; requestId: stri
       >
         Public cache шинэчлэлтийг дахин оролдох
       </Button>
+      <Show when={mutation.error} keyed>
+        {(error) => <p>{errorMessage(error)}</p>}
+      </Show>
     </div>
   );
 };

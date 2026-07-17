@@ -53,28 +53,32 @@ export const listGroupings = async (actor: StaffActor) => {
 };
 
 const purgeCommittedCatalogChange = async () => {
-  const debt = await groupingQueries.findCatalogCachePurgeDebt();
-  if (!debt) {
-    return { cache: "not_required" as const, cachePurgeRequestId: null };
+  try {
+    const debt = await groupingQueries.findCatalogCachePurgeDebt();
+    if (!debt) {
+      return { cache: "not_required" as const, cachePurgeRequestId: null };
+    }
+    const purge = await purgeCatalogListingCache();
+    const outcomeRecorded = await groupingQueries.recordCatalogCachePurgeOutcome(
+      debt.revision,
+      purge.kind,
+      purge.requestId,
+    );
+    const log = createLogger({ action: "grouping.cache_purge" });
+    log.set({
+      cachePurge: { outcome: purge.kind, outcomeRecorded, requestId: purge.requestId },
+    });
+    log.emit();
+    return {
+      cache:
+        purge.kind === "purged" && outcomeRecorded
+          ? ("purged" as const)
+          : ("committed_but_not_purged" as const),
+      cachePurgeRequestId: purge.requestId,
+    };
+  } catch {
+    return { cache: "committed_but_not_purged" as const, cachePurgeRequestId: null };
   }
-  const purge = await purgeCatalogListingCache();
-  const outcomeRecorded = await groupingQueries.recordCatalogCachePurgeOutcome(
-    debt.revision,
-    purge.kind,
-    purge.requestId,
-  );
-  const log = createLogger({ action: "grouping.cache_purge" });
-  log.set({
-    cachePurge: { outcome: purge.kind, outcomeRecorded, requestId: purge.requestId },
-  });
-  log.emit();
-  return {
-    cache:
-      purge.kind === "purged" && outcomeRecorded
-        ? ("purged" as const)
-        : ("committed_but_not_purged" as const),
-    cachePurgeRequestId: purge.requestId,
-  };
 };
 
 type PersistenceMutationResult =
@@ -182,10 +186,14 @@ export const replaceCategoryMembership = async (
   actor: StaffActor,
   id: CategoryId,
   input: GroupingMembershipInput,
-) =>
-  duplicateMembership(input)
+) => {
+  if (!authorize(actor)) {
+    return failure("forbidden");
+  }
+  return duplicateMembership(input)
     ? failure("duplicate_membership")
     : runAuthorizedMutation(actor, () => groupingQueries.replaceCategoryMembership(id, input));
+};
 
 export const createCollection = (actor: StaffActor, input: CollectionInput) =>
   runAuthorizedMutation(actor, () => groupingQueries.createCollection(input));
@@ -200,10 +208,14 @@ export const replaceCollectionMembership = (
   actor: StaffActor,
   id: CollectionId,
   input: GroupingMembershipInput,
-) =>
-  duplicateMembership(input)
+) => {
+  if (!authorize(actor)) {
+    return failure("forbidden");
+  }
+  return duplicateMembership(input)
     ? failure("duplicate_membership")
     : runAuthorizedMutation(actor, () => groupingQueries.replaceCollectionMembership(id, input));
+};
 
 export const createTag = (actor: StaffActor, input: TagInput) =>
   runAuthorizedMutation(actor, () => groupingQueries.createTag(input));
@@ -215,10 +227,14 @@ export const replaceTagMembership = (
   actor: StaffActor,
   id: TagId,
   input: GroupingMembershipInput,
-) =>
-  duplicateMembership(input)
+) => {
+  if (!authorize(actor)) {
+    return failure("forbidden");
+  }
+  return duplicateMembership(input)
     ? failure("duplicate_membership")
     : runAuthorizedMutation(actor, () => groupingQueries.replaceTagMembership(id, input));
+};
 
 export const retryGroupingCachePurge = async (actor: StaffActor) => {
   if (!authorize(actor)) {
