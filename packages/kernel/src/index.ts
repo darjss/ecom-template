@@ -4,6 +4,7 @@ export {
   adjustProductInventory,
   createProduct,
   listCatalog,
+  retryProductCachePurge,
   transitionProduct,
   updateProduct,
   type CatalogMutationResult,

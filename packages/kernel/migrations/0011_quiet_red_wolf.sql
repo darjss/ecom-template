@@ -1,3 +1,16 @@
+CREATE TABLE `catalog_cache_purge_debts` (
+	`product_id` text PRIMARY KEY NOT NULL,
+	`revision` text NOT NULL,
+	`attempt_count` integer DEFAULT 0 NOT NULL,
+	`request_id` text,
+	`command_committed_at` integer NOT NULL,
+	`last_attempted_at` integer,
+	FOREIGN KEY (`product_id`) REFERENCES `catalog_items`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "catalog_cache_purge_debts_revision_check" CHECK(length("catalog_cache_purge_debts"."revision") = 36),
+	CONSTRAINT "catalog_cache_purge_debts_attempt_check" CHECK("catalog_cache_purge_debts"."attempt_count" BETWEEN 0 AND 1000000),
+	CONSTRAINT "catalog_cache_purge_debts_request_check" CHECK("catalog_cache_purge_debts"."request_id" IS NULL OR length("catalog_cache_purge_debts"."request_id") BETWEEN 1 AND 128)
+);
+--> statement-breakpoint
 CREATE TABLE `catalog_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`kind` text NOT NULL,
@@ -104,7 +117,7 @@ CREATE TABLE `stock_items` (
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`variant_id`) REFERENCES `variants`(`id`) ON UPDATE no action ON DELETE restrict,
 	CONSTRAINT "stock_items_id_check" CHECK(length("stock_items"."id") = 37 AND substr("stock_items"."id", 1, 11) = 'stock_item_' AND substr("stock_items"."id", 12, 1) GLOB '[0-7]' AND substr("stock_items"."id", 12) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'),
-	CONSTRAINT "stock_items_balance_check" CHECK("stock_items"."on_hand_quantity" >= 0 AND "stock_items"."reserved_quantity" >= 0 AND "stock_items"."reserved_quantity" <= "stock_items"."on_hand_quantity")
+	CONSTRAINT "stock_items_balance_check" CHECK("stock_items"."on_hand_quantity" BETWEEN 0 AND 1000000 AND "stock_items"."reserved_quantity" >= 0 AND "stock_items"."reserved_quantity" <= "stock_items"."on_hand_quantity")
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `stock_items_variant_id_unique` ON `stock_items` (`variant_id`);--> statement-breakpoint

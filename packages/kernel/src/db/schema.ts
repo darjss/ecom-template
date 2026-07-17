@@ -235,6 +235,31 @@ export const catalogItems = sqliteTable(
   ],
 );
 
+export const catalogCachePurgeDebts = sqliteTable(
+  "catalog_cache_purge_debts",
+  {
+    productId: text("product_id")
+      .primaryKey()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("catalog_cache_purge_debts_revision_check", sql`length(${table.revision}) = 36`),
+    check(
+      "catalog_cache_purge_debts_attempt_check",
+      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      "catalog_cache_purge_debts_request_check",
+      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
+    ),
+  ],
+);
+
 export const variants = sqliteTable(
   "variants",
   {
@@ -306,7 +331,7 @@ export const stockItems = sqliteTable(
     ),
     check(
       "stock_items_balance_check",
-      sql`${table.onHandQuantity} >= 0 AND ${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.onHandQuantity}`,
+      sql`${table.onHandQuantity} BETWEEN 0 AND 1000000 AND ${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.onHandQuantity}`,
     ),
   ],
 );

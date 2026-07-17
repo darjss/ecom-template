@@ -13,6 +13,7 @@ import { env } from "cloudflare:workers";
 import { getTableName } from "drizzle-orm";
 import * as v from "valibot";
 import {
+  catalogCachePurgeDebts,
   catalogItems,
   idempotencyRecords,
   inventoryEntries,
@@ -29,6 +30,7 @@ import { catalogReaderQueries } from "./reader-persistence";
 import { compactSku } from "./sku";
 
 export const catalogTableNames = {
+  cachePurgeDebts: getTableName(catalogCachePurgeDebts),
   catalogItems: getTableName(catalogItems),
   variants: getTableName(variants),
   skus: getTableName(skus),
@@ -38,6 +40,9 @@ export const catalogTableNames = {
   inventoryEntries: getTableName(inventoryEntries),
   idempotencyRecords: getTableName(idempotencyRecords),
 };
+
+const CachePurgeDebtRevisionSchema = v.strictObject({ revision: v.string() });
+const cachePurgeDebtUpsert = `INSERT INTO ${catalogTableNames.cachePurgeDebts} (product_id, revision, attempt_count, request_id, command_committed_at, last_attempted_at) SELECT id, ?, 0, NULL, ?, NULL FROM ${catalogTableNames.catalogItems} WHERE id = ? AND state <> 'draft' AND updated_at = ? ON CONFLICT(product_id) DO UPDATE SET revision = excluded.revision, attempt_count = 0, request_id = NULL, command_committed_at = excluded.command_committed_at, last_attempted_at = NULL RETURNING revision`;
 
 const existsById = async (id: ProductId) => {
   const result = await env.DB.prepare("SELECT id FROM catalog_items WHERE id = ? LIMIT 1")
@@ -106,10 +111,12 @@ export const catalogQueries = {
           now,
         ),
       ]);
-      return { product: await findCatalogProductById(v.parse(ProductIdSchema, id)) };
     } catch {
-      return { conflict: await findConflict(input.slug, input.sku) };
+      return {
+        conflict: (await findConflict(input.slug, input.sku)) ?? ("infrastructure" as const),
+      };
     }
+    return { product: await findCatalogProductById(v.parse(ProductIdSchema, id)) };
   },
 
   async update(actor: StaffActor, id: ProductId, input: UpdateProductInput) {
@@ -125,7 +132,7 @@ export const catalogQueries = {
     const now = Date.now();
     const catalogAcceptance = `(catalog_items.state = 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.locked_at IS NULL)) OR (catalog_items.state <> 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.sku = ?))`;
     try {
-      const results = await env.DB.batch([
+      const statements = [
         env.DB.prepare(
           `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', 'catalog.product.update', 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE id = ? AND (${catalogAcceptance})`,
         ).bind(
@@ -142,8 +149,19 @@ export const catalogQueries = {
         env.DB.prepare(
           "UPDATE skus SET sku = ?, sku_compact = ?, updated_at = ? WHERE variant_id = ? AND locked_at IS NULL AND EXISTS (SELECT 1 FROM catalog_items WHERE id = ? AND state = 'draft') RETURNING sku",
         ).bind(input.sku, compactSku(input.sku), now, current.defaultVariantId, id),
-      ]);
-      if (results.at(0)?.meta.changes === 1 && results.at(1)?.results.length === 1) {
+      ];
+      if (current.state !== "draft") {
+        statements.push(
+          env.DB.prepare(cachePurgeDebtUpsert).bind(crypto.randomUUID(), now, id, now),
+        );
+      }
+      const results = await env.DB.batch(statements);
+      const debtRecorded = current.state === "draft" || results.at(3)?.results.length === 1;
+      if (
+        results.at(0)?.meta.changes === 1 &&
+        results.at(1)?.results.length === 1 &&
+        debtRecorded
+      ) {
         const product = await findCatalogProductById(id);
         if (product?.sku === input.sku) {
           return { kind: "changed" as const, product };
@@ -222,15 +240,18 @@ export const catalogQueries = {
       env.DB.prepare(
         `UPDATE catalog_items SET state = ?, updated_at = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END, archived_at = CASE WHEN ? = 'archived' THEN ? ELSE NULL END WHERE ${transitionPredicate} RETURNING id`,
       ).bind(next, now, next, now, next, now, id, expected),
+      env.DB.prepare(cachePurgeDebtUpsert).bind(crypto.randomUUID(), now, id, now),
     );
     const results = await env.DB.batch(statements);
     const publicationLockChanged = transition !== "publish" || results.at(0)?.results.length === 1;
     const auditIndex = transition === "publish" ? 1 : 0;
     const transitionIndex = auditIndex + 1;
+    const debtIndex = transitionIndex + 1;
     if (
       publicationLockChanged &&
       results.at(auditIndex)?.meta.changes === 1 &&
-      results.at(transitionIndex)?.results.length === 1
+      results.at(transitionIndex)?.results.length === 1 &&
+      results.at(debtIndex)?.results.length === 1
     ) {
       return { kind: "changed" as const, product: await findCatalogProductById(id) };
     }
@@ -242,5 +263,37 @@ export const catalogQueries = {
       "invalid_publication",
     );
     return { kind: "invalid_publication" as const };
+  },
+
+  async findCachePurgeDebt(id: ProductId) {
+    const result = await env.DB.prepare(
+      `SELECT revision FROM ${catalogTableNames.cachePurgeDebts} WHERE product_id = ? LIMIT 1`,
+    )
+      .bind(id)
+      .all();
+    const row = result.results.at(0);
+    return row ? v.parse(CachePurgeDebtRevisionSchema, row) : undefined;
+  },
+
+  async recordCachePurgeOutcome(
+    id: ProductId,
+    revision: string,
+    outcome: "purged" | "failed",
+    requestId: string | null,
+  ) {
+    if (outcome === "purged") {
+      const result = await env.DB.prepare(
+        `DELETE FROM ${catalogTableNames.cachePurgeDebts} WHERE product_id = ? AND revision = ? RETURNING product_id`,
+      )
+        .bind(id, revision)
+        .all();
+      return result.results.length === 1;
+    }
+    const result = await env.DB.prepare(
+      `UPDATE ${catalogTableNames.cachePurgeDebts} SET attempt_count = attempt_count + 1, request_id = ?, last_attempted_at = ? WHERE product_id = ? AND revision = ? AND attempt_count < 1000000 RETURNING product_id`,
+    )
+      .bind(requestId, Date.now(), id, revision)
+      .all();
+    return result.results.length === 1;
   },
 };

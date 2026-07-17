@@ -67,7 +67,7 @@ export const inventoryQueries = {
     const reservationSum = activeReservationSum("si");
     const results = await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO ${catalogTableNames.inventoryEntries} (id, stock_item_id, kind, on_hand_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) SELECT ?, si.id, 'adjustment', ?, 'staff', ?, ?, ?, ?, ? FROM ${catalogTableNames.stockItems} si WHERE si.id = ? AND si.reserved_quantity = ${reservationSum} AND si.on_hand_quantity + ? >= si.reserved_quantity AND NOT EXISTS (SELECT 1 FROM ${catalogTableNames.idempotencyRecords} WHERE scope = ? AND key = ?)`,
+        `INSERT INTO ${catalogTableNames.inventoryEntries} (id, stock_item_id, kind, on_hand_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) SELECT ?, si.id, 'adjustment', ?, 'staff', ?, ?, ?, ?, ? FROM ${catalogTableNames.stockItems} si WHERE si.id = ? AND si.reserved_quantity = ${reservationSum} AND si.on_hand_quantity + ? >= si.reserved_quantity AND si.on_hand_quantity + ? <= 1000000 AND NOT EXISTS (SELECT 1 FROM ${catalogTableNames.idempotencyRecords} WHERE scope = ? AND key = ?)`,
       ).bind(
         entryId,
         input.delta,
@@ -77,12 +77,21 @@ export const inventoryQueries = {
         now,
         current.stockItemId,
         input.delta,
+        input.delta,
         idempotencyScope,
         input.idempotencyKey,
       ),
       env.DB.prepare(
-        `UPDATE ${catalogTableNames.stockItems} SET on_hand_quantity = on_hand_quantity + ?, updated_at = ? WHERE id = ? AND reserved_quantity = ${activeReservationSum(catalogTableNames.stockItems)} AND on_hand_quantity + ? >= reserved_quantity AND EXISTS (SELECT 1 FROM ${catalogTableNames.inventoryEntries} WHERE id = ? AND stock_item_id = ?) RETURNING on_hand_quantity`,
-      ).bind(input.delta, now, current.stockItemId, input.delta, entryId, current.stockItemId),
+        `UPDATE ${catalogTableNames.stockItems} SET on_hand_quantity = on_hand_quantity + ?, updated_at = ? WHERE id = ? AND reserved_quantity = ${activeReservationSum(catalogTableNames.stockItems)} AND on_hand_quantity + ? >= reserved_quantity AND on_hand_quantity + ? <= 1000000 AND EXISTS (SELECT 1 FROM ${catalogTableNames.inventoryEntries} WHERE id = ? AND stock_item_id = ?) RETURNING on_hand_quantity`,
+      ).bind(
+        input.delta,
+        now,
+        current.stockItemId,
+        input.delta,
+        input.delta,
+        entryId,
+        current.stockItemId,
+      ),
       env.DB.prepare(
         `INSERT INTO ${catalogTableNames.idempotencyRecords} (scope, key, request_hash, result_kind, result_id, created_at) SELECT ?, ?, ?, 'inventory_adjustment', ?, ? FROM ${catalogTableNames.inventoryEntries} WHERE id = ? ON CONFLICT(scope, key) DO NOTHING RETURNING key`,
       ).bind(idempotencyScope, input.idempotencyKey, hash, entryId, now, entryId),
@@ -115,6 +124,16 @@ export const inventoryQueries = {
         "inventory_inconsistent",
       );
       return { kind: "inventory_inconsistent" as const, blockers };
+    }
+    if (refreshed.onHandQuantity + input.delta > 1_000_000) {
+      await recordRejectedAttempt(
+        actor,
+        "inventory.adjust",
+        "stock_item",
+        refreshed.stockItemId,
+        "inventory_limit",
+      );
+      return { kind: "inventory_limit" as const };
     }
     if (refreshed.onHandQuantity + input.delta < refreshed.reservedQuantity) {
       await recordRejectedAttempt(

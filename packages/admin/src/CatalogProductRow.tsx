@@ -1,5 +1,5 @@
 import { catalogMutationOptions } from "@ecom/client";
-import type { Product } from "@ecom/contracts";
+import type { CatalogClientError, Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
@@ -7,6 +7,9 @@ import { Show } from "solid-js";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 
 const money = new Intl.NumberFormat("mn-MN");
+
+const mutationErrorMessage = (error: CatalogClientError) =>
+  error.kind === "api" ? error.error.message : "Хүсэлтийг гүйцэтгэж чадсангүй. Дахин оролдоно уу.";
 
 const ProductEditForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
@@ -100,18 +103,8 @@ const ProductEditForm = (props: { product: Product }) => {
       <Button type="submit" variant="secondary" disabled={mutation.isPending}>
         Хадгалах
       </Button>
-      <Show when={mutation.data?.data.cache === "committed_but_not_purged"}>
-        <div role="alert">
-          <p>Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй.</p>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={mutation.isPending}
-            onClick={() => form.handleSubmit()}
-          >
-            Дахин хадгалж cache цэвэрлэх
-          </Button>
-        </div>
+      <Show when={mutation.error} keyed>
+        {(error) => <p role="alert">{mutationErrorMessage(error)}</p>}
       </Show>
     </form>
   );
@@ -152,8 +145,28 @@ export const CatalogProductRow = (props: { product: Product }) => {
         {actionLabel()}
       </Button>
       <ProductEditForm product={props.product} />
-      <Show when={mutation.data?.data.cache === "committed_but_not_purged"}>
-        <p role="alert">Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй.</p>
+      <Show when={mutation.error} keyed>
+        {(error) => <p role="alert">{mutationErrorMessage(error)}</p>}
+      </Show>
+      <Show when={props.product.cachePurgeDebt} keyed>
+        {(debt) => (
+          <div role="alert">
+            <p>
+              Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Оролдлого: {debt.attemptCount}
+            </p>
+            <Show when={debt.requestId} keyed>
+              {(requestId) => <p>Cloudflare хүсэлтийн ID: {requestId}</p>}
+            </Show>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate({ kind: "retry-cache-purge", id: props.product.id })}
+            >
+              Cache цэвэрлэгээг дахин оролдох
+            </Button>
+          </div>
+        )}
       </Show>
       <InventoryAdjustmentForm product={props.product} />
     </li>

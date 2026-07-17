@@ -38,6 +38,7 @@ export type CatalogMutation =
   | { readonly kind: "publish"; readonly id: ProductId }
   | { readonly kind: "archive"; readonly id: ProductId }
   | { readonly kind: "reactivate"; readonly id: ProductId }
+  | { readonly kind: "retry-cache-purge"; readonly id: ProductId }
   | ({ readonly kind: "adjust"; readonly id: ProductId } & InventoryAdjustmentInput);
 
 const requestInventoryAdjustment = (
@@ -73,11 +74,13 @@ export const requestCatalogMutation = async (mutation: CatalogMutation) => {
             ? await client.api.catalog.products({ id: mutation.id }).archive.post()
             : mutation.kind === "reactivate"
               ? await client.api.catalog.products({ id: mutation.id }).reactivate.post()
-              : await requestInventoryAdjustment(client, mutation.id, {
-                  delta: mutation.delta,
-                  reason: mutation.reason,
-                  idempotencyKey: mutation.idempotencyKey,
-                });
+              : mutation.kind === "retry-cache-purge"
+                ? await client.api.catalog.products({ id: mutation.id })["cache-purge"].retry.post()
+                : await requestInventoryAdjustment(client, mutation.id, {
+                    delta: mutation.delta,
+                    reason: mutation.reason,
+                    idempotencyKey: mutation.idempotencyKey,
+                  });
   if (response.error) {
     throw parseFailure(response.error.value);
   }

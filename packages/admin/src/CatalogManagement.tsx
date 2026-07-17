@@ -1,4 +1,5 @@
 import { catalogQueryOptions } from "@ecom/client";
+import { Button } from "@ecom/ui";
 import { useQuery } from "@tanstack/solid-query";
 import { For, Show } from "solid-js";
 import { CatalogProductRow } from "./CatalogProductRow";
@@ -17,17 +18,36 @@ export const CatalogManagement = () => {
       </div>
       <CreateProductForm />
       <Show
-        when={catalog.isSuccess ? catalog.data : undefined}
-        keyed
-        fallback={<p role="status">Каталог ачаалж байна…</p>}
+        when={!catalog.isError}
+        fallback={
+          <div role="alert">
+            <p>
+              Каталогийг ачаалж чадсангүй. Сүлжээ болон Store үйлчилгээг шалгаад дахин оролдоно уу.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={catalog.isFetching}
+              onClick={() => void catalog.refetch()}
+            >
+              Дахин ачаалах
+            </Button>
+          </div>
+        }
       >
-        {(data) => (
-          <Show when={data.data.length > 0} fallback={<p>Анхны бүтээгдэхүүнээ үүсгэнэ үү.</p>}>
-            <ul class="staff-list">
-              <For each={data.data}>{(product) => <CatalogProductRow product={product} />}</For>
-            </ul>
-          </Show>
-        )}
+        <Show
+          when={catalog.isSuccess ? catalog.data : undefined}
+          keyed
+          fallback={<p role="status">Каталог ачаалж байна…</p>}
+        >
+          {(data) => (
+            <Show when={data.data.length > 0} fallback={<p>Анхны бүтээгдэхүүнээ үүсгэнэ үү.</p>}>
+              <ul class="staff-list">
+                <For each={data.data}>{(product) => <CatalogProductRow product={product} />}</For>
+              </ul>
+            </Show>
+          )}
+        </Show>
       </Show>
     </section>
   );

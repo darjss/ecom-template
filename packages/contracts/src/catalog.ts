@@ -49,6 +49,15 @@ export const InventoryDeltaSchema = v.pipe(
   v.check((value) => value !== 0),
 );
 
+export const CachePurgeRequestIdSchema = v.nullable(
+  v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+);
+export const CachePurgeDebtSchema = v.strictObject({
+  attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  requestId: CachePurgeRequestIdSchema,
+  lastAttemptedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+});
+
 export const ProductSchema = v.strictObject({
   id: ProductIdSchema,
   defaultVariantId: VariantIdSchema,
@@ -61,6 +70,7 @@ export const ProductSchema = v.strictObject({
   sku: SkuSchema,
   onHandQuantity: InventoryQuantitySchema,
   reservedQuantity: InventoryQuantitySchema,
+  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
   updatedAt: v.pipe(v.string(), v.isoTimestamp()),
 });
@@ -70,6 +80,7 @@ export const CatalogProductResponseSchema = v.strictObject({
   data: v.strictObject({
     product: ProductSchema,
     cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
+    cachePurgeRequestId: CachePurgeRequestIdSchema,
   }),
 });
 export const CreateProductInputSchema = v.strictObject({
@@ -109,6 +120,7 @@ export const CatalogFailureReasonSchema = v.picklist([
   "sku_locked",
   "reservation_blocked",
   "inventory_inconsistent",
+  "inventory_limit",
   "idempotency_conflict",
   "committed_but_not_purged",
 ]);

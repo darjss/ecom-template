@@ -8,18 +8,30 @@ import { createSignal, Show } from "solid-js";
 export const InventoryAdjustmentForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
-  const [idempotencyKey, setIdempotencyKey] = createSignal(crypto.randomUUID());
+  const [pendingCommand, setPendingCommand] = createSignal<{
+    signature: string;
+    idempotencyKey: string;
+  }>();
   const form = createForm(() => ({
     defaultValues: { delta: 0, reason: "" },
     onSubmit: async ({ value }) => {
+      const canonicalReason = value.reason.trim();
+      const signature = JSON.stringify([value.delta, canonicalReason]);
+      const existing = pendingCommand();
+      const command =
+        existing?.signature === signature
+          ? existing
+          : { signature, idempotencyKey: crypto.randomUUID() };
+      setPendingCommand(command);
       await mutation.mutateAsync({
         kind: "adjust",
         id: props.product.id,
-        ...value,
-        idempotencyKey: idempotencyKey(),
+        delta: value.delta,
+        reason: canonicalReason,
+        idempotencyKey: command.idempotencyKey,
       });
       form.reset();
-      setIdempotencyKey(crypto.randomUUID());
+      setPendingCommand(undefined);
     },
   }));
   return (

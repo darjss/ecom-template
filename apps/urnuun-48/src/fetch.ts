@@ -83,7 +83,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
         return new Response(null, {
           status: 303,
           headers: {
-            location: new URL("/admin/login", origin).toString(),
+            location: "/admin/login",
             "cache-control": "private, no-store",
           },
         });

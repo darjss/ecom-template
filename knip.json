@@ -24,7 +24,6 @@
     "date-fns",
     "dismatch",
     "es-toolkit",
-    "evlog",
     "micromark"
   ]
 }

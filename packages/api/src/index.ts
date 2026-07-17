@@ -34,6 +34,7 @@ import {
   readDatabaseHealth,
   readStaffAuthSession,
   removeStaff,
+  retryProductCachePurge,
   retryStaffSessionCleanup,
   revokeStaff,
   transitionProduct,
@@ -95,15 +96,17 @@ const catalogError = (
                 ? "Active reservations block this inventory adjustment"
                 : code === "inventory_inconsistent"
                   ? "Reserved inventory truth requires reconciliation"
-                  : code === "idempotency_conflict"
-                    ? "The idempotency key belongs to another inventory command"
-                    : code === "not_found"
-                      ? "Product was not found"
-                      : code === "forbidden"
-                        ? "Catalog authority is required"
-                        : code === "conflict"
-                          ? "Inventory changed concurrently"
-                          : "Catalog infrastructure is unavailable";
+                  : code === "inventory_limit"
+                    ? "Inventory on-hand cannot exceed 1,000,000"
+                    : code === "idempotency_conflict"
+                      ? "The idempotency key belongs to another inventory command"
+                      : code === "not_found"
+                        ? "Product was not found"
+                        : code === "forbidden"
+                          ? "Catalog authority is required"
+                          : code === "conflict"
+                            ? "Inventory changed concurrently"
+                            : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403
@@ -435,6 +438,20 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         return authorization.response;
       }
       const result = await transitionProduct(authorization.actor, id.output, "reactivate");
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogProductResponseSchema, { data: result.value });
+    })
+    .post("/catalog/products/:id/cache-purge/retry", async ({ params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      if (!id.success) {
+        return status(422, apiError("validation", "A valid Product ID is required"));
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await retryProductCachePurge(authorization.actor, id.output);
       return result.isErr()
         ? catalogError(result.error, status)
         : v.parse(CatalogProductResponseSchema, { data: result.value });

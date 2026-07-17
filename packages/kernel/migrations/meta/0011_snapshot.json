@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a7d24853-f53c-4551-bf18-f2f9f957a63c",
+  "id": "9eec3bd7-6cc3-449a-a4a0-d54a7e9a0878",
   "prevId": "3f875294-05d0-4387-acdb-da6af9876742",
   "tables": {
     "audit_events": {
@@ -172,6 +172,82 @@
         "audit_events_fact_length_check": {
           "name": "audit_events_fact_length_check",
           "value": "length(\"audit_events\".\"action\") BETWEEN 1 AND 64 AND length(\"audit_events\".\"entity_kind\") BETWEEN 1 AND 64 AND length(\"audit_events\".\"entity_id\") BETWEEN 1 AND 128"
+        }
+      }
+    },
+    "catalog_cache_purge_debts": {
+      "name": "catalog_cache_purge_debts",
+      "columns": {
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "command_committed_at": {
+          "name": "command_committed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_attempted_at": {
+          "name": "last_attempted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "catalog_cache_purge_debts_product_id_catalog_items_id_fk": {
+          "name": "catalog_cache_purge_debts_product_id_catalog_items_id_fk",
+          "tableFrom": "catalog_cache_purge_debts",
+          "tableTo": "catalog_items",
+          "columnsFrom": ["product_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "catalog_cache_purge_debts_revision_check": {
+          "name": "catalog_cache_purge_debts_revision_check",
+          "value": "length(\"catalog_cache_purge_debts\".\"revision\") = 36"
+        },
+        "catalog_cache_purge_debts_attempt_check": {
+          "name": "catalog_cache_purge_debts_attempt_check",
+          "value": "\"catalog_cache_purge_debts\".\"attempt_count\" BETWEEN 0 AND 1000000"
+        },
+        "catalog_cache_purge_debts_request_check": {
+          "name": "catalog_cache_purge_debts_request_check",
+          "value": "\"catalog_cache_purge_debts\".\"request_id\" IS NULL OR length(\"catalog_cache_purge_debts\".\"request_id\") BETWEEN 1 AND 128"
         }
       }
     },
@@ -1196,7 +1272,7 @@
         },
         "stock_items_balance_check": {
           "name": "stock_items_balance_check",
-          "value": "\"stock_items\".\"on_hand_quantity\" >= 0 AND \"stock_items\".\"reserved_quantity\" >= 0 AND \"stock_items\".\"reserved_quantity\" <= \"stock_items\".\"on_hand_quantity\""
+          "value": "\"stock_items\".\"on_hand_quantity\" BETWEEN 0 AND 1000000 AND \"stock_items\".\"reserved_quantity\" >= 0 AND \"stock_items\".\"reserved_quantity\" <= \"stock_items\".\"on_hand_quantity\""
         }
       }
     },
