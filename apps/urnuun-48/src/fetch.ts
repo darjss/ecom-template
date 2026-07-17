@@ -1,5 +1,9 @@
 import { handle } from "@astrojs/cloudflare/handler";
-import { resolveStaffRequest, resolveStoreRequestOrigin } from "@ecom/api";
+import {
+  resolveStaffRequest,
+  resolveStoreRequestOrigin,
+  staffPresentationRoleHeader,
+} from "@ecom/api";
 import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
 import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
@@ -50,6 +54,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
   }
 
   const pathname = new URL(request.url).pathname;
+  let presentationRequest: Request = request;
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     return privateResponse(await api.fetch(request));
   }
@@ -80,6 +85,9 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
           },
         });
       }
+      const presentationHeaders = new Headers(request.headers);
+      presentationHeaders.set(staffPresentationRoleHeader, staff.actor.role);
+      presentationRequest = new Request(request, { headers: presentationHeaders });
     } catch {
       return privateResponse(
         Response.json(
@@ -89,5 +97,5 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
       );
     }
   }
-  return classifyResponse(request, await handle(request, environment, context));
+  return classifyResponse(request, await handle(presentationRequest, environment, context));
 };

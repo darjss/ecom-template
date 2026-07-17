@@ -15,7 +15,9 @@ import { createForm } from "@tanstack/solid-form";
 import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
+import { resolveAdminSurface } from "./access";
 
+export { resolveAdminSurface, type AdminSurface } from "./access";
 export { StaffLoginForm } from "./StaffLoginForm";
 
 const roleLabels: Record<StaffRole, string> = {
@@ -316,7 +318,21 @@ const StaffManagement = () => {
   );
 };
 
-export type AdminAppProps = { storeName: string };
+const AdminLanding = () => (
+  <section class="staff-management" aria-labelledby="admin-landing-title">
+    <div class="section-heading">
+      <div>
+        <h2 id="admin-landing-title">Тавтай морилно уу</h2>
+        <p>Дэлгүүрийн өдөр тутмын ажлын хэсгүүд энд байрлана.</p>
+      </div>
+    </div>
+    <a class="store-link" href="/">
+      Дэлгүүрийн нүүр рүү очих
+    </a>
+  </section>
+);
+
+export type AdminAppProps = { storeName: string; role: StaffRole };
 
 const Dashboard = (props: AdminAppProps) => (
   <div class="admin-shell">
@@ -326,7 +342,7 @@ const Dashboard = (props: AdminAppProps) => (
       </a>
       <nav>
         <a class="active" aria-current="page" href="/admin">
-          Ажилтны эрх
+          {props.role === "owner" ? "Ажилтны эрх" : "Хяналтын самбар"}
         </a>
       </nav>
       <a class="store-link" href="/">
@@ -337,21 +353,26 @@ const Dashboard = (props: AdminAppProps) => (
       <header>
         <div>
           <p class="eyebrow">Удирдлага</p>
-          <h1>Store-ийн баг</h1>
+          <h1>{props.role === "owner" ? "Store-ийн баг" : "Удирдлагын самбар"}</h1>
         </div>
         <div class="system-health">
           <span>Систем</span>
           <HealthStatus />
         </div>
       </header>
-      <StaffManagement />
+      <Show
+        when={resolveAdminSurface(props.role) === "staff_management"}
+        fallback={<AdminLanding />}
+      >
+        <StaffManagement />
+      </Show>
     </main>
   </div>
 );
 
 export const AdminApp = (props: AdminAppProps) => (
   <QueryClientProvider client={createStoreQueryClient()}>
-    <Dashboard storeName={props.storeName} />
+    <Dashboard role={props.role} storeName={props.storeName} />
   </QueryClientProvider>
 );
 

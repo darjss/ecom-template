@@ -9,6 +9,7 @@ import {
   StaffListResponseSchema,
   StaffMutationInputSchema,
   StaffMutationResponseSchema,
+  StaffRoleSchema,
   StoreDefinitionSchema,
   type StoreDefinition,
 } from "@ecom/contracts";
@@ -32,6 +33,11 @@ import {
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { resolveStoreRequestOrigin } from "./request-origin";
+
+export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
+
+export const readStaffPresentationRole = (headers: Headers) =>
+  v.parse(StaffRoleSchema, headers.get(staffPresentationRoleHeader));
 
 const privateResponse = (response: Response) => {
   const headers = new Headers(response.headers);
