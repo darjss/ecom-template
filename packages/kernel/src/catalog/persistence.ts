@@ -20,7 +20,7 @@ import {
 } from "../db/schema";
 import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
-import { catalogReaderQueries, findCatalogProductById } from "./read/persistence";
+import { catalogReaderQueries, findCatalogProductById } from "../catalog-reader/persistence";
 import { compactSku, skuFromVariantId } from "./sku";
 
 const existsById = async (id: ProductId) => {

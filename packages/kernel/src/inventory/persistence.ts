@@ -14,7 +14,7 @@ import {
   stockItems,
 } from "../db/schema";
 import type { StaffActor } from "../staff/operations";
-import { findCatalogProductById } from "../catalog/read/persistence";
+import { findCatalogProductById } from "../catalog-reader/persistence";
 import { recordRejectedAttempt } from "../catalog/persistence";
 
 export const inventoryQueries = {

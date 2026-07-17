@@ -1,10 +1,35 @@
-import { ProductSchema, type Product, type ProductId } from "@ecom/contracts";
+import {
+  ProductSchema,
+  PublicProductDetailSchema,
+  PublicProductSummarySchema,
+  type Product,
+  type ProductId,
+} from "@ecom/contracts";
 import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
-import { database } from "../../db/database";
-import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../../db/schema";
+import { database } from "../db/database";
+import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
 
-const productProjection = {
+const ReturnedProductSchema = v.strictObject({
+  id: v.string(),
+  defaultVariantId: v.string(),
+  stockItemId: v.string(),
+  slug: v.string(),
+  state: v.string(),
+  name: v.string(),
+  description: v.string(),
+  priceMnt: v.number(),
+  sku: v.string(),
+  onHandQuantity: v.number(),
+  reservedQuantity: v.number(),
+  cachePurgeAttemptCount: v.nullable(v.number()),
+  cachePurgeRequestId: v.nullable(v.string()),
+  cachePurgeLastAttemptedAt: v.nullable(v.date()),
+  createdAt: v.date(),
+  updatedAt: v.date(),
+});
+
+const productSelection = {
   id: catalogItems.id,
   defaultVariantId: variants.id,
   stockItemId: stockItems.id,
@@ -25,37 +50,31 @@ const productProjection = {
 
 const productQuery = () =>
   database()
-    .select(productProjection)
+    .select(productSelection)
     .from(catalogItems)
     .innerJoin(variants, and(eq(variants.productId, catalogItems.id), eq(variants.isDefault, true)))
     .innerJoin(skus, eq(skus.variantId, variants.id))
     .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
     .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
 
-const projectProduct = (row: Awaited<ReturnType<typeof productQuery>>[number]): Product =>
-  v.parse(ProductSchema, {
-    id: row.id,
-    defaultVariantId: row.defaultVariantId,
-    stockItemId: row.stockItemId,
-    slug: row.slug,
-    state: row.state,
-    name: row.name,
-    description: row.description,
-    priceMnt: row.priceMnt,
-    sku: row.sku,
-    onHandQuantity: row.onHandQuantity,
-    reservedQuantity: row.reservedQuantity,
+const projectProduct = (source: unknown): Product => {
+  const row = v.parse(ReturnedProductSchema, source);
+  const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...product } =
+    row;
+  return v.parse(ProductSchema, {
+    ...product,
     cachePurgeDebt:
-      row.cachePurgeAttemptCount === null
+      cachePurgeAttemptCount === null
         ? null
         : {
-            attemptCount: row.cachePurgeAttemptCount,
-            requestId: row.cachePurgeRequestId,
-            lastAttemptedAt: row.cachePurgeLastAttemptedAt?.toISOString() ?? null,
+            attemptCount: cachePurgeAttemptCount,
+            requestId: cachePurgeRequestId,
+            lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
           },
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: product.createdAt.toISOString(),
+    updatedAt: product.updatedAt.toISOString(),
   });
+};
 
 export const findCatalogProductById = async (id: ProductId) => {
   const rows = await productQuery().where(eq(catalogItems.id, id)).limit(1);
@@ -72,7 +91,7 @@ export const catalogReaderQueries = {
   },
 
   async listPublished() {
-    return database()
+    const rows = await database()
       .select({
         id: catalogItems.id,
         slug: catalogItems.slug,
@@ -91,6 +110,7 @@ export const catalogReaderQueries = {
       )
       .where(eq(catalogItems.state, "published"))
       .orderBy(desc(catalogItems.createdAt));
+    return rows.map((row) => v.parse(PublicProductSummarySchema, row));
   },
 
   async findPublishedBySlug(slug: string) {
@@ -114,6 +134,7 @@ export const catalogReaderQueries = {
       )
       .where(and(eq(catalogItems.state, "published"), eq(catalogItems.slug, slug)))
       .limit(1);
-    return rows.at(0);
+    const row = rows.at(0);
+    return row ? v.parse(PublicProductDetailSchema, row) : undefined;
   },
 };
