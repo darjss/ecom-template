@@ -206,10 +206,21 @@ export type StaffCommandContext = {
   readonly correlationId: string;
 };
 
+const StaffCleanupOperationSchema = v.picklist([
+  "approve",
+  "role_change",
+  "revoke",
+  "remove",
+  "provision",
+]);
+
+export type StaffCleanupOperation = v.InferOutput<typeof StaffCleanupOperationSchema>;
+
 export type StaffCleanupDebt = {
   readonly authUserId: string;
   readonly staffId: StaffId;
   readonly sessionGeneration: number;
+  readonly operation: StaffCleanupOperation;
 };
 
 const returnedSelectionSql =
@@ -324,6 +335,7 @@ export const staffQueries = {
         authUserId: staffSessionCleanupDebts.authUserId,
         staffId: staffSessionCleanupDebts.staffId,
         sessionGeneration: staffSessionCleanupDebts.sessionGeneration,
+        operation: staffSessionCleanupDebts.operation,
       })
       .from(staffSessionCleanupDebts)
       .orderBy(asc(staffSessionCleanupDebts.createdAt))
@@ -331,7 +343,11 @@ export const staffQueries = {
     return rows.map((row) => ({
       authUserId: row.authUserId,
       staffId: v.parse(StaffIdSchema, row.staffId),
-      sessionGeneration: row.sessionGeneration,
+      sessionGeneration: v.parse(
+        v.pipe(v.number(), v.integer(), v.minValue(0)),
+        row.sessionGeneration,
+      ),
+      operation: v.parse(StaffCleanupOperationSchema, row.operation),
     }));
   },
 

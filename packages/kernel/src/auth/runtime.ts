@@ -24,6 +24,12 @@ const readAuthEnvironment = () =>
   });
 
 const staffStorageKey = (key: string) => `staff:${key}`;
+const StaffSessionGenerationSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
+const StaffCleanupSessionSchema = v.object({
+  token: v.pipe(v.string(), v.minLength(1)),
+  generation: v.optional(v.unknown()),
+});
+const staffSessionCleanupLimit = 100;
 
 export const createStaffAuth = (origin: string) => {
   const environment = readAuthEnvironment();
@@ -133,9 +139,9 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
     return { kind: "unauthorized" as const };
   }
 
-  const deleteSessions = async () => {
+  const deleteSession = async () => {
     try {
-      await (await auth.$context).internalAdapter.deleteUserSessions(session.user.id);
+      await (await auth.$context).internalAdapter.deleteSession(session.session.token);
       return true;
     } catch {
       return false;
@@ -145,7 +151,7 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
   const role = v.safeParse(StaffRoleSchema, session.session.role);
   if (!role.success) {
     const applicant = await staffQueries.resolveApplicant(session.user.id, session.user.email);
-    if (applicant.kind === "infrastructure_unavailable" || !(await deleteSessions())) {
+    if (applicant.kind === "infrastructure_unavailable" || !(await deleteSession())) {
       return { kind: "unavailable" as const };
     }
     return applicant.kind === "identity_conflict"
@@ -153,12 +159,9 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
       : { kind: "awaiting_approval" as const };
   }
 
-  const generation = v.safeParse(
-    v.pipe(v.number(), v.integer(), v.minValue(0)),
-    session.session.generation,
-  );
+  const generation = v.safeParse(StaffSessionGenerationSchema, session.session.generation);
   if (!generation.success) {
-    return (await deleteSessions())
+    return (await deleteSession())
       ? { kind: "unauthorized" as const }
       : { kind: "unavailable" as const };
   }
@@ -180,7 +183,7 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
     return { kind: "unavailable" as const };
   }
   if (authorityAttempt.authority.kind !== "current") {
-    if (!(await deleteSessions())) {
+    if (!(await deleteSession())) {
       return { kind: "unavailable" as const };
     }
     return authorityAttempt.authority.kind === "identity_conflict"
@@ -197,11 +200,43 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
   };
 };
 
-export const revokeStaffUserSessions = async (origin: string, authUserId: string) => {
+export const cleanupStaffUserSessions = async (
+  origin: string,
+  authUserId: string,
+  expectedGeneration: number,
+  mode: "stale" | "all",
+) => {
   const auth = createStaffAuth(origin);
   if (!auth) {
     return false;
   }
-  await (await auth.$context).internalAdapter.deleteUserSessions(authUserId);
-  return true;
+  const adapter = (await auth.$context).internalAdapter;
+  const requiresDeletion = (generation: unknown) => {
+    if (mode === "all") {
+      return true;
+    }
+    const parsed = v.safeParse(StaffSessionGenerationSchema, generation);
+    return !parsed.success || parsed.output < expectedGeneration;
+  };
+  const sessions = v.safeParse(
+    v.array(StaffCleanupSessionSchema),
+    await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
+  );
+  if (!sessions.success || sessions.output.length > staffSessionCleanupLimit) {
+    return false;
+  }
+  for (const session of sessions.output) {
+    if (requiresDeletion(session.generation)) {
+      await adapter.deleteSession(session.token);
+    }
+  }
+  const remaining = v.safeParse(
+    v.array(StaffCleanupSessionSchema),
+    await adapter.listSessions(authUserId, { onlyActiveSessions: true }),
+  );
+  return (
+    remaining.success &&
+    remaining.output.length <= staffSessionCleanupLimit &&
+    remaining.output.every((session) => !requiresDeletion(session.generation))
+  );
 };

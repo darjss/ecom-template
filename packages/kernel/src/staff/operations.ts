@@ -1,7 +1,7 @@
 import type { StaffId, StaffMember, StaffRole } from "@ecom/contracts";
 import { Result } from "better-result";
-import { revokeStaffUserSessions } from "../auth/runtime";
-import { staffQueries, type StaffRecord } from "./persistence";
+import { cleanupStaffUserSessions } from "../auth/runtime";
+import { staffQueries, type StaffCleanupOperation, type StaffRecord } from "./persistence";
 
 export type StaffCapability =
   | "staff_auth"
@@ -59,16 +59,27 @@ const commandContext = (actor: StaffActor) => ({
   correlationId: crypto.randomUUID(),
 });
 
-const revokeSessions = async (
+const cleanupMode = (operation: StaffCleanupOperation): "stale" | "all" =>
+  operation === "revoke" || operation === "remove" ? "all" : "stale";
+
+const cleanupSessions = async (
   origin: string,
   member: StaffRecord,
+  operation: StaffCleanupOperation,
   cleanupGeneration = member.sessionGeneration,
 ) => {
   if (!member.authUserId) {
     return true;
   }
   try {
-    if (!(await revokeStaffUserSessions(origin, member.authUserId))) {
+    if (
+      !(await cleanupStaffUserSessions(
+        origin,
+        member.authUserId,
+        cleanupGeneration,
+        cleanupMode(operation),
+      ))
+    ) {
       return false;
     }
     return await staffQueries.clearCleanupDebt(member.authUserId, cleanupGeneration);
@@ -132,7 +143,7 @@ export const approveStaff = async (
     if (!changed) {
       return Result.err({ code: current ? "invalid_transition" : "not_found" });
     }
-    if (!(await revokeSessions(origin, changed))) {
+    if (!(await cleanupSessions(origin, changed, "approve"))) {
       return Result.err({ code: "session_revocation_failed" });
     }
     return Result.ok(publicMember(changed));
@@ -171,7 +182,7 @@ export const changeStaffRole = async (
             : "invalid_transition",
       });
     }
-    if (!(await revokeSessions(origin, changed))) {
+    if (!(await cleanupSessions(origin, changed, "role_change"))) {
       return Result.err({ code: "session_revocation_failed" });
     }
     return Result.ok(publicMember(changed));
@@ -202,7 +213,7 @@ export const revokeStaff = async (
             : "invalid_transition",
       });
     }
-    if (!(await revokeSessions(origin, changed))) {
+    if (!(await cleanupSessions(origin, changed, "revoke"))) {
       return Result.err({ code: "session_revocation_failed" });
     }
     return Result.ok(publicMember(changed));
@@ -236,7 +247,7 @@ export const removeStaff = async (
             : "invalid_transition",
       });
     }
-    if (!(await revokeSessions(origin, removed, cleanupGeneration))) {
+    if (!(await cleanupSessions(origin, removed, "remove", cleanupGeneration))) {
       return Result.err({ code: "session_revocation_failed" });
     }
     return Result.ok(publicMember(removed));
@@ -267,7 +278,12 @@ export const retryStaffSessionCleanup = async (
     for (const debt of debts) {
       let sessionsDeleted = false;
       try {
-        sessionsDeleted = await revokeStaffUserSessions(origin, debt.authUserId);
+        sessionsDeleted = await cleanupStaffUserSessions(
+          origin,
+          debt.authUserId,
+          debt.sessionGeneration,
+          cleanupMode(debt.operation),
+        );
       } catch {
         sessionsDeleted = false;
       }
