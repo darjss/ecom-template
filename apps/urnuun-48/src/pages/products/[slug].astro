@@ -13,6 +13,9 @@ if (!product) {
 }
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
 const formattedPrice = new Intl.NumberFormat("mn-MN").format(product.priceMnt);
+const imageWidths = [320, 640, 960, 1280];
+const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
+  imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
 ---
 <StoreLayout title={`${product.name} · Өрнүүн 48`} description={product.description || product.name}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
@@ -23,7 +26,34 @@ const formattedPrice = new Intl.NumberFormat("mn-MN").format(product.priceMnt);
   </header>
   <main id="content">
     <article class="featured" aria-labelledby="product-title">
-      <div class="product-visual"><span class="bay-number">Каталог</span><img src="/media/p07-tote-sand.webp" alt="" width="1000" height="1000" /></div>
+      <div class="product-visual">
+        <span class="bay-number">Каталог</span>
+        {product.images.length === 0
+          ? <div class="grid aspect-square place-items-center bg-(--surface) p-6 text-center text-(--muted)">Зураг оруулаагүй байна</div>
+          : <div class="grid gap-3 sm:grid-cols-2">
+              {product.images.map((image, index) => (
+                <picture class={index === 0 ? "sm:col-span-2" : undefined}>
+                  <source
+                    type="image/avif"
+                    srcset={imageSrcset(image.mediaAssetId, "avif")}
+                    sizes="(max-width: 767px) 100vw, 50vw"
+                  />
+                  <img
+                    class="aspect-square w-full object-cover"
+                    src={`/media/${image.mediaAssetId}/960.webp`}
+                    srcset={imageSrcset(image.mediaAssetId, "webp")}
+                    sizes="(max-width: 767px) 100vw, 50vw"
+                    alt={image.altText}
+                    width="960"
+                    height="960"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    fetchpriority={index === 0 ? "high" : "auto"}
+                    decoding="async"
+                  />
+                </picture>
+              ))}
+            </div>}
+      </div>
       <div class="product-copy">
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>

@@ -2,6 +2,7 @@ import { handle } from "@astrojs/cloudflare/handler";
 import {
   resolveStaffRequest,
   resolveStoreRequestOrigin,
+  servePublicMedia,
   staffPresentationRoleHeader,
 } from "@ecom/api";
 import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
@@ -58,6 +59,9 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
 
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
+  if (pathname.startsWith("/media/")) {
+    return servePublicMedia(request);
+  }
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     return privateResponse(await api.fetch(request));
   }

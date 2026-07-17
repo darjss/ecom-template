@@ -4,6 +4,7 @@ import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
 import { Show } from "solid-js";
+import { CatalogImageForm } from "./CatalogImageForm";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -164,6 +165,7 @@ export const CatalogProductRow = (props: { product: Product }) => {
           </div>
         )}
       </Show>
+      <CatalogImageForm product={props.product} />
       <InventoryAdjustmentForm product={props.product} />
     </li>
   );

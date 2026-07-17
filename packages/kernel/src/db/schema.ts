@@ -184,6 +184,52 @@ export const catalogItems = sqliteTable(
   ],
 );
 
+export const mediaAssets = sqliteTable(
+  "media_assets",
+  {
+    id: text("id").primaryKey(),
+    objectKey: text("object_key").notNull().unique(),
+    declaredContentType: text("declared_content_type", {
+      enum: ["image/jpeg", "image/png", "image/webp"],
+    }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "media_assets_id_check",
+      sql`length(${table.id}) = 32 AND substr(${table.id}, 1, 6) = 'media_' AND substr(${table.id}, 7, 1) GLOB '[0-7]' AND substr(${table.id}, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check(
+      "media_assets_content_type_check",
+      sql`${table.declaredContentType} IN ('image/jpeg', 'image/png', 'image/webp')`,
+    ),
+  ],
+);
+
+export const catalogItemImages = sqliteTable(
+  "catalog_item_images",
+  {
+    catalogItemId: text("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "cascade" }),
+    mediaAssetId: text("media_asset_id")
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    altText: text("alt_text").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.catalogItemId, table.position] }),
+    uniqueIndex("catalog_item_images_asset_idx").on(table.catalogItemId, table.mediaAssetId),
+    index("catalog_item_images_media_idx").on(table.mediaAssetId),
+    check("catalog_item_images_position_check", sql`${table.position} BETWEEN 0 AND 7`),
+    check(
+      "catalog_item_images_alt_text_check",
+      sql`${table.altText} = trim(${table.altText}) AND length(${table.altText}) BETWEEN 1 AND 240`,
+    ),
+  ],
+);
+
 export const catalogCachePurgeDebts = sqliteTable(
   "catalog_cache_purge_debts",
   {
