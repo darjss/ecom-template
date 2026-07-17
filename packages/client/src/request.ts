@@ -13,10 +13,17 @@ type EdenResponse<Data, ApiErrorEnvelope> = {
   readonly error: { readonly value: ApiErrorEnvelope } | null;
 };
 
-export const requestResult = async <ResponseData, ResponseError, Data, ApiError>(
+export const requestResult = async <
+  ResponseData,
+  ResponseError,
+  DataInput,
+  Data,
+  ErrorInput,
+  ApiError,
+>(
   request: () => Promise<EdenResponse<ResponseData, ResponseError>>,
-  dataSchema: v.GenericSchema<ResponseData, Data>,
-  errorSchema: v.GenericSchema<ResponseError, { readonly error: ApiError }>,
+  dataSchema: v.GenericSchema<DataInput, Data>,
+  errorSchema: v.GenericSchema<ErrorInput, { readonly error: ApiError }>,
   invalidDataMessage: string,
 ): Promise<ResultType<Data, ClientRequestError<ApiError>>> => {
   try {

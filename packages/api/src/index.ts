@@ -30,8 +30,8 @@ import {
   adjustProductInventory,
   approveStaff,
   attachCatalogImage,
-  createProduct,
   changeStaffRole,
+  createProduct,
   createStaff,
   createStaffAuth,
   createStorefrontReader,
@@ -54,6 +54,7 @@ import {
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createCustomerAuthRoutes } from "./customer-routes";
+import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 
 export { MediaUploadMultipartMaxBytes };
@@ -515,6 +516,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
+    .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
     .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();
       if (databaseHealth.isErr()) {

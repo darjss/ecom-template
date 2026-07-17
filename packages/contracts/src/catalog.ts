@@ -16,6 +16,9 @@ const typeIdSchema = (prefix: string, label: string) =>
   );
 
 export const ProductIdSchema = typeIdSchema("product", "Product ID");
+export const BundleIdSchema = typeIdSchema("bundle", "Bundle ID");
+export const CatalogItemIdSchema = v.union([ProductIdSchema, BundleIdSchema]);
+export const CatalogItemKindSchema = v.picklist(["product", "bundle"]);
 export const VariantIdSchema = typeIdSchema("variant", "Variant ID");
 export const MediaAssetIdSchema = typeIdSchema("media", "Media Asset ID");
 export const StockItemIdSchema = typeIdSchema("stock_item", "Stock Item ID");
@@ -171,6 +174,15 @@ export const PublicCatalogImageSchema = v.strictObject({
   position: MediaPositionSchema,
   altText: MediaAltTextSchema,
 });
+export const PublicCatalogItemSummarySchema = v.strictObject({
+  id: CatalogItemIdSchema,
+  kind: CatalogItemKindSchema,
+  slug: CatalogSlugSchema,
+  name: CatalogNameSchema,
+  description: v.string(),
+  priceMnt: PriceMntSchema,
+  images: v.array(PublicCatalogImageSchema),
+});
 export const PublicProductSummarySchema = v.strictObject({
   id: ProductIdSchema,
   slug: CatalogSlugSchema,
@@ -185,6 +197,9 @@ export const PublicProductDetailSchema = v.strictObject({
 });
 
 export type ProductId = v.InferOutput<typeof ProductIdSchema>;
+export type BundleId = v.InferOutput<typeof BundleIdSchema>;
+export type CatalogItemId = v.InferOutput<typeof CatalogItemIdSchema>;
+export type CatalogItemKind = v.InferOutput<typeof CatalogItemKindSchema>;
 export type VariantId = v.InferOutput<typeof VariantIdSchema>;
 export type MediaAssetId = v.InferOutput<typeof MediaAssetIdSchema>;
 export type StockItemId = v.InferOutput<typeof StockItemIdSchema>;
@@ -203,10 +218,12 @@ export type PublicCatalogImage = v.InferOutput<typeof PublicCatalogImageSchema>;
 export type CatalogClientError = ClientRequestError<
   v.InferOutput<typeof CatalogApiErrorSchema>["error"]
 >;
+export type PublicCatalogItemSummary = v.InferOutput<typeof PublicCatalogItemSummarySchema>;
 export type PublicProductSummary = v.InferOutput<typeof PublicProductSummarySchema>;
 export type PublicProductDetail = v.InferOutput<typeof PublicProductDetailSchema>;
 
 export const createProductId = () => typeidUnboxed("product");
+export const createBundleId = () => typeidUnboxed("bundle");
 export const createVariantId = () => typeidUnboxed("variant");
 export const createMediaAssetId = () => typeidUnboxed("media");
 export const createStockItemId = () => typeidUnboxed("stock_item");

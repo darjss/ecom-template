@@ -1,6 +1,10 @@
 import {
+  PublicGroupingListingSchema,
+  PublicGroupingSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type PublicGrouping,
+  type PublicGroupingListing,
   type PublicProductDetail,
   type PublicProductSummary,
   type StorefrontSummary,
@@ -8,11 +12,60 @@ import {
 import * as v from "valibot";
 import { catalogQueries } from "../catalog/persistence";
 import { readDatabaseHealth } from "../db/health";
+import { groupingQueries } from "../grouping/persistence";
 
 export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
+  readonly listPublishedGroupings: () => Promise<{
+    readonly categories: readonly PublicGrouping[];
+    readonly collections: readonly PublicGrouping[];
+  }>;
+  readonly readPublishedCategory: (slug: string) => Promise<PublicGroupingListing | undefined>;
+  readonly readPublishedCollection: (slug: string) => Promise<PublicGroupingListing | undefined>;
+};
+
+const listPublishedProducts = async () => {
+  const rows = await catalogQueries.listPublished();
+  return rows.map((row) => v.parse(PublicProductSummarySchema, row));
+};
+
+const projectPublicGrouping = (group: {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly description: string;
+}) =>
+  v.parse(PublicGroupingSchema, {
+    id: group.id,
+    slug: group.slug,
+    name: group.name,
+    description: group.description,
+  });
+
+const publicListing = async (
+  grouping: Awaited<ReturnType<typeof groupingQueries.findPublicCategory>>,
+) => {
+  if (!grouping) {
+    return undefined;
+  }
+  const catalogItems = await catalogQueries.listPublishedCatalogItems(grouping.catalogItemIds);
+  const catalogItemsById = new Map(
+    catalogItems.map((catalogItem) => [catalogItem.id, catalogItem]),
+  );
+  return v.parse(PublicGroupingListingSchema, {
+    grouping: {
+      id: grouping.id,
+      slug: grouping.slug,
+      name: grouping.name,
+      description: grouping.description,
+    },
+    catalogItems: grouping.catalogItemIds.flatMap((id) => {
+      const catalogItem = catalogItemsById.get(id);
+      return catalogItem ? [catalogItem] : [];
+    }),
+  });
 };
 
 export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
@@ -23,12 +76,28 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
     }
     return summary;
   },
-  listPublishedProducts: async () => {
-    const rows = await catalogQueries.listPublished();
-    return rows.map((row) => v.parse(PublicProductSummarySchema, row));
-  },
+  listPublishedProducts,
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);
     return row ? v.parse(PublicProductDetailSchema, row) : undefined;
   },
+  listPublishedGroupings: async () => {
+    const [groups, catalogItems] = await Promise.all([
+      groupingQueries.listPublicGroupings(),
+      catalogQueries.listPublishedCatalogItems(),
+    ]);
+    const publishedIds = new Set(catalogItems.map((catalogItem) => catalogItem.id));
+    return {
+      categories: groups.categories
+        .filter((group) => group.catalogItemIds.some((id) => publishedIds.has(id)))
+        .map(projectPublicGrouping),
+      collections: groups.collections
+        .filter((group) => group.catalogItemIds.some((id) => publishedIds.has(id)))
+        .map(projectPublicGrouping),
+    };
+  },
+  readPublishedCategory: async (slug) =>
+    publicListing(await groupingQueries.findPublicCategory(slug)),
+  readPublishedCollection: async (slug) =>
+    publicListing(await groupingQueries.findPublicCollection(slug)),
 });

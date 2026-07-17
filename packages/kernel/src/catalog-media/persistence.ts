@@ -1,10 +1,11 @@
 import {
   CatalogImageSchema,
+  CatalogItemIdSchema,
   MediaAssetIdSchema,
   MediaContentTypeSchema,
-  ProductIdSchema,
   PublicCatalogImageSchema,
   type CatalogImage,
+  type CatalogItemId,
   type MediaAssetId,
   type MediaContentType,
   type ProductId,
@@ -129,7 +130,7 @@ export const catalogMediaQueries = {
     });
   },
 
-  async listForCatalogItems(ids: readonly ProductId[]) {
+  async listForCatalogItems(ids: readonly CatalogItemId[]) {
     if (ids.length === 0) {
       return [];
     }
@@ -140,15 +141,15 @@ export const catalogMediaQueries = {
       .where(inArray(catalogItemImages.catalogItemId, ids))
       .orderBy(asc(catalogItemImages.position));
     return rows.map(({ catalogItemId, ...image }) => ({
-      catalogItemId: v.parse(ProductIdSchema, catalogItemId),
+      catalogItemId: v.parse(CatalogItemIdSchema, catalogItemId),
       image: projectCatalogImage(image),
     }));
   },
 
-  async listPublicForCatalogItems(ids: readonly ProductId[]) {
+  async listPublicForCatalogItems(ids: readonly CatalogItemId[]) {
     const rows = await this.listForCatalogItems(ids);
     return rows.map(
-      ({ catalogItemId, image }): { catalogItemId: ProductId; image: PublicCatalogImage } => ({
+      ({ catalogItemId, image }): { catalogItemId: CatalogItemId; image: PublicCatalogImage } => ({
         catalogItemId,
         image: v.parse(PublicCatalogImageSchema, {
           mediaAssetId: image.mediaAsset.id,

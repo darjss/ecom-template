@@ -17,6 +17,7 @@ import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
 import { resolveAdminSurface } from "./access";
 import { CatalogManagement } from "./CatalogManagement";
+import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
 export { StaffLoginForm } from "./StaffLoginForm";
@@ -373,6 +374,7 @@ const Dashboard = (props: AdminAppProps) => (
         </div>
       </header>
       <CatalogManagement />
+      <GroupingManagement />
       <Show when={resolveAdminSurface(props.role) === "staff_management"}>
         <StaffManagement />
       </Show>

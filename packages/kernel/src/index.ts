@@ -16,6 +16,24 @@ export {
   type CatalogOperationFailure,
 } from "./catalog/operations";
 export {
+  createCategory,
+  createCollection,
+  createTag,
+  listGroupings,
+  replaceCategoryMembership,
+  replaceCollectionMembership,
+  replaceTagMembership,
+  retryGroupingCachePurge,
+  setCategoryState,
+  setCollectionState,
+  setTagState,
+  updateCategory,
+  updateCollection,
+  updateTag,
+  type GroupingMutationResult,
+  type GroupingOperationFailure,
+} from "./grouping/operations";
+export {
   readCustomerSession,
   requestCustomerOtp,
   verifyCustomerOtp,

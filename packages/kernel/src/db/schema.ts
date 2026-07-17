@@ -7,6 +7,7 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
 export * from "../auth/customer.generated";
@@ -184,6 +185,147 @@ export const catalogItems = sqliteTable(
   ],
 );
 
+export const categories = sqliteTable(
+  "categories",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    parentId: text("parent_id").references((): AnySQLiteColumn => categories.id, {
+      onDelete: "restrict",
+    }),
+    position: integer("position").notNull(),
+    state: text("state", { enum: ["draft", "active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    activatedAt: integer("activated_at", { mode: "timestamp_ms" }),
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check(
+      "categories_id_check",
+      sql`length(${table.id}) = 35 AND substr(${table.id}, 1, 9) = 'category_' AND substr(${table.id}, 10, 1) GLOB '[0-7]' AND substr(${table.id}, 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("categories_slug_check", sql`length(${table.slug}) BETWEEN 1 AND 100`),
+    check("categories_name_check", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
+    check("categories_position_check", sql`${table.position} BETWEEN 0 AND 10000`),
+    check("categories_state_check", sql`${table.state} IN ('draft', 'active', 'archived')`),
+    check(
+      "categories_parent_check",
+      sql`${table.parentId} IS NULL OR ${table.parentId} <> ${table.id}`,
+    ),
+    index("categories_parent_state_position_idx").on(
+      table.parentId,
+      table.state,
+      table.position,
+      table.id,
+    ),
+  ],
+);
+
+export const collections = sqliteTable(
+  "collections",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    state: text("state", { enum: ["draft", "active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    activatedAt: integer("activated_at", { mode: "timestamp_ms" }),
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check(
+      "collections_id_check",
+      sql`length(${table.id}) = 37 AND substr(${table.id}, 1, 11) = 'collection_' AND substr(${table.id}, 12, 1) GLOB '[0-7]' AND substr(${table.id}, 12) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("collections_slug_check", sql`length(${table.slug}) BETWEEN 1 AND 100`),
+    check("collections_name_check", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
+    check("collections_description_check", sql`length(${table.description}) <= 5000`),
+    check("collections_state_check", sql`${table.state} IN ('draft', 'active', 'archived')`),
+    index("collections_state_name_idx").on(table.state, table.name, table.id),
+  ],
+);
+
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    label: text("label").notNull(),
+    normalizedLabel: text("normalized_label").notNull().unique(),
+    state: text("state", { enum: ["draft", "active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    activatedAt: integer("activated_at", { mode: "timestamp_ms" }),
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check(
+      "tags_id_check",
+      sql`length(${table.id}) = 30 AND substr(${table.id}, 1, 4) = 'tag_' AND substr(${table.id}, 5, 1) GLOB '[0-7]' AND substr(${table.id}, 5) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("tags_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
+    check(
+      "tags_normalized_label_check",
+      sql`${table.normalizedLabel} = trim(${table.normalizedLabel}) AND length(${table.normalizedLabel}) BETWEEN 1 AND 80`,
+    ),
+    check("tags_state_check", sql`${table.state} IN ('draft', 'active', 'archived')`),
+    index("tags_state_label_idx").on(table.state, table.normalizedLabel, table.id),
+  ],
+);
+
+export const catalogItemCategories = sqliteTable(
+  "catalog_item_categories",
+  {
+    catalogItemId: text("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    categoryId: text("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.catalogItemId, table.categoryId] }),
+    index("catalog_item_categories_category_idx").on(table.categoryId, table.catalogItemId),
+  ],
+);
+
+export const catalogItemCollections = sqliteTable(
+  "catalog_item_collections",
+  {
+    catalogItemId: text("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.catalogItemId, table.collectionId] }),
+    uniqueIndex("catalog_item_collections_position_idx").on(table.collectionId, table.position),
+    check("catalog_item_collections_position_check", sql`${table.position} BETWEEN 0 AND 10000`),
+  ],
+);
+
+export const catalogItemTags = sqliteTable(
+  "catalog_item_tags",
+  {
+    catalogItemId: text("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.catalogItemId, table.tagId] }),
+    index("catalog_item_tags_tag_idx").on(table.tagId, table.catalogItemId),
+  ],
+);
+
 export const mediaAssets = sqliteTable(
   "media_assets",
   {
@@ -250,6 +392,30 @@ export const catalogCachePurgeDebts = sqliteTable(
     ),
     check(
       "catalog_cache_purge_debts_request_check",
+      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
+    ),
+  ],
+);
+
+export const catalogListingCachePurgeDebt = sqliteTable(
+  "catalog_listing_cache_purge_debt",
+  {
+    key: text("key").primaryKey(),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("catalog_listing_cache_purge_debt_key_check", sql`${table.key} = 'catalog'`),
+    check("catalog_listing_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
+    check(
+      "catalog_listing_cache_purge_debt_attempt_check",
+      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      "catalog_listing_cache_purge_debt_request_check",
       sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
     ),
   ],

@@ -12,10 +12,10 @@ import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story"]);
-const publicProductPath = /^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const publicCatalogPath = /^\/(?:products|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const privateCatalogImageUploadPath = /^\/api\/catalog\/products\/[^/]+\/images$/;
 const isPublicStorefrontPath = (pathname: string) =>
-  publicStorefrontPaths.has(pathname) || publicProductPath.test(pathname);
+  publicStorefrontPaths.has(pathname) || publicCatalogPath.test(pathname);
 
 const privateResponse = (response: Response) => {
   const headers = new Headers(response.headers);

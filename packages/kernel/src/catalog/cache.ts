@@ -9,7 +9,7 @@ import {
 } from "./cache-contract";
 import { catalogQueries } from "./persistence";
 
-const purgeCatalogCache = async (productId: string) => {
+const purgeCacheTags = async (tags: readonly string[]) => {
   const configuration = parseCachePurgeEnvironment(env);
   if (!configuration.success) {
     return { kind: "failed" as const, requestId: null };
@@ -21,7 +21,7 @@ const purgeCatalogCache = async (productId: string) => {
         headers: {
           authorization: `Bearer ${configuration.output.CLOUDFLARE_CACHE_PURGE_TOKEN}`,
         },
-        json: { tags: ["catalog", `product:${productId}`] },
+        json: { tags },
         retry: 0,
         throwHttpErrors: false,
         timeout: 10_000,
@@ -39,13 +39,15 @@ const purgeCatalogCache = async (productId: string) => {
   }
 };
 
+export const purgeCatalogListingCache = () => purgeCacheTags(["catalog"]);
+
 export const resolvePendingCatalogCachePurge = async (product: Product) => {
   const debt = await catalogQueries.findCachePurgeDebt(product.id);
   if (!debt) {
     return { product, cache: "not_required" as const, cachePurgeRequestId: null };
   }
 
-  const purge = await purgeCatalogCache(product.id);
+  const purge = await purgeCacheTags(["catalog", `product:${product.id}`]);
   const log = createLogger({ action: "catalog.cache_purge", productId: product.id });
   let outcomeRecorded = false;
   try {
