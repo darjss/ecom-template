@@ -21,6 +21,32 @@ export const customers = sqliteTable(
       "customers_id_check",
       sql`length(${table.id}) = 35 AND substr(${table.id}, 1, 9) = 'customer_' AND substr(${table.id}, 10, 1) GLOB '[0-7]' AND substr(${table.id}, 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
+    check("customers_auth_identity_check", sql`${table.authUserId} = ${table.id}`),
+  ],
+);
+
+export const customerOtpRateCounters = sqliteTable(
+  "customer_otp_rate_counters",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("customer_otp_rate_counters_count_check", sql`${table.count} > 0`),
+    index("customer_otp_rate_counters_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const customerOtpRateAdmissions = sqliteTable(
+  "customer_otp_rate_admissions",
+  {
+    requestId: text("request_id").primaryKey(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("customer_otp_rate_admissions_request_id_check", sql`length(${table.requestId}) = 36`),
+    index("customer_otp_rate_admissions_created_idx").on(table.createdAt),
   ],
 );
 

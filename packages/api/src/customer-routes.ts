@@ -17,9 +17,10 @@ import {
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { resolveStoreRequestOrigin } from "./request-origin";
+import { forwardSetCookies } from "./set-cookie";
 
 const authError = (
-  code: "unauthorized" | "validation" | "rate_limited" | "unavailable",
+  code: "unauthorized" | "forbidden" | "validation" | "rate_limited" | "unavailable",
   message: string,
   retryAfterSeconds?: number,
 ) =>
@@ -34,6 +35,9 @@ const mapFailure = (
 ) => {
   if (failure.code === "invalid_input") {
     return status(422, authError("validation", "Утасны дугаар эсвэл код буруу байна"));
+  }
+  if (failure.code === "invalid_origin") {
+    return status(403, authError("forbidden", "Request origin is not accepted"));
   }
   if (failure.code === "invalid_otp") {
     return status(422, authError("validation", "Код хүчингүй эсвэл хугацаа дууссан"));
@@ -55,6 +59,9 @@ const mapFailure = (
     ),
   );
 };
+
+const acceptsCredentialOrigin = (request: Request, origin: string) =>
+  request.headers.get("origin") === origin;
 
 const requestIpAddress = (request: Request) => {
   const source =
@@ -78,9 +85,13 @@ export const createCustomerAuthRoutes = (
       if (!origin) {
         return status(421, authError("validation", "Request host is not accepted"));
       }
+      if (!acceptsCredentialOrigin(request, origin)) {
+        return status(403, authError("forbidden", "Request origin is not accepted"));
+      }
       const result = await requestCustomerOtp(
         input.output.phone,
         requestIpAddress(request),
+        definition.profile.name,
         smsGateway,
       );
       return result.isErr()
@@ -96,6 +107,9 @@ export const createCustomerAuthRoutes = (
       if (!origin) {
         return status(421, authError("validation", "Request host is not accepted"));
       }
+      if (!acceptsCredentialOrigin(request, origin)) {
+        return status(403, authError("forbidden", "Request origin is not accepted"));
+      }
       const result = await verifyCustomerOtp(
         request,
         origin,
@@ -105,10 +119,7 @@ export const createCustomerAuthRoutes = (
       if (result.isErr()) {
         return mapFailure(result.error, status, set.headers);
       }
-      const cookie = result.value.response.headers.get("set-cookie");
-      if (cookie) {
-        set.headers["set-cookie"] = cookie;
-      }
+      forwardSetCookies(result.value.responseHeaders, set.headers);
       return v.parse(CustomerSessionResponseSchema, {
         data: { kind: "authenticated", phone: result.value.phone },
       });
@@ -122,10 +133,7 @@ export const createCustomerAuthRoutes = (
       if (session.kind === "unavailable") {
         return status(503, authError("unavailable", "Нэвтрэх үйлчилгээ түр ажиллахгүй байна"));
       }
-      const cookie = session.responseHeaders.get("set-cookie");
-      if (cookie) {
-        set.headers["set-cookie"] = cookie;
-      }
+      forwardSetCookies(session.responseHeaders, set.headers);
       return v.parse(CustomerSessionResponseSchema, {
         data:
           session.kind === "active"
@@ -138,13 +146,13 @@ export const createCustomerAuthRoutes = (
       if (!origin) {
         return status(421, authError("validation", "Request host is not accepted"));
       }
+      if (!acceptsCredentialOrigin(request, origin)) {
+        return status(403, authError("forbidden", "Request origin is not accepted"));
+      }
       const response = await signOutCustomer(request, origin);
       if (!response?.ok) {
         return status(503, authError("unavailable", "Гарах үйлдлийг хийж чадсангүй"));
       }
-      const cookie = response.headers.get("set-cookie");
-      if (cookie) {
-        set.headers["set-cookie"] = cookie;
-      }
+      forwardSetCookies(response.headers, set.headers);
       return v.parse(CustomerSessionResponseSchema, { data: { kind: "anonymous" } });
     });

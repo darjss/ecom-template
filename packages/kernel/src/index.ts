@@ -1,4 +1,4 @@
-export { createCustomerAuth, signOutCustomer } from "./auth/customer-runtime";
+export { signOutCustomer } from "./auth/customer-runtime";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
 export { createStoreBackground, type StoreBackground } from "./background/index";
 export {

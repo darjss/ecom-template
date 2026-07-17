@@ -29,6 +29,15 @@ const isStaffId = (value: string) => {
 };
 
 export const StaffIdSchema = v.pipe(v.string(), v.check(isStaffId, "Invalid Staff ID"));
+const isCustomerId = (value: string) => {
+  try {
+    fromString(value, "customer");
+    return true;
+  } catch {
+    return false;
+  }
+};
+export const CustomerIdSchema = v.pipe(v.string(), v.check(isCustomerId, "Invalid Customer ID"));
 export const AuditActorKindSchema = v.picklist([
   "system",
   "staff",
@@ -194,7 +203,7 @@ export const CustomerSessionResponseSchema = v.strictObject({
 });
 export const CustomerAuthApiErrorSchema = v.strictObject({
   error: v.strictObject({
-    code: v.picklist(["unauthorized", "validation", "rate_limited", "unavailable"]),
+    code: v.picklist(["unauthorized", "forbidden", "validation", "rate_limited", "unavailable"]),
     message: v.string(),
     retryAfterSeconds: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   }),
@@ -277,6 +286,7 @@ export const HealthClientErrorSchema = v.variant("kind", [
 ]);
 
 export type StaffId = v.InferOutput<typeof StaffIdSchema>;
+export type CustomerId = v.InferOutput<typeof CustomerIdSchema>;
 export type AuditActorKind = v.InferOutput<typeof AuditActorKindSchema>;
 export type AuditActor = v.InferOutput<typeof AuditActorSchema>;
 export type TelegramOperatorLabel = v.InferOutput<typeof TelegramOperatorLabelSchema>;

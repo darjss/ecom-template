@@ -2,15 +2,10 @@ import { CustomerOtpCodeSchema, MongolianPhoneSchema, type MongolianPhone } from
 import { Result } from "better-result";
 import { env } from "cloudflare:workers";
 import * as v from "valibot";
-import {
-  createCustomerSessionResponse,
-  ensureCustomerAuthUser,
-  readCustomerAuthSession,
-} from "../auth/customer-runtime";
+import { establishCustomerAuthSession, readCustomerAuthSession } from "../auth/customer-runtime";
 import { customerQueries } from "./persistence";
 
 const CustomerSecretSchema = v.pipe(v.string(), v.minLength(32));
-const CounterSchema = v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(0));
 const otpLifetimeMs = 5 * 60 * 1_000;
 const phoneDailyWindowMs = 24 * 60 * 60 * 1_000;
 const ipWindowMs = 15 * 60 * 1_000;
@@ -25,6 +20,7 @@ export type CustomerSmsDelivery = (intent: {
 
 export type CustomerAuthFailure =
   | { readonly code: "invalid_input" }
+  | { readonly code: "invalid_origin" }
   | { readonly code: "invalid_otp" }
   | { readonly code: "rate_limited"; readonly retryAfterSeconds: number }
   | { readonly code: "delivery_unavailable" }
@@ -62,64 +58,51 @@ const generateOtp = () => {
   return v.parse(CustomerOtpCodeSchema, String(value % 10_000).padStart(4, "0"));
 };
 
-const readCounter = async (key: string) => {
-  const value = await env.EPHEMERAL_KV.get(key);
-  if (!value) {
-    return 0;
-  }
-  const parsed = v.safeParse(CounterSchema, value);
-  if (!parsed.success) {
-    throw new Error("Invalid OTP counter state");
-  }
-  return parsed.output;
-};
-
 const windowState = (now: number, size: number, offset = 0) => {
   const start = Math.floor((now + offset) / size) * size - offset;
-  return {
-    id: start,
-    retryAfterSeconds: Math.max(1, Math.ceil((start + size - now) / 1_000)),
-  };
+  return { id: start, expiresAt: start + size };
 };
 
-const applySendLimits = async (phoneKey: string, ipKey: string, now: number) => {
-  const cooldownKey = `customer:otp:cooldown:${phoneKey}`;
-  const cooldownUntilSource = await env.EPHEMERAL_KV.get(cooldownKey);
-  const cooldownUntil = cooldownUntilSource ? Number(cooldownUntilSource) : 0;
-  if (Number.isFinite(cooldownUntil) && cooldownUntil > now) {
-    return { limited: true as const, retryAfterSeconds: Math.ceil((cooldownUntil - now) / 1_000) };
-  }
-
+const applySendLimits = async (phoneKey: string, ipKey: string, requestId: string, now: number) => {
   const day = windowState(now, phoneDailyWindowMs, ulaanbaatarOffsetMs);
   const ipWindow = windowState(now, ipWindowMs);
-  const phoneCounterKey = `customer:otp:phone-day:${day.id}:${phoneKey}`;
-  const ipCounterKey = `customer:otp:ip-window:${ipWindow.id}:${ipKey}`;
-  const [phoneCount, ipCount] = await Promise.all([
-    readCounter(phoneCounterKey),
-    readCounter(ipCounterKey),
-  ]);
-  if (phoneCount >= 5) {
-    return { limited: true as const, retryAfterSeconds: day.retryAfterSeconds };
-  }
-  if (ipCount >= 10) {
-    return { limited: true as const, retryAfterSeconds: ipWindow.retryAfterSeconds };
+  const cooldown = {
+    key: `customer:otp:cooldown:${phoneKey}`,
+    expiresAt: now + cooldownMs,
+  };
+  const phoneDay = {
+    key: `customer:otp:phone-day:${day.id}:${phoneKey}`,
+    expiresAt: day.expiresAt,
+  };
+  const ipRateWindow = {
+    key: `customer:otp:ip-window:${ipWindow.id}:${ipKey}`,
+    expiresAt: ipWindow.expiresAt,
+  };
+  const admission = await customerQueries.admitOtpSend({
+    requestId,
+    now,
+    cooldown,
+    phoneDay,
+    ipWindow: ipRateWindow,
+  });
+  if (!admission.admitted) {
+    return { limited: true as const, retryAfterSeconds: admission.retryAfterSeconds };
   }
 
-  await Promise.all([
-    env.EPHEMERAL_KV.put(cooldownKey, String(now + cooldownMs), { expirationTtl: 60 }),
-    env.EPHEMERAL_KV.put(phoneCounterKey, String(phoneCount + 1), {
-      expirationTtl: Math.max(60, day.retryAfterSeconds),
-    }),
-    env.EPHEMERAL_KV.put(ipCounterKey, String(ipCount + 1), {
-      expirationTtl: Math.max(60, ipWindow.retryAfterSeconds),
-    }),
-  ]);
+  await Promise.all(
+    [cooldown, phoneDay, ipRateWindow].map((hint) =>
+      env.EPHEMERAL_KV.put(hint.key, requestId, {
+        expirationTtl: Math.max(60, Math.ceil((hint.expiresAt - now) / 1_000)),
+      }),
+    ),
+  );
   return { limited: false as const };
 };
 
 export const requestCustomerOtp = async (
   phoneSource: string,
   ipAddress: string,
+  storeDisplayName: string,
   deliverSms: CustomerSmsDelivery,
 ): Promise<Result<{ readonly accepted: true }, CustomerAuthFailure>> => {
   const phone = normalizeMongolianPhone(phoneSource);
@@ -136,13 +119,13 @@ export const requestCustomerOtp = async (
       hmac(secret.output, `phone:${phone.output}`),
       hmac(secret.output, `ip:${ipAddress}`),
     ]);
-    const limit = await applySendLimits(phoneKey, ipKey, Date.now());
+    const requestId = crypto.randomUUID();
+    const limit = await applySendLimits(phoneKey, ipKey, requestId, Date.now());
     if (limit.limited) {
       return Result.err({ code: "rate_limited", retryAfterSeconds: limit.retryAfterSeconds });
     }
 
     const code = generateOtp();
-    const requestId = crypto.randomUUID();
     const createdAt = Date.now();
     await customerQueries.replaceChallenge(
       phone.output,
@@ -154,7 +137,7 @@ export const requestCustomerOtp = async (
     const delivery = await deliverSms({
       requestId,
       phone: phone.output,
-      message: `Өрнүүн 48 баталгаажуулах код: ${code}. Код 5 минут хүчинтэй.`,
+      message: `${storeDisplayName} баталгаажуулах код: ${code}. Код 5 минут хүчинтэй.`,
     });
     return delivery.isErr()
       ? Result.err({ code: "delivery_unavailable" })
@@ -170,8 +153,11 @@ export const verifyCustomerOtp = async (
   phoneSource: string,
   code: string,
 ): Promise<
-  Result<{ readonly phone: MongolianPhone; readonly response: Response }, CustomerAuthFailure>
+  Result<{ readonly phone: MongolianPhone; readonly responseHeaders: Headers }, CustomerAuthFailure>
 > => {
+  if (request.headers.get("origin") !== origin) {
+    return Result.err({ code: "invalid_origin" });
+  }
   const phone = normalizeMongolianPhone(phoneSource);
   const parsedCode = v.safeParse(CustomerOtpCodeSchema, code);
   const secret = v.safeParse(CustomerSecretSchema, env.BETTER_AUTH_CUSTOMER_SECRET);
@@ -191,22 +177,10 @@ export const verifyCustomerOtp = async (
     if (!consumed) {
       return Result.err({ code: "invalid_otp" });
     }
-    const authUser = await ensureCustomerAuthUser(origin, phone.output);
-    if (authUser.kind !== "ready") {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const customer = await customerQueries.establish(phone.output, authUser.authUserId);
-    if (!customer) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const response = await createCustomerSessionResponse(
-      request,
-      origin,
-      authUser.email,
-      authUser.credential,
-    );
+    const customer = await customerQueries.establish(phone.output);
+    const response = await establishCustomerAuthSession(request, origin, customer.id, phone.output);
     return response
-      ? Result.ok({ phone: phone.output, response })
+      ? Result.ok({ phone: phone.output, responseHeaders: response.headers })
       : Result.err({ code: "infrastructure_unavailable" });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
