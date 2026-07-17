@@ -5,6 +5,9 @@ import {
   type CreateProductInput,
   type InventoryAdjustmentInput,
   type ProductId,
+  type SaveProductOptionsInput,
+  type UpdateVariantPresentationInput,
+  type VariantId,
   type UpdateProductInput,
 } from "@ecom/contracts";
 import { createApiClient } from "../eden";
@@ -25,6 +28,14 @@ export type CatalogMutation =
   | { readonly kind: "archive"; readonly id: ProductId }
   | { readonly kind: "reactivate"; readonly id: ProductId }
   | { readonly kind: "retry-cache-purge"; readonly id: ProductId }
+  | ({ readonly kind: "save-options"; readonly id: ProductId } & SaveProductOptionsInput)
+  | ({
+      readonly kind: "update-variant";
+      readonly id: ProductId;
+      readonly variantId: VariantId;
+    } & UpdateVariantPresentationInput)
+  | { readonly kind: "archive-variant"; readonly id: ProductId; readonly variantId: VariantId }
+  | { readonly kind: "reactivate-variant"; readonly id: ProductId; readonly variantId: VariantId }
   | ({ readonly kind: "adjust"; readonly id: ProductId } & InventoryAdjustmentInput);
 
 const requestInventoryAdjustment = (
@@ -60,10 +71,34 @@ export const requestCatalogMutation = (mutation: CatalogMutation) => {
               ? client.api.catalog.products({ id: mutation.id }).reactivate.post()
               : mutation.kind === "retry-cache-purge"
                 ? client.api.catalog.products({ id: mutation.id })["cache-purge"].retry.post()
-                : requestInventoryAdjustment(client, mutation.id, {
-                    delta: mutation.delta,
-                    reason: mutation.reason,
-                  });
+                : mutation.kind === "save-options"
+                  ? client.api.catalog.products({ id: mutation.id }).options.put({
+                      groups: mutation.groups,
+                      variants: mutation.variants,
+                    })
+                  : mutation.kind === "update-variant"
+                    ? client.api.catalog
+                        .products({ id: mutation.id })
+                        .variants({
+                          variantId: mutation.variantId,
+                        })
+                        .patch({
+                          priceOverrideMnt: mutation.priceOverrideMnt,
+                          imageMediaAssetId: mutation.imageMediaAssetId,
+                        })
+                    : mutation.kind === "archive-variant" || mutation.kind === "reactivate-variant"
+                      ? client.api.catalog
+                          .products({ id: mutation.id })
+                          .variants({
+                            variantId: mutation.variantId,
+                          })({
+                            action: mutation.kind === "archive-variant" ? "archive" : "reactivate",
+                          })
+                          .post()
+                      : requestInventoryAdjustment(client, mutation.id, {
+                          delta: mutation.delta,
+                          reason: mutation.reason,
+                        });
   return requestResult(
     request,
     CatalogProductResponseSchema,

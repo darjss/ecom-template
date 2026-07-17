@@ -421,6 +421,63 @@ export const catalogListingCachePurgeDebt = sqliteTable(
   ],
 );
 
+export const optionGroups = sqliteTable(
+  "option_groups",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "option_groups_id_check",
+      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_group_'`,
+    ),
+    check("option_groups_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
+    check("option_groups_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
+    check("option_groups_position_check", sql`${table.position} BETWEEN 0 AND 99`),
+    check("option_groups_state_check", sql`${table.state} IN ('active', 'archived')`),
+    uniqueIndex("option_groups_product_key_idx").on(table.productId, table.key),
+    uniqueIndex("option_groups_product_position_idx").on(table.productId, table.position),
+  ],
+);
+
+export const optionValues = sqliteTable(
+  "option_values",
+  {
+    id: text("id").primaryKey(),
+    optionGroupId: text("option_group_id")
+      .notNull()
+      .references(() => optionGroups.id, { onDelete: "restrict" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "option_values_id_check",
+      sql`length(${table.id}) = 39 AND substr(${table.id}, 1, 13) = 'option_value_'`,
+    ),
+    check("option_values_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
+    check("option_values_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
+    check("option_values_position_check", sql`${table.position} BETWEEN 0 AND 99`),
+    check("option_values_state_check", sql`${table.state} IN ('active', 'archived')`),
+    uniqueIndex("option_values_group_key_idx").on(table.optionGroupId, table.key),
+    uniqueIndex("option_values_group_position_idx").on(table.optionGroupId, table.position),
+    index("option_values_group_state_idx").on(table.optionGroupId, table.state),
+  ],
+);
+
 export const variants = sqliteTable(
   "variants",
   {
@@ -429,6 +486,11 @@ export const variants = sqliteTable(
       .notNull()
       .references(() => catalogItems.id, { onDelete: "restrict" }),
     isDefault: integer("is_default", { mode: "boolean" }).notNull(),
+    combinationKey: text("combination_key").notNull(),
+    priceOverrideMnt: integer("price_override_mnt"),
+    imageMediaAssetId: text("image_media_asset_id").references(() => mediaAssets.id, {
+      onDelete: "restrict",
+    }),
     state: text("state", { enum: ["active", "archived"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
@@ -439,11 +501,34 @@ export const variants = sqliteTable(
       sql`length(${table.id}) = 34 AND substr(${table.id}, 1, 8) = 'variant_' AND substr(${table.id}, 9, 1) GLOB '[0-7]' AND substr(${table.id}, 9) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
     check("variants_default_check", sql`${table.isDefault} IN (0, 1)`),
+    check("variants_combination_check", sql`length(${table.combinationKey}) BETWEEN 1 AND 512`),
+    check(
+      "variants_price_override_check",
+      sql`${table.priceOverrideMnt} IS NULL OR ${table.priceOverrideMnt} > 0`,
+    ),
     check("variants_state_check", sql`${table.state} IN ('active', 'archived')`),
     uniqueIndex("variants_default_product_idx")
       .on(table.productId)
       .where(sql`${table.isDefault} = 1`),
+    uniqueIndex("variants_product_combination_idx").on(table.productId, table.combinationKey),
     index("variants_product_state_idx").on(table.productId, table.state),
+    index("variants_image_media_idx").on(table.imageMediaAssetId),
+  ],
+);
+
+export const variantOptionValues = sqliteTable(
+  "variant_option_values",
+  {
+    variantId: text("variant_id")
+      .notNull()
+      .references(() => variants.id, { onDelete: "restrict" }),
+    optionValueId: text("option_value_id")
+      .notNull()
+      .references(() => optionValues.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.variantId, table.optionValueId] }),
+    index("variant_option_values_value_idx").on(table.optionValueId, table.variantId),
   ],
 );
 

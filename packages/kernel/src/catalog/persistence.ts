@@ -130,6 +130,9 @@ export const catalogQueries = {
           id: variantId,
           productId: id,
           isDefault: true,
+          combinationKey: "__default__",
+          priceOverrideMnt: null,
+          imageMediaAssetId: null,
           state: "active",
           createdAt: now,
           updatedAt: now,
@@ -293,8 +296,8 @@ export const catalogQueries = {
       .where(
         and(
           eq(variants.productId, catalogItems.id),
-          eq(variants.isDefault, true),
           eq(variants.state, "active"),
+          sql`coalesce(${variants.priceOverrideMnt}, ${catalogItems.priceMnt}) > 0`,
           sql`length(trim(${skus.sku})) > 0`,
         ),
       );
@@ -358,13 +361,24 @@ export const catalogQueries = {
                 .set({ lockedAt: now, updatedAt: now })
                 .where(
                   and(
-                    eq(skus.variantId, current.defaultVariantId),
                     isNull(skus.lockedAt),
                     exists(
                       db
-                        .select({ id: catalogItems.id })
-                        .from(catalogItems)
-                        .where(transitionPredicate),
+                        .select({ id: variants.id })
+                        .from(variants)
+                        .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+                        .where(
+                          and(
+                            eq(variants.id, skus.variantId),
+                            eq(variants.productId, id),
+                            exists(
+                              db
+                                .select({ id: catalogItems.id })
+                                .from(catalogItems)
+                                .where(transitionPredicate),
+                            ),
+                          ),
+                        ),
                     ),
                   ),
                 )

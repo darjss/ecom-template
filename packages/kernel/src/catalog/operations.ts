@@ -10,6 +10,7 @@ import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { resolvePendingCatalogCachePurge } from "./cache";
 import { inventoryQueries } from "../inventory/persistence";
 import { catalogQueries } from "./persistence";
+import { catalogVariantQueries } from "../catalog-variants/persistence";
 
 export type CatalogOperationFailure = {
   readonly code:
@@ -106,6 +107,9 @@ export const transitionProduct = async (
     return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
   }
   try {
+    if (transition !== "archive" && !(await catalogVariantQueries.validatePublication(id))) {
+      return Result.err<never, CatalogOperationFailure>({ code: "invalid_publication" });
+    }
     const result = await catalogQueries.transition(actor, id, transition);
     if (result.kind === "changed" && result.product) {
       return Result.ok(await resolvePendingCatalogCachePurge(result.product));

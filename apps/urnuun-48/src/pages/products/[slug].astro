@@ -1,4 +1,5 @@
 ---
+import { ProductVariantSelector } from "@ecom/storefront";
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -12,7 +13,6 @@ if (!product) {
   });
 }
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
-const formattedPrice = new Intl.NumberFormat("mn-MN").format(product.priceMnt);
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
@@ -58,9 +58,7 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
-        <strong>{formattedPrice} ₮</strong>
-        <p>Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
-        <button type="button" disabled>Боломж шалгаж байна</button>
+        <ProductVariantSelector product={product} client:load />
       </div>
     </article>
   </main>

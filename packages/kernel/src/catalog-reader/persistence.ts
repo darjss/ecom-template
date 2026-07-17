@@ -14,6 +14,7 @@ import * as v from "valibot";
 import { database } from "../db/database";
 import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
+import { readProductOptionConfiguration } from "../catalog-variants/persistence";
 
 const ReturnedProductSchema = v.strictObject({
   id: v.string(),
@@ -62,7 +63,11 @@ const productQuery = () =>
     .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
     .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
 
-const projectProduct = (source: unknown, images: Product["images"]): Product => {
+const projectProduct = (
+  source: unknown,
+  images: Product["images"],
+  optionConfiguration: Product["optionConfiguration"],
+): Product => {
   const row = v.parse(ReturnedProductSchema, source);
   const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...product } =
     row;
@@ -77,6 +82,7 @@ const projectProduct = (source: unknown, images: Product["images"]): Product => 
             lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
           },
     images,
+    optionConfiguration,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
   });
@@ -88,10 +94,14 @@ export const findCatalogProductById = async (id: ProductId) => {
   if (!row) {
     return undefined;
   }
-  const images = await catalogMediaQueries.listForCatalogItems([id]);
+  const [images, optionConfiguration] = await Promise.all([
+    catalogMediaQueries.listForCatalogItems([id]),
+    readProductOptionConfiguration(id),
+  ]);
   return projectProduct(
     row,
     images.map(({ image }) => image),
+    optionConfiguration,
   );
 };
 
@@ -133,14 +143,20 @@ export const catalogReaderQueries = {
 
   async listAll() {
     const rows = await productQuery().orderBy(desc(catalogItems.createdAt));
-    const products = rows.map((row) => projectProduct(row, []));
-    const images = await catalogMediaQueries.listForCatalogItems(products.map(({ id }) => id));
-    return products.map((product) => ({
-      ...product,
-      images: images
-        .filter(({ catalogItemId }) => catalogItemId === product.id)
-        .map(({ image }) => image),
-    }));
+    return Promise.all(
+      rows.map(async (row) => {
+        const id = v.parse(ProductIdSchema, row.id);
+        const [images, optionConfiguration] = await Promise.all([
+          catalogMediaQueries.listForCatalogItems([id]),
+          readProductOptionConfiguration(id),
+        ]);
+        return projectProduct(
+          row,
+          images.map(({ image }) => image),
+          optionConfiguration,
+        );
+      }),
+    );
   },
 
   async listPublished() {
@@ -153,14 +169,6 @@ export const catalogReaderQueries = {
         priceMnt: catalogItems.priceMnt,
       })
       .from(catalogItems)
-      .innerJoin(
-        variants,
-        and(
-          eq(variants.productId, catalogItems.id),
-          eq(variants.isDefault, true),
-          eq(variants.state, "active"),
-        ),
-      )
       .where(eq(catalogItems.state, "published"))
       .orderBy(desc(catalogItems.createdAt));
     const ids = rows.map((row) => v.parse(ProductIdSchema, row.id));
@@ -183,17 +191,8 @@ export const catalogReaderQueries = {
         name: catalogItems.name,
         description: catalogItems.description,
         priceMnt: catalogItems.priceMnt,
-        variantId: variants.id,
       })
       .from(catalogItems)
-      .innerJoin(
-        variants,
-        and(
-          eq(variants.productId, catalogItems.id),
-          eq(variants.isDefault, true),
-          eq(variants.state, "active"),
-        ),
-      )
       .where(and(eq(catalogItems.state, "published"), eq(catalogItems.slug, slug)))
       .limit(1);
     const row = rows.at(0);
@@ -201,10 +200,59 @@ export const catalogReaderQueries = {
       return undefined;
     }
     const id = v.parse(ProductIdSchema, row.id);
-    const images = await catalogMediaQueries.listPublicForCatalogItems([id]);
+    const [images, configuration] = await Promise.all([
+      catalogMediaQueries.listPublicForCatalogItems([id]),
+      readProductOptionConfiguration(id),
+    ]);
+    const activeGroups = configuration.groups.filter(({ state }) => state === "active");
+    const activeValueIds = new Set(
+      activeGroups.flatMap(({ values }) =>
+        values.filter(({ state }) => state === "active").map(({ id: valueId }) => valueId),
+      ),
+    );
+    const publicImages = images.map(({ image }) => image);
     return v.parse(PublicProductDetailSchema, {
       ...row,
-      images: images.map(({ image }) => image),
+      images: publicImages,
+      optionGroups: activeGroups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        position: group.position,
+        values: group.values
+          .filter(({ state }) => state === "active")
+          .map(({ id: valueId, label, position }) => ({ id: valueId, label, position })),
+      })),
+      variants: configuration.variants
+        .filter(
+          (variant) =>
+            variant.state === "active" &&
+            (variant.isDefault ? activeGroups.length === 0 : activeGroups.length > 0),
+        )
+        .map((variant) => ({
+          id: variant.id,
+          sku: variant.sku,
+          priceMnt: variant.priceOverrideMnt ?? row.priceMnt,
+          image:
+            publicImages.find(({ mediaAssetId }) => mediaAssetId === variant.imageMediaAssetId) ??
+            null,
+          optionValues: variant.optionValueIds
+            .filter((valueId) => activeValueIds.has(valueId))
+            .flatMap((valueId) =>
+              activeGroups.flatMap((group) => {
+                const value = group.values.find(({ id: candidateId }) => candidateId === valueId);
+                return value
+                  ? [
+                      {
+                        groupId: group.id,
+                        groupLabel: group.label,
+                        valueId: value.id,
+                        valueLabel: value.label,
+                      },
+                    ]
+                  : [];
+              }),
+            ),
+        })),
     });
   },
 };
