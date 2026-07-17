@@ -76,6 +76,7 @@ export const requestCatalogMutation = async (mutation: CatalogMutation) => {
               : await requestInventoryAdjustment(client, mutation.id, {
                   delta: mutation.delta,
                   reason: mutation.reason,
+                  idempotencyKey: mutation.idempotencyKey,
                 });
   if (response.error) {
     throw parseFailure(response.error.value);

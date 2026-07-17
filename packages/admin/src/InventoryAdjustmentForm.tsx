@@ -3,16 +3,23 @@ import type { Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
-import { Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
 export const InventoryAdjustmentForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
+  const [idempotencyKey, setIdempotencyKey] = createSignal(crypto.randomUUID());
   const form = createForm(() => ({
     defaultValues: { delta: 0, reason: "" },
     onSubmit: async ({ value }) => {
-      await mutation.mutateAsync({ kind: "adjust", id: props.product.id, ...value });
+      await mutation.mutateAsync({
+        kind: "adjust",
+        id: props.product.id,
+        ...value,
+        idempotencyKey: idempotencyKey(),
+      });
       form.reset();
+      setIdempotencyKey(crypto.randomUUID());
     },
   }));
   return (

@@ -93,13 +93,17 @@ const catalogError = (
               ? "Product lifecycle transition is not valid"
               : code === "reservation_blocked"
                 ? "Active reservations block this inventory adjustment"
-                : code === "not_found"
-                  ? "Product was not found"
-                  : code === "forbidden"
-                    ? "Catalog authority is required"
-                    : code === "conflict"
-                      ? "Inventory changed concurrently"
-                      : "Catalog infrastructure is unavailable";
+                : code === "inventory_inconsistent"
+                  ? "Reserved inventory truth requires reconciliation"
+                  : code === "idempotency_conflict"
+                    ? "The idempotency key belongs to another inventory command"
+                    : code === "not_found"
+                      ? "Product was not found"
+                      : code === "forbidden"
+                        ? "Catalog authority is required"
+                        : code === "conflict"
+                          ? "Inventory changed concurrently"
+                          : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403

@@ -25,7 +25,6 @@
     "dismatch",
     "es-toolkit",
     "evlog",
-    "json-canonicalize",
     "micromark"
   ]
 }

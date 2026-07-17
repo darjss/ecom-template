@@ -14,6 +14,7 @@ import { getTableName } from "drizzle-orm";
 import * as v from "valibot";
 import {
   catalogItems,
+  idempotencyRecords,
   inventoryEntries,
   inventoryReservationItems,
   inventoryReservations,
@@ -25,6 +26,7 @@ import type { StaffActor } from "../staff/operations";
 import { acceptedProductAudit, catalogActorBindings, recordRejectedAttempt } from "./audit";
 import { findCatalogProductById } from "./product-projection";
 import { catalogReaderQueries } from "./reader-persistence";
+import { compactSku } from "./sku";
 
 export const catalogTableNames = {
   catalogItems: getTableName(catalogItems),
@@ -34,9 +36,8 @@ export const catalogTableNames = {
   inventoryReservations: getTableName(inventoryReservations),
   inventoryReservationItems: getTableName(inventoryReservationItems),
   inventoryEntries: getTableName(inventoryEntries),
+  idempotencyRecords: getTableName(idempotencyRecords),
 };
-
-const compactSku = (sku: string) => sku.toUpperCase().replaceAll(/[-/\s]/g, "");
 
 const existsById = async (id: ProductId) => {
   const result = await env.DB.prepare("SELECT id FROM catalog_items WHERE id = ? LIMIT 1")
@@ -84,14 +85,13 @@ export const catalogQueries = {
           "INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES (?, ?, 'variant', ?, NULL, NULL, ?, ?)",
         ).bind(input.sku, compactSku(input.sku), variantId, now, now),
         env.DB.prepare(
-          "INSERT INTO stock_items (id, variant_id, on_hand_quantity, updated_at) VALUES (?, ?, ?, ?)",
+          "INSERT INTO stock_items (id, variant_id, on_hand_quantity, reserved_quantity, updated_at) VALUES (?, ?, ?, 0, ?)",
         ).bind(stockItemId, variantId, input.openingQuantity, now),
         env.DB.prepare(
-          "INSERT INTO inventory_entries (id, stock_item_id, kind, on_hand_delta, resulting_on_hand_quantity, resulting_reserved_quantity, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) VALUES (?, ?, 'opening', ?, ?, 0, 'staff', ?, ?, ?, ?, ?)",
+          "INSERT INTO inventory_entries (id, stock_item_id, kind, on_hand_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) VALUES (?, ?, 'opening', ?, 'staff', ?, ?, ?, ?, ?)",
         ).bind(
           inventoryEntryId,
           stockItemId,
-          input.openingQuantity,
           input.openingQuantity,
           ...catalogActorBindings(actor),
           input.inventoryReason,

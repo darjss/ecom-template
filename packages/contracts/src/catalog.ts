@@ -88,9 +88,11 @@ export const UpdateProductInputSchema = v.strictObject({
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
 });
+export const InventoryAdjustmentIdempotencyKeySchema = v.pipe(v.string(), v.uuid());
 export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
   reason: InventoryReasonSchema,
+  idempotencyKey: InventoryAdjustmentIdempotencyKeySchema,
 });
 
 export const InventoryBlockingReservationSchema = v.strictObject({
@@ -106,6 +108,8 @@ export const CatalogFailureReasonSchema = v.picklist([
   "invalid_publication",
   "sku_locked",
   "reservation_blocked",
+  "inventory_inconsistent",
+  "idempotency_conflict",
   "committed_but_not_purged",
 ]);
 export const CatalogApiErrorSchema = v.strictObject({
@@ -148,6 +152,9 @@ export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
 export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
+export type InventoryAdjustmentIdempotencyKey = v.InferOutput<
+  typeof InventoryAdjustmentIdempotencyKeySchema
+>;
 export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
 export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
 export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;

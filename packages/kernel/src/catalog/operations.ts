@@ -21,6 +21,8 @@ export type CatalogOperationFailure = {
     | "invalid_publication"
     | "sku_locked"
     | "reservation_blocked"
+    | "inventory_inconsistent"
+    | "idempotency_conflict"
     | "conflict"
     | "infrastructure_unavailable";
   readonly blockers?: readonly {
@@ -150,14 +152,19 @@ export const adjustProductInventory = async (
         cache: "not_required",
       });
     }
-    if (result.kind === "reservation_blocked") {
+    if (result.kind === "reservation_blocked" || result.kind === "inventory_inconsistent") {
       return Result.err<never, CatalogOperationFailure>({
-        code: "reservation_blocked",
+        code: result.kind,
         blockers: result.blockers,
       });
     }
     return Result.err<never, CatalogOperationFailure>({
-      code: result.kind === "not_found" || result.kind === "conflict" ? result.kind : "conflict",
+      code:
+        result.kind === "not_found" ||
+        result.kind === "conflict" ||
+        result.kind === "idempotency_conflict"
+          ? result.kind
+          : "conflict",
     });
   } catch {
     return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });

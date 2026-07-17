@@ -283,7 +283,7 @@ export const skus = sqliteTable(
       sql`(${table.ownerKind} = 'variant' AND ${table.variantId} IS NOT NULL AND ${table.bundleId} IS NULL) OR (${table.ownerKind} = 'bundle' AND ${table.variantId} IS NULL AND ${table.bundleId} IS NOT NULL)`,
     ),
     check("skus_value_check", sql`length(trim(${table.sku})) BETWEEN 1 AND 64`),
-    check("skus_compact_check", sql`length(${table.skuCompact}) BETWEEN 1 AND 64`),
+    check("skus_compact_check", sql`length(${table.skuCompact}) BETWEEN 1 AND 256`),
   ],
 );
 
@@ -296,6 +296,7 @@ export const stockItems = sqliteTable(
       .unique()
       .references(() => variants.id, { onDelete: "restrict" }),
     onHandQuantity: integer("on_hand_quantity").notNull(),
+    reservedQuantity: integer("reserved_quantity").notNull().default(0),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
@@ -303,7 +304,10 @@ export const stockItems = sqliteTable(
       "stock_items_id_check",
       sql`length(${table.id}) = 37 AND substr(${table.id}, 1, 11) = 'stock_item_' AND substr(${table.id}, 12, 1) GLOB '[0-7]' AND substr(${table.id}, 12) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
-    check("stock_items_balance_check", sql`${table.onHandQuantity} >= 0`),
+    check(
+      "stock_items_balance_check",
+      sql`${table.onHandQuantity} >= 0 AND ${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.onHandQuantity}`,
+    ),
   ],
 );
 
@@ -356,8 +360,6 @@ export const inventoryEntries = sqliteTable(
       .references(() => stockItems.id, { onDelete: "restrict" }),
     kind: text("kind", { enum: ["opening", "adjustment"] }).notNull(),
     onHandDelta: integer("on_hand_delta").notNull(),
-    resultingOnHandQuantity: integer("resulting_on_hand_quantity").notNull(),
-    resultingReservedQuantity: integer("resulting_reserved_quantity").notNull(),
     actorKind: text("actor_kind", { enum: ["staff"] }).notNull(),
     staffId: text("staff_id").notNull(),
     staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }).notNull(),
@@ -376,15 +378,33 @@ export const inventoryEntries = sqliteTable(
       sql`${table.actorKind} = 'staff' AND ${table.staffRole} IN ('owner', 'manager', 'staff')`,
     ),
     check("inventory_entries_reason_check", sql`length(trim(${table.reason})) BETWEEN 1 AND 240`),
-    check(
-      "inventory_entries_balance_check",
-      sql`${table.resultingOnHandQuantity} >= 0 AND ${table.resultingReservedQuantity} >= 0 AND ${table.resultingReservedQuantity} <= ${table.resultingOnHandQuantity}`,
-    ),
     uniqueIndex("inventory_entries_correlation_stock_idx").on(
       table.commandCorrelationId,
       table.stockItemId,
     ),
     index("inventory_entries_stock_timeline_idx").on(table.stockItemId, table.createdAt, table.id),
+  ],
+);
+
+export const idempotencyRecords = sqliteTable(
+  "idempotency_records",
+  {
+    scope: text("scope").notNull(),
+    key: text("key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    resultKind: text("result_kind").notNull(),
+    resultId: text("result_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.key] }),
+    check("idempotency_records_scope_check", sql`length(${table.scope}) BETWEEN 1 AND 64`),
+    check("idempotency_records_key_check", sql`length(${table.key}) BETWEEN 1 AND 128`),
+    check("idempotency_records_hash_check", sql`length(${table.requestHash}) = 64`),
+    check(
+      "idempotency_records_result_check",
+      sql`length(${table.resultKind}) BETWEEN 1 AND 64 AND length(${table.resultId}) BETWEEN 1 AND 128`,
+    ),
   ],
 );
 
