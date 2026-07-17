@@ -174,7 +174,8 @@ const importsRawKernelSchema = (path, specifier) => {
 const rawSchemaLocationAllowed = (path) =>
   path.startsWith("packages/kernel/src/db/") ||
   /^packages\/kernel\/src\/auth\/[^/]+\.generated\.ts$/.test(path) ||
-  /^packages\/kernel\/src\/[^/]+\/persistence\.ts$/.test(path);
+  /^packages\/kernel\/src\/[^/]+\/persistence\.ts$/.test(path) ||
+  path === "packages/kernel/src/catalog/read/persistence.ts";
 
 const cloudflareLocationAllowed = (path) =>
   /^apps\/[^/]+\/src\/worker\.ts$/.test(path) ||

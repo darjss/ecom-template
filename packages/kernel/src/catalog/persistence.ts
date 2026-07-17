@@ -21,8 +21,7 @@ import {
 import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
 import { recordRejectedAttempt } from "./audit";
-import { findCatalogProductById } from "./product-projection";
-import { catalogReaderQueries } from "./reader-persistence";
+import { catalogReaderQueries, findCatalogProductById } from "./read/persistence";
 import { compactSku, skuFromVariantId } from "./sku";
 
 const existsById = async (id: ProductId) => {
