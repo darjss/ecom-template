@@ -1,9 +1,19 @@
 import { execFile, spawn } from "node:child_process";
 import type { Dirent } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import { parse as parseYaml } from "yaml";
@@ -14,6 +24,7 @@ import {
   DeliveryAuditEventIdSchema,
   DeliveryJournalSchema,
   DeliveryManifestSchema,
+  DeploymentTargetNameSchema,
   DeliveryStaffIdSchema,
   DevProcessRecordSchema,
   ProofRecordSchema,
@@ -94,7 +105,7 @@ const readManifest = () => readManifestPath(requireOption("--manifest"));
 
 const readTarget = async () => {
   const { manifest, digest } = await readManifest();
-  const targetName = requireOption("--target");
+  const targetName = v.parse(DeploymentTargetNameSchema, requireOption("--target"));
   const target = manifest.targets[targetName];
   if (!target) {
     throw new Error(`Unknown target: ${targetName}`);
@@ -103,8 +114,10 @@ const readTarget = async () => {
 };
 
 const targetSlug = (app: string) => v.parse(StoreSlugSchema, app.slice("@shops/".length));
-const journalPath = (targetName: string) => join(".delivery", `${targetName}.journal.json`);
-const proofPath = (targetName: string) => join(".delivery", `${targetName}.proof.json`);
+const journalPath = (targetName: string) =>
+  join(".delivery", `${v.parse(DeploymentTargetNameSchema, targetName)}.journal.json`);
+const proofPath = (targetName: string) =>
+  join(".delivery", `${v.parse(DeploymentTargetNameSchema, targetName)}.proof.json`);
 const devProcessPath = (slug: string) => join(".delivery", `${slug}.dev.json`);
 
 const SqlEmailSchema = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
@@ -172,52 +185,176 @@ const parseDeliveryJournal = (source: string) => {
   return result.output;
 };
 
-const readDeliveryJournal = async (targetName: string) => {
+const isMissingFile = (error: unknown) =>
+  typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+
+type CanonicalDirectory = {
+  readonly path: string;
+  readonly realPath: string;
+};
+
+const resolveCanonicalDirectory = async (
+  directory: string,
+  missingAllowed: boolean,
+  invalidMessage: string,
+): Promise<CanonicalDirectory | undefined> => {
+  const path = resolvePath(directory);
+  let status;
+  try {
+    status = await lstat(path);
+  } catch (error) {
+    if (missingAllowed && isMissingFile(error)) {
+      return undefined;
+    }
+    throw new Error(invalidMessage, { cause: error });
+  }
+  if (status.isSymbolicLink() || !status.isDirectory()) {
+    throw new Error(invalidMessage);
+  }
+  try {
+    return { path, realPath: await realpath(path) };
+  } catch {
+    throw new Error(invalidMessage);
+  }
+};
+
+const isContainedPath = (root: string, path: string) => {
+  const remainder = relative(root, path);
+  return (
+    remainder === "" ||
+    (remainder !== ".." && !remainder.startsWith(`..${sep}`) && !isAbsolute(remainder))
+  );
+};
+
+const readCanonicalDeliveryJournal = async (
+  targetName: string,
+  missingAllowed: boolean,
+  knownRoot?: CanonicalDirectory,
+) => {
+  const validTargetName = v.parse(DeploymentTargetNameSchema, targetName);
+  const root =
+    knownRoot ??
+    (await resolveCanonicalDirectory(
+      ".delivery",
+      missingAllowed,
+      "Canonical delivery journal evidence root is invalid",
+    ));
+  if (!root) {
+    return undefined;
+  }
+  const path = resolvePath(root.path, `${validTargetName}.journal.json`);
+  if (!isContainedPath(root.path, path)) {
+    throw new Error("Canonical delivery journal evidence path is invalid");
+  }
+  let status;
+  try {
+    status = await lstat(path);
+  } catch (error) {
+    if (missingAllowed && isMissingFile(error)) {
+      return undefined;
+    }
+    throw new Error("Remote Owner target lacks a deployed delivery journal", { cause: error });
+  }
+  if (status.isSymbolicLink() || !status.isFile()) {
+    throw new Error("Canonical delivery journal evidence file is invalid");
+  }
+  let canonicalPath: string;
+  try {
+    canonicalPath = await realpath(path);
+  } catch {
+    throw new Error("Canonical delivery journal evidence file is invalid");
+  }
+  if (!isContainedPath(root.realPath, canonicalPath)) {
+    throw new Error("Canonical delivery journal evidence path is invalid");
+  }
   let source: string;
   try {
-    source = await readFile(journalPath(targetName), "utf8");
+    source = await readFile(canonicalPath, "utf8");
   } catch {
-    throw new Error("Remote Owner target lacks a deployed delivery journal");
+    throw new Error("Canonical delivery journal evidence file is invalid");
   }
   return parseDeliveryJournal(source);
 };
 
-const isMissingFile = (error: unknown) =>
-  typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+const readDeliveryJournal = async (targetName: string) => {
+  const journal = await readCanonicalDeliveryJournal(targetName, false);
+  if (!journal) {
+    throw new Error("Remote Owner target lacks a deployed delivery journal");
+  }
+  return journal;
+};
 
 const privateManifestLimit = 100;
 
 const readPrivateManifestPaths = async () => {
+  const root = await resolveCanonicalDirectory(
+    ".private",
+    true,
+    "Canonical private delivery evidence root is invalid",
+  );
+  if (!root) {
+    return [];
+  }
   const paths: string[] = [];
-  const visit = async (directory: string, root = false): Promise<void> => {
+  const visit = async (directory: string): Promise<void> => {
     let entries: Dirent[];
     try {
       entries = await readdir(directory, { withFileTypes: true });
-    } catch (error) {
-      if (root && isMissingFile(error)) {
-        return;
-      }
-      throw error;
+    } catch {
+      throw new Error("Canonical private delivery evidence cannot be read");
     }
     for (const entry of entries) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) {
-        await visit(path);
-      } else if (entry.isFile() && /\.ya?ml$/.test(entry.name)) {
-        paths.push(path);
+      const path = resolvePath(directory, entry.name);
+      let status;
+      try {
+        status = await lstat(path);
+      } catch {
+        throw new Error("Canonical private delivery evidence cannot be read");
+      }
+      if (entry.isSymbolicLink() || status.isSymbolicLink()) {
+        continue;
+      }
+      if (entry.isDirectory() && status.isDirectory()) {
+        let canonicalPath: string;
+        try {
+          canonicalPath = await realpath(path);
+        } catch {
+          throw new Error("Canonical private delivery evidence cannot be read");
+        }
+        if (!isContainedPath(root.realPath, canonicalPath)) {
+          throw new Error("Canonical private delivery evidence escapes its root");
+        }
+        await visit(canonicalPath);
+      } else if (entry.isFile() && status.isFile() && /\.ya?ml$/.test(entry.name)) {
+        let canonicalPath: string;
+        try {
+          canonicalPath = await realpath(path);
+        } catch {
+          throw new Error("Canonical private Production manifest evidence is malformed");
+        }
+        if (!isContainedPath(root.realPath, canonicalPath)) {
+          throw new Error("Canonical private delivery evidence escapes its root");
+        }
+        paths.push(canonicalPath);
         if (paths.length > privateManifestLimit) {
           throw new Error("Canonical private delivery evidence exceeds its bounded file limit");
         }
       }
     }
   };
-  await visit(".private", true);
+  await visit(root.realPath);
   return paths.toSorted();
 };
 
 const resolveCanonicalRemoteTarget = async (slug: string) => {
+  const privateManifestPaths = await readPrivateManifestPaths();
+  const deliveryRoot = await resolveCanonicalDirectory(
+    ".delivery",
+    true,
+    "Canonical delivery journal evidence root is invalid",
+  );
   const candidates: Array<Awaited<ReturnType<typeof readTarget>>> = [];
-  for (const path of await readPrivateManifestPaths()) {
+  for (const path of privateManifestPaths) {
     let input: ManifestInput;
     try {
       input = await readManifestPath(path);
@@ -228,16 +365,13 @@ const resolveCanonicalRemoteTarget = async (slug: string) => {
       if (target.kind !== "production" || targetSlug(target.app) !== slug) {
         continue;
       }
-      let journalSource: string;
-      try {
-        journalSource = await readFile(journalPath(targetName), "utf8");
-      } catch (error) {
-        if (isMissingFile(error)) {
-          continue;
-        }
-        throw error;
+      if (!deliveryRoot) {
+        continue;
       }
-      const journal = parseDeliveryJournal(journalSource);
+      const journal = await readCanonicalDeliveryJournal(targetName, true, deliveryRoot);
+      if (!journal) {
+        continue;
+      }
       if (
         journal.target !== targetName ||
         journal.app !== target.app ||
@@ -462,8 +596,7 @@ const proofTarget = async () => {
   if (target.kind !== "local") {
     throw new Error("Remote proof requires deployed infrastructure");
   }
-  const journalSource = await readFile(journalPath(targetName), "utf8");
-  const journal = v.parse(DeliveryJournalSchema, JSON.parse(journalSource));
+  const journal = await readDeliveryJournal(targetName);
   const commit = await readCommitIdentity();
   const localStore = await resolveLocalStore(targetSlug(target.app));
   const d1 = await readAppD1Resource(localStore.slug);

@@ -1,6 +1,11 @@
 import * as v from "valibot";
 
 export const StoreSlugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
+export const DeploymentTargetNameSchema = v.pipe(
+  v.string(),
+  v.maxLength(63),
+  v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+);
 export const StoreNameSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
 export const CommitIdentitySchema = v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/));
 export const ManifestDigestSchema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/));
@@ -28,12 +33,12 @@ export const DeploymentTargetSchema = v.strictObject({
 
 export const DeliveryManifestSchema = v.strictObject({
   schemaVersion: v.literal(1),
-  targets: v.record(v.string(), DeploymentTargetSchema),
+  targets: v.record(DeploymentTargetNameSchema, DeploymentTargetSchema),
 });
 
 export const DeliveryJournalSchema = v.strictObject({
   schemaVersion: v.literal(2),
-  target: v.string(),
+  target: DeploymentTargetNameSchema,
   app: v.string(),
   commit: CommitIdentitySchema,
   manifestDigest: ManifestDigestSchema,
