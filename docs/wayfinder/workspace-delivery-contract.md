@@ -148,7 +148,7 @@ The workspace pins pnpm, Node, Vite Plus, Wrangler, Astro, TypeScript, and migra
 
 Oxfmt owns formatting. Oxlint starts from `npx @letstri/oxlint-config init`, then incorporates the applicable general Antfu rules and `eslint-plugin-solid` through native rules or Oxlint's JS-plugin support. Because Oxlint cannot currently parse `.astro`, a narrow Antfu/`eslint-plugin-astro` ESLint pass runs only on Astro files. Biome and a second general ESLint pass are excluded. Knip finds dead files, exports, and dependencies. Sherif checks workspace manifest consistency. Dependency-direction checks enforce the graph above. CI runs format, lint, typecheck, Knip, Sherif, dependency checks, and build with no generated drift.
 
-The bootstrap installs the approved dependency baseline instead of leaving feature agents to choose foundational libraries ad hoc. In addition to the accepted framework, Cloudflare, auth, database, UI, query, form, date, motion, icon, logging, and validation packages, this baseline includes `better-result`, `dismatch`, `es-toolkit`, `@solid-primitives/storage`, `json-canonicalize`, `culori`, and `micromark`. Installing a baseline dependency does not justify using it outside its owning need: canonical JSON belongs to idempotency hashing, Culori to the Theme compiler, and Micromark to the constrained CMS renderer. Major additions or competing libraries require an explicit reviewed decision.
+The bootstrap installs the approved dependency baseline instead of leaving feature agents to choose foundational libraries ad hoc. In addition to the accepted framework, Cloudflare, auth, database, UI, query, form, date, motion, icon, logging, and validation packages, this baseline includes `better-result`, `dismatch`, `es-toolkit`, `@solid-primitives/storage`, `culori`, and `micromark`. Installing a baseline dependency does not justify using it outside its owning need: Culori to the Theme compiler, and Micromark to the constrained CMS renderer. Major additions or competing libraries require an explicit reviewed decision.
 
 Remote apply requires a clean checkout and records the exact commit and lockfile digest. Production apply additionally requires an explicit typed target confirmation. It does not require tags, changelogs, artifact registries, or a release branch.
 
@@ -166,7 +166,7 @@ Remote apply requires a clean checkout and records the exact commit and lockfile
 8. verify required secret names;
 9. list pending migrations and record the current D1 Time Travel bookmark;
 10. apply the shared migrations;
-11. apply the idempotent Store seed when the target has not been seeded;
+11. apply the Store seed only when the target has not been seeded;
 12. deploy the Worker by content digest;
 13. prove the workers.dev deployment and required bindings;
 14. attach configured routes, then prove the canonical URL;
@@ -176,7 +176,7 @@ Steps that do not apply, such as remote resource creation for `local` or route a
 
 On restart, the CLI validates the manifest digest and re-verifies completed external facts before skipping them. A missing resource, changed immutable identity, ambiguous same-name resource, changed source digest after deployment began, or inconsistent migration history stops with a precise recovery instruction. It never guesses ownership.
 
-A failed step records the redacted command, time, error, and retry count. Already-created resources remain. Rerunning starts at the first incomplete or no-longer-valid step. The workflow uses ordinary Cloudflare idempotency and deterministic resource names; it does not introduce a remote lock or coordinator. Concurrent remote apply for the same target is unsupported and rejected operationally.
+A failed step records the redacted command, time, error, and retry count. Already-created resources remain. Rerunning starts at the first incomplete or no-longer-valid step. The workflow checks existing resources and uses deterministic resource names; it does not introduce a remote lock or coordinator. Concurrent remote apply for the same target is unsupported and rejected operationally.
 
 ## Schema evolution and rollback
 
@@ -221,7 +221,7 @@ Manual edits to generated Wrangler files, copied migrations, uncommitted remote 
 
 Cleanup is never part of apply failure handling.
 
-- `prospect-demo` cleanup is idempotent and requires typing the full resource prefix. It disables routes and Worker access before deleting storage, then journals each deletion.
+- `prospect-demo` cleanup tolerates already-absent resources and requires typing the full resource prefix. It disables routes and Worker access before deleting storage, then journals each deletion.
 - Partial targets created by a failed first apply use the same explicit prefix-confirmed cleanup.
 - The normal cleanup command refuses `production`. Production decommissioning is a separately reviewed manual runbook so a convenient demo command cannot delete real commerce data.
 - Canary reset uses ordinary synthetic scenario reset commands; deleting and recreating the canary requires explicit manual approval.

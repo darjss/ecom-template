@@ -6,7 +6,7 @@ This is the approved pre-schema contract for the shared commerce kernel. Persist
 
 **Decision status:** Founder approved.
 
-Every commerce identity, command, idempotency key, event, and reference is scoped to exactly one independently deployed Store, and all references resolve within it. Customer and Staff Member identities never link or merge across Stores, even when phone numbers match. Each Store's D1 SQL database is authoritative; no global commerce identity or cross-store aggregate exists in v1. The shared kernel uses SQL directly through the repository-owned data layer rather than maintaining a storage-neutral commerce abstraction. The merchant app may choose presentation, but only the shared kernel may mutate price, inventory, checkout, Payment, Order, cancellation, refund, or Fulfillment truth.
+Every commerce identity, command, event, and reference is scoped to exactly one independently deployed Store, and all references resolve within it. Customer and Staff Member identities never link or merge across Stores, even when phone numbers match. Each Store's D1 SQL database is authoritative; no global commerce identity or cross-store aggregate exists in v1. The shared kernel uses SQL directly through the repository-owned data layer rather than maintaining a storage-neutral commerce abstraction. The merchant app may choose presentation, but only the shared kernel may mutate price, inventory, checkout, Payment, Order, cancellation, refund, or Fulfillment truth.
 
 The kernel owns these aggregate boundaries:
 
@@ -77,7 +77,7 @@ Checkout performs one authoritative placement operation:
 5. Require the commercial facts displayed to the customer and reject with structured current facts when item, Variant, or Bundle eligibility, selected options, discount outcome, Delivery availability or fee, unit amounts, or grand total changed—even if cheaper. Revalidate stock independently. Harmless copy, image, or other non-commercial metadata changes do not block placement; the Order snapshots current authoritative presentation facts.
 6. Atomically create the Placed Order and immutable Commercial Snapshots, reserve all Inventory Demand, create its initial Payment when money is due, create its Fulfillment, and record required consequential evidence. If grand total is zero, create no Payment and immediately consume the reservation in the same transaction.
 
-A Draft Order may exist while the server assembles and validates a placement, but it has no external commercial commitment and owns no reservation. The externally durable result of successful checkout is a Placed Order. Retrying the same checkout command must return that result rather than create another Order; the reliability contract defines idempotency storage.
+A Draft Order may exist while the server assembles and validates a placement, but it has no external commercial commitment and owns no reservation. The externally durable result of successful checkout is a Placed Order. Repeating checkout may create another Order; callers must avoid automatic mutation retries.
 
 An Order Line snapshots customer-visible item identity and name, applicable Variant identity and name, selected options, SKU, Personalization, resolved unit catalog price, quantity, line adjustments, line total, and expanded Inventory Demand. A purchased Bundle remains one customer-visible Order Line with its own SKU, quantity, price, discount allocation, and Personalization while also snapshotting component Variant identities, SKUs, per-bundle quantities, and total Inventory Demand for fulfillment and audit. Bundle price is not allocated across components, and Refunds are recorded only at Order level in v1. The Order snapshots currency, subtotal, allocated and order-level Discount Adjustments, delivery method, fee and destination or Pickup Location, fulfillment-required submitted contact facts, grand total, and policy/version references needed to explain the sale. Later catalog, Discount Rule, Location, or Customer edits never rewrite it. Once Placed, items, quantities, Personalization, discounts, delivery mode or fee, and submitted destination are immutable; material customer changes require whole-Order Cancellation and a new `PlaceOrder`. Corrected contact instructions, staff notes, courier references, and similar operational facts append with audit evidence without rewriting the original snapshot.
 
@@ -201,7 +201,7 @@ The application layer exposes intention-revealing commands; persistence and adap
 
 Owner/manager-only financial authority is a precondition for manual confirmation, rejection, and Refund recording. Full role-to-command authorization is decided by the identity boundary ticket.
 
-Commands either commit every owned state change and its required inventory, financial, redemption, provider, and operator evidence together or commit none. Expected Revision protects mutable aggregates. Idempotency protects command retries and provider evidence; it does not replace optimistic concurrency.
+Commands either commit every owned state change and its required inventory, financial, redemption, provider, and operator evidence together or commit none. Expected Revision protects mutable aggregates. Current-state predicates and unique provider references protect consequential transitions.
 
 ## Cancellation and refund rules
 
@@ -221,7 +221,7 @@ Cancellation is a whole-Order decision, while Refund is a Payment fact. Line-lev
 
 An authenticated Customer owns the Order they place, while submitted recipient name, normalized phone, and destination may differ and remain immutable Fulfillment snapshots. Recipient facts never establish, transfer, or relink Customer identity. Checkout snapshots recipient and consent-relevant facts onto the Order. A Guest Order has no Customer identity and receives a narrow Guest Tracking Link. The stored secret is non-recoverable and scoped to read-only tracking of one Order; it cannot authorize profile, payment, cancellation, or other Order access. The link remains valid while the Order is active and expires automatically 30 days after the Order becomes Completed or Cancelled; v1 has no staff revocation workflow.
 
-Exactly one Customer identity may exist per normalized verified phone within a Store. The verified phone is immutable in normal v1 workflows. Verifying another phone establishes or accesses its own Customer and never moves or merges Order history automatically; legitimate phone-change or conflict recovery requires explicit audited owner/manager handling with no cross-Store effects. SMS OTP is used only to establish or access a Customer login for a normalized phone in this Store; guest checkout and Payment never require OTP. Orders placed while authenticated belong to that Customer. `LinkGuestOrders` attaches all prior Guest Orders whose snapshotted checkout phone exactly matches the newly verified phone because no authenticated owner existed at placement. Until then, each Guest Order is accessible only through its temporary order-specific Guest Tracking Link. The linking operation is audited, idempotent, and never rewrites contact snapshots. Already linked Orders remain linked, and a conflicting Customer link requires explicit owner/manager recovery rather than automatic reassignment. Staff cannot assert phone ownership, and identity or history never links across Stores.
+Exactly one Customer identity may exist per normalized verified phone within a Store. The verified phone is immutable in normal v1 workflows. Verifying another phone establishes or accesses its own Customer and never moves or merges Order history automatically; legitimate phone-change or conflict recovery requires explicit audited owner/manager handling with no cross-Store effects. SMS OTP is used only to establish or access a Customer login for a normalized phone in this Store; guest checkout and Payment never require OTP. Orders placed while authenticated belong to that Customer. `LinkGuestOrders` attaches all prior Guest Orders whose snapshotted checkout phone exactly matches the newly verified phone because no authenticated owner existed at placement. Until then, each Guest Order is accessible only through its temporary order-specific Guest Tracking Link. The linking operation is audited and never rewrites contact snapshots. Already linked Orders remain linked, and a conflicting Customer link requires explicit owner/manager recovery rather than automatic reassignment. Staff cannot assert phone ownership, and identity or history never links across Stores.
 
 ## Evidence, audit, and adapters
 
@@ -235,13 +235,13 @@ Payment, courier, tax, and messaging adapters are statically registered translat
 - verify authenticity and normalize external responses or callbacks into evidence;
 - report external identifiers, timestamps, and diagnostics.
 
-They may not define domain states, accept an amount mismatch, authorize staff, mutate Order or inventory records, decide idempotency, or suppress audit evidence. The shared kernel validates adapter evidence and chooses the command and transition. Provider-specific details stay in namespaced evidence or adapter-owned persistence and do not leak into canonical state machines.
+They may not define domain states, accept an amount mismatch, authorize staff, mutate Order or inventory records, suppress audit evidence. The shared kernel validates adapter evidence and chooses the command and transition. Provider-specific details stay in namespaced evidence or adapter-owned persistence and do not leak into canonical state machines.
 
 ## Required downstream decisions
 
 This model intentionally leaves these implementation decisions to the already-charted tickets:
 
-- reliability, idempotency persistence, callback/poll races, outbox, retries, and recovery;
+- reliability, callback/poll races, outbox, retries, and recovery;
 - exact D1 tables, constraints, indexes, TypeID prefixes, and transaction mechanics within the shared repository-owned schema/backend packages;
 - Elysia/Eden route and module interfaces, validation envelopes, and authorization plumbing;
 - auth/session mechanics and detailed role permissions.

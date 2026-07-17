@@ -11,7 +11,7 @@ Before coding, read [`docs/agents/coding-standards.md`](docs/agents/coding-stand
 
 ## Product scale
 
-Design for independent Stores doing roughly 10–20 Orders per day, comfortably around 50 Orders per day and audiences up to about 50,000 followers. Preserve Store isolation, authorization, validation, atomic commercial and inventory truth, retry idempotency, recoverability, and compact evidence. Do not optimize for unsupported enterprise scale.
+Design for independent Stores doing roughly 10–20 Orders per day, comfortably around 50 Orders per day and audiences up to about 50,000 followers. Preserve Store isolation, authorization, validation, atomic commercial and inventory truth, recoverability, and compact evidence. Do not optimize for unsupported enterprise scale.
 
 ## Stack and ownership
 

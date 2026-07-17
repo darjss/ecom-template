@@ -4,62 +4,21 @@ import {
   type InventoryAdjustmentInput,
   type ProductId,
 } from "@ecom/contracts";
-import { and, asc, eq, exists, notExists, sql, sum } from "drizzle-orm";
-import { canonicalize } from "json-canonicalize";
+import { and, asc, eq, exists, sql, sum } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import {
-  idempotencyRecords,
   inventoryEntries,
   inventoryReservationItems,
   inventoryReservations,
   stockItems,
 } from "../db/schema";
 import type { StaffActor } from "../staff/operations";
-import { recordRejectedAttempt } from "./persistence";
-import { findCatalogProductById } from "./read/persistence";
-
-const idempotencyScope = "inventory.adjust";
-
-const requestHash = async (
-  actor: StaffActor,
-  productId: ProductId,
-  input: InventoryAdjustmentInput,
-) => {
-  const bytes = new TextEncoder().encode(
-    canonicalize({
-      actorStaffId: actor.staffId,
-      delta: input.delta,
-      productId,
-      reason: input.reason,
-    }),
-  );
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-};
-
-const readIdempotency = async (key: string) => {
-  const rows = await database()
-    .select({
-      requestHash: idempotencyRecords.requestHash,
-      resultId: idempotencyRecords.resultId,
-    })
-    .from(idempotencyRecords)
-    .where(and(eq(idempotencyRecords.scope, idempotencyScope), eq(idempotencyRecords.key, key)))
-    .limit(1);
-  return rows.at(0);
-};
+import { findCatalogProductById } from "../catalog/read/persistence";
+import { recordRejectedAttempt } from "../catalog/persistence";
 
 export const inventoryQueries = {
   async adjust(actor: StaffActor, id: ProductId, input: InventoryAdjustmentInput) {
-    const hash = await requestHash(actor, id, input);
-    const replay = await readIdempotency(input.idempotencyKey);
-    if (replay) {
-      return replay.requestHash === hash
-        ? { kind: "changed" as const, product: await findCatalogProductById(id) }
-        : { kind: "idempotency_conflict" as const };
-    }
-
     const current = await findCatalogProductById(id);
     if (!current) {
       return { kind: "not_found" as const };
@@ -84,23 +43,11 @@ export const inventoryQueries = {
       );
     const activeReservedQuantity = sql<number>`coalesce((${activeReservationTotal}), 0)`;
     const resultingOnHand = sql<number>`${stockItems.onHandQuantity} + ${input.delta}`;
-    const unusedIdempotencyKey = notExists(
-      db
-        .select({ scope: idempotencyRecords.scope })
-        .from(idempotencyRecords)
-        .where(
-          and(
-            eq(idempotencyRecords.scope, idempotencyScope),
-            eq(idempotencyRecords.key, input.idempotencyKey),
-          ),
-        ),
-    );
     const safeAdjustment = and(
       eq(stockItems.id, current.stockItemId),
       sql`${stockItems.reservedQuantity} = ${activeReservedQuantity}`,
       sql`${resultingOnHand} >= ${stockItems.reservedQuantity}`,
       sql`${resultingOnHand} <= 1000000`,
-      unusedIdempotencyKey,
     );
 
     const results = await db.batch([
@@ -126,10 +73,7 @@ export const inventoryQueries = {
         .set({ onHandQuantity: resultingOnHand, updatedAt: now })
         .where(
           and(
-            eq(stockItems.id, current.stockItemId),
-            sql`${stockItems.reservedQuantity} = ${activeReservedQuantity}`,
-            sql`${resultingOnHand} >= ${stockItems.reservedQuantity}`,
-            sql`${resultingOnHand} <= 1000000`,
+            safeAdjustment,
             exists(
               db
                 .select({ id: inventoryEntries.id })
@@ -144,33 +88,14 @@ export const inventoryQueries = {
           ),
         )
         .returning({ onHandQuantity: stockItems.onHandQuantity }),
-      db
-        .insert(idempotencyRecords)
-        .select(
-          db
-            .select({
-              scope: sql<string>`${idempotencyScope}`.as("scope"),
-              key: sql<string>`${input.idempotencyKey}`.as("key"),
-              requestHash: sql<string>`${hash}`.as("request_hash"),
-              resultKind: sql<string>`'inventory_adjustment'`.as("result_kind"),
-              resultId: sql<string>`${entryId}`.as("result_id"),
-              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-            })
-            .from(inventoryEntries)
-            .where(eq(inventoryEntries.id, entryId)),
-        )
-        .onConflictDoNothing(),
     ] as const);
 
-    if (results[0].meta.changes === 1 && results[1].length === 1 && results[2].meta.changes === 1) {
-      return { kind: "changed" as const, product: await findCatalogProductById(id) };
-    }
-
-    const committed = await readIdempotency(input.idempotencyKey);
-    if (committed) {
-      return committed.requestHash === hash
-        ? { kind: "changed" as const, product: await findCatalogProductById(id) }
-        : { kind: "idempotency_conflict" as const };
+    const changed = results[1].at(0);
+    if (changed) {
+      return {
+        kind: "changed" as const,
+        product: { ...current, onHandQuantity: changed.onHandQuantity },
+      };
     }
 
     const refreshed = await findCatalogProductById(id);

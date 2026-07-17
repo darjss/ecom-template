@@ -78,7 +78,7 @@ Do not put live availability in cached HTML, public search cache, KV, client sto
 
 The browser submits identities, selected Options, Personalizations, quantity, and its quoted values. The checkout command reloads the current published Product and Variant, price, Bundle component demand, inventory balance and reservations, Discount validity, Delivery quote inputs, and required Personalization definitions. It calculates the authoritative quote and atomically reserves inventory when placement succeeds.
 
-A stale quote returns a typed conflict such as `price_changed`, `selection_changed`, `unavailable`, or `insufficient_stock`, together with the current safe correction needed by the UI. It does not silently accept stale price or decrement inventory based on client availability. Idempotent placement and atomic reservation remain owned by the accepted commerce contract.
+A stale quote returns a typed conflict such as `price_changed`, `selection_changed`, `unavailable`, or `insufficient_stock`, together with the current safe correction needed by the UI. It does not silently accept stale price or decrement inventory based on client availability. Atomic reservation remain owned by the accepted commerce contract.
 
 ## Never shared-cache
 

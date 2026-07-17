@@ -411,28 +411,6 @@ export const inventoryEntries = sqliteTable(
   ],
 );
 
-export const idempotencyRecords = sqliteTable(
-  "idempotency_records",
-  {
-    scope: text("scope").notNull(),
-    key: text("key").notNull(),
-    requestHash: text("request_hash").notNull(),
-    resultKind: text("result_kind").notNull(),
-    resultId: text("result_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.scope, table.key] }),
-    check("idempotency_records_scope_check", sql`length(${table.scope}) BETWEEN 1 AND 64`),
-    check("idempotency_records_key_check", sql`length(${table.key}) BETWEEN 1 AND 128`),
-    check("idempotency_records_hash_check", sql`length(${table.requestHash}) = 64`),
-    check(
-      "idempotency_records_result_check",
-      sql`length(${table.resultKind}) BETWEEN 1 AND 64 AND length(${table.resultId}) BETWEEN 1 AND 128`,
-    ),
-  ],
-);
-
 export const systemMetadata = sqliteTable("system_metadata", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

@@ -68,7 +68,7 @@ Official sources: [TypeID specification v0.3.0](https://github.com/jetify-com/ty
 | `location` / `ordering_notice` / `homepage_section` | CMS entities with stable identity |
 | `audit_event` | Audit Event |
 
-Pure join rows use composite primary keys. Singleton records use fixed keys. Idempotency records use their natural `(scope, key)` primary key. Better Auth records retain Better Auth-generated IDs.
+Pure join rows use composite primary keys. Singleton records use fixed keys. Better Auth records retain Better Auth-generated IDs.
 
 ### JSON boundary
 
@@ -401,7 +401,7 @@ There is no address book, cross-Store identity, merge table, or phone-change wor
 
 ### Telegram action state
 
-There is no `telegram_bindings` table. Exact Telegram operator IDs and short audit labels are founder-maintained deployment configuration. Opaque bounded Payment action references live in the prefixed KV namespace. Telegram update IDs and financial action commands use the shared D1 idempotency table when they can cause a business effect.
+There is no `telegram_bindings` table. Exact Telegram operator IDs and short audit labels are founder-maintained deployment configuration. Opaque bounded Payment action references live in the prefixed KV namespace. Financial actions use current-state predicates and immutable financial evidence.
 
 ### `guest_tracking_links`
 
@@ -560,18 +560,6 @@ Exactly one Fulfillment belongs to each Order. State predicates and related Paym
 
 ## Audit and retry safety
 
-### `idempotency_records`
-
-- `scope TEXT NOT NULL`
-- `key TEXT NOT NULL`
-- normalized `request_hash TEXT NOT NULL`
-- `result_kind TEXT NOT NULL`
-- `result_id TEXT NOT NULL`
-- `created_at INTEGER NOT NULL`
-- composite primary key `(scope, key)`
-
-Only externally retried commands use this table: checkout, provider callbacks, Workflow steps, Telegram actions, and financial commands where transport retry is plausible. Same key plus same hash returns the original result; same key plus a different hash conflicts. Order-creating records are retained with the Order. Provider references remain unique for Store lifetime.
-
 ### `audit_events`
 
 - TypeID `id`
@@ -643,7 +631,7 @@ Schema changes run through Drizzle generation and the repository migration comma
 
 The implementation must preserve these atomic groups:
 
-- **Place Order:** idempotency record, Order and relational snapshots, Discount claim, Inventory Reservation and entries, initial Payment when due, Fulfillment, and relevant Audit Event.
+- **Place Order:** Order and relational snapshots, Discount claim, Inventory Reservation and entries, initial Payment when due, Fulfillment, and relevant Audit Event.
 - **Confirm or reject Payment:** conditional Payment state, Payment Entries, Reservation consume/release and Inventory Entries, Order consequence, Refund Obligation when relevant.
 - **QPay expiry:** conditional Payment expiry, Reservation expiry, inventory release, unpaid Order cancellation, and Discount release.
 - **Record Refund:** Payment Entries and reconciled Payment/refund-obligation balances.
@@ -651,7 +639,7 @@ The implementation must preserve these atomic groups:
 - **Publish CMS:** replace one Published aggregate and children from Draft, then remove Draft. Cache purge follows the commit and may report a partial outcome.
 - **Staff authority change:** Staff state/role, affected Better Auth session deletion, and Audit Event.
 
-Conditional state updates must affect exactly one expected row. Zero affected rows return a typed conflict or already-resolved result. Constraints and idempotency prevent duplicate business effects even when HTTP, provider, Telegram, Cron, or Workflow delivery repeats.
+Conditional state updates must affect exactly one expected row. Zero affected rows return a typed conflict or already-resolved result. Constraints and current-state predicates protect transitions; callers must not automatically retry effectful requests.
 
 ## Excluded schema
 

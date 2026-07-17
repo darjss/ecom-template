@@ -130,11 +130,11 @@ Starting limits are:
 - OTP verification: 5 attempts per challenge, then invalidate it;
 - Staff credential attempts: 10 per IP and normalized login in 15 minutes;
 - Guest Tracking Link failures: 30 invalid attempts per IP in 15 minutes;
-- Checkout placement: 20 non-idempotent attempts per device/IP in 10 minutes.
+- Checkout placement: 20 attempts per device/IP in 10 minutes.
 
-Responses are generic and include `Retry-After`. Successful idempotent retries return the original result and do not create another business effect. There is no global Store request cap: one social post must not disable ordering for everyone, and carrier NAT must not turn a modest audience into false fraud.
+Responses are generic and include `Retry-After`. There is no global Store request cap: one social post must not disable ordering for everyone, and carrier NAT must not turn a modest audience into false fraud.
 
-Authenticated provider callbacks are bounded by body size, signature/credential verification, unique provider references, and D1 idempotency. They are not put behind the customer limiter or a challenge that can prevent payment evidence from arriving. Cloudflare WAF rate-limit rules may reject obvious abuse when already included in the Store's plan, but application safety cannot depend on paid WAF features.
+Authenticated provider callbacks are bounded by body size, signature/credential verification, unique provider references, and current-state predicates. They are not put behind the customer limiter or a challenge that can prevent payment evidence from arriving. Cloudflare WAF rate-limit rules may reject obvious abuse when already included in the Store's plan, but application safety cannot depend on paid WAF features.
 
 ## Recovery contract
 
@@ -153,7 +153,7 @@ Authenticated provider callbacks are bounded by body size, signature/credential 
 3. Inspect Cloudflare status, Workers Logs, D1 metrics, Audit Events, Financial Entries, Inventory Entries, and provider records. Prefer a forward fix or compatible code redeploy when data is still trustworthy.
 4. If restore is required, choose and record the exact bookmark, obtain founder confirmation naming the Store, and run Time Travel restore for that Store only. Preserve the returned previous bookmark.
 5. Deploy the schema-compatible commit, run doctor, health, ledger invariants, and the accepted Canary Scenarios that do not contact real customers.
-6. Reconcile every provider event and merchant-observed transfer from the restored interval through ordinary idempotent commands. Never repair Payment or inventory truth with unaudited table edits.
+6. Reconcile every provider event and merchant-observed transfer from the restored interval through ordinary commands. Never repair Payment or inventory truth with unaudited table edits.
 7. Compare physical stock for affected Stock Items, resolve discrepancies through audited Inventory Entries, then re-enable only proven payment methods.
 8. Record the outcome and evidence link in the Store's private operations notes.
 
@@ -167,7 +167,7 @@ Check Cloudflare component status, health, Worker invocation outcomes, recent de
 
 ### Payment provider failure or uncertain money
 
-Disable only the affected automated provider in `commerce_settings`; leave transfer or COD available only if the merchant already approved them. Keep the Order and Inventory Reservation in the accepted safe uncertainty state. Compare provider evidence, Financial Entries, callback logs, and Workflow state, then invoke the ordinary idempotent reconcile or staff-confirm command. Never infer payment from a timeout, retry Checkout, or force a state with SQL.
+Disable only the affected automated provider in `commerce_settings`; leave transfer or COD available only if the merchant already approved them. Keep the Order and Inventory Reservation in the accepted safe uncertainty state. Compare provider evidence, Financial Entries, callback logs, and Workflow state, then invoke the ordinary reconcile or staff-confirm command. Never infer payment from a timeout, retry Checkout, or force a state with SQL.
 
 ### Inventory mismatch or oversell risk
 
@@ -191,7 +191,7 @@ Activation is blocked until all of the following pass against the exact Producti
 
 1. **Identity and isolation:** delivery journal matches Worker, D1, both KV namespaces, R2, routes, secrets, and PostHog project for this Store; another Store's credentials and IDs cannot access them.
 2. **Merchant readiness:** Owner access, Manager recovery contact, physical stock opening balances, delivery/pickup settings, policies, domain, and enabled payment methods are explicitly approved.
-3. **Provider proof:** doctor passes safe checks; each enabled payment method completes its real sandbox or merchant-authorized nominal journey through Order placement, evidence, idempotent duplicate delivery, confirmation/rejection, Reservation consequence, and Refund recording where applicable. Missing provider facilities block that method, not the whole Store when another approved method is safe.
+3. **Provider proof:** doctor passes safe checks; each enabled payment method completes its real sandbox or merchant-authorized nominal journey through Order placement, evidence, duplicate-delivery handling, confirmation/rejection, Reservation consequence, and Refund recording where applicable. Missing provider facilities block that method, not the whole Store when another approved method is safe.
 4. **Commerce proof:** the eight fictional Reference Store Canary Scenarios pass on canary, then Production browser/API proof covers Variant selection, live availability, Cart, stale price/stock rejection, anonymous Checkout, enabled Customer login, Guest Tracking, Admin Payment action, Fulfillment, cancellation, Refund Obligation, and concurrent stock contention without contacting a real customer.
 5. **Cache and privacy:** the accepted cache response matrix and purge proof pass; no sensitive route is shared-cached; logs and PostHog payload inspection contain no prohibited data; replay stops before sensitive routes.
 6. **Recovery:** pre-migration bookmark exists, the canary restore drill is current, previous compatible commit is recorded, Production cleanup refusal is proven, and the four money/inventory/access runbooks have named operators.

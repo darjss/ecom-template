@@ -8,7 +8,7 @@ Small independent Mongolian merchants need fast, trustworthy ecommerce without b
 
 PR #34 merged the approved bootstrap at `f748ab739274ed57e57e115c081a3c68bc249733` and closed #31. The superseded SaaS starter is gone; the nine-package workspace and production-shaped runtime seams are now the baseline. The remaining problem is to extend that baseline into the complete commerce system, remote Reference Store canary, and direct Store delivery workflow without rebuilding landed foundations or pretending intentionally unavailable boundaries are already implemented.
 
-The target is intentionally modest: an independent Store usually handles 10–20 Orders per day, should remain comfortable around 50 Orders per day, and may serve an audience around 50,000 followers. The product must protect Store isolation, authorization, validation, atomic money and inventory truth, retry idempotency, recoverability, and compact evidence without introducing a control plane, distributed coordination, or enterprise ceremony.
+The target is intentionally modest: an independent Store usually handles 10–20 Orders per day, should remain comfortable around 50 Orders per day, and may serve an audience around 50,000 followers. The product must protect Store isolation, authorization, validation, atomic money and inventory truth, recoverability, and compact evidence without introducing a control plane, distributed coordination, or enterprise ceremony.
 
 ## Solution
 
@@ -75,7 +75,6 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 41. As a shopper, I want submitted Discount codes validated by the server, so that the Cart cannot invent eligibility or value.
 42. As a shopper, I want the best eligible automatic Discount when I do not submit a valid code, so that the available automatic benefit is applied consistently.
 43. As a shopper, I want one deliberate submit to create at most one Order across retries, so that a network problem cannot duplicate my purchase.
-44. As a shopper, I want the same idempotency key with changed intent rejected, so that accidental key reuse cannot return an unrelated Order.
 45. As a shopper, I want complete Bundle component demand checked atomically, so that a Bundle is never partially promised.
 46. As a shopper, I want concurrent final-stock attempts to allow only one complete winner, so that inventory never becomes negative.
 47. As a shopper, I want successful placement to preserve immutable product, option, Personalization, price, Discount, delivery, and contact facts, so that later edits do not rewrite my Order.
@@ -95,7 +94,7 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 58. As a guest shopper, I want the tracking capability hidden from referrers, third parties, logs, and shared caches, so that possession remains narrow authority.
 59. As a guest shopper, I want tracking to expire 30 days after terminal Order state, so that the capability does not remain open indefinitely.
 60. As an authenticated Customer, I want Store-local Order history, so that I can revisit Orders placed under my verified phone.
-61. As a newly verified Customer, I want eligible prior Guest Orders with the exact verified phone linked idempotently, so that my history becomes useful without rewriting recipient snapshots.
+61. As a newly verified Customer, I want eligible prior Guest Orders with the exact verified phone linked without rewriting existing links, so that my history becomes useful without rewriting recipient snapshots.
 
 ### Customer authentication
 
@@ -128,7 +127,7 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 85. As a Staff Member, I want an attention view derived from unresolved authoritative business state, so that I can prioritize real decisions without a duplicate task queue.
 86. As an Owner or Manager, I want searchable consequential Audit Events and links to financial and inventory ledgers, so that actions can be explained compactly.
 87. As a Staff Member, I want ordinary writes to use simple last-write-wins behavior, so that small-Store operations do not carry unnecessary revision workflows.
-88. As a Staff Member, I want consequential transitions protected by atomic current-state predicates and idempotency, so that simplicity does not weaken money or inventory safety.
+88. As a Staff Member, I want consequential transitions protected by atomic current-state predicates, so that simplicity does not weaken money or inventory safety.
 
 ### Staff authority and Telegram
 
@@ -227,10 +226,10 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 - Preserve and deepen the landed Store backend initialized from Store Profile and static provider definition. Its only external entrypoints remain the complete Elysia app, direct in-process Storefront reader, and bounded scheduled/Workflow work.
 - Preserve the landed Astro request dispatcher that sends `/api` to Elysia and pages/assets to Astro. Astro SSR uses the direct reader and never Eden or HTTP self-calls.
 - Public API includes private/no-store Catalog search and `GET /api/catalog/availability?variantIds=...` with at most 50 unique canonical Variant IDs. Availability is advisory and does not expose raw inventory balances.
-- Checkout provides current quote, idempotent Order placement, and the narrow QPay-to-bank-transfer switch. Placement requires an idempotency key retained across transport retries.
+- Checkout provides current quote and the narrow QPay-to-bank-transfer switch. A repeated placement request may create another Order.
 - Customer APIs expose separate Customer Auth, Customer Order history, and one-Order Guest Tracking. Anonymous automated-payment Orders receive a separate short-lived action capability for switching payment method; tracking authority cannot mutate.
 - Admin uses intention-revealing resource routes for Catalog, Bundles, Discounts, inventory, Orders, Payments, Refunds, Fulfillment, CMS, media, Staff, audit, and attention state. Actor identity and role always derive from the Staff session.
-- Automated-payment and Telegram callbacks use fixed Store-local paths because providers are selected at build time. Callback evidence is authenticated, normalized, idempotent, and passed to the same private kernel commands used by Admin and background work.
+- Automated-payment and Telegram callbacks use fixed Store-local paths because providers are selected at build time. Callback evidence is authenticated, normalized, and passed to the same private kernel commands used by Admin and background work.
 - All auth, Checkout, Customer, tracking, Payment, Order, inventory, callback, preview, and Admin responses are private/no-store. Error and redirect responses are never shared-cached.
 
 ### Browser state and presentation
@@ -255,7 +254,7 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 
 - Cart is local-only intent and never an inventory hold. Quote and placement resolve current Catalog, Variants, Bundles, Personalization, Discounts, delivery, pricing, and inventory.
 - Placement rejects a changed selection, eligibility, price, Discount, Delivery Option, fee, or total and returns current safe facts. It independently rejects insufficient inventory.
-- Successful placement atomically creates the Placed Order, immutable Order Lines and Commercial Snapshots, Discount claim and allocation, one normalized set of reservation items or COD consumption facts, initial Payment when required, Fulfillment, compact ledger evidence, idempotency result, and required Audit Events.
+- Successful placement atomically creates the Placed Order, immutable Order Lines and Commercial Snapshots, Discount claim and allocation, one normalized set of reservation items or COD consumption facts, initial Payment when required, Fulfillment, compact ledger evidence and required Audit Events.
 - Zero-total Orders create no Payment and consume the complete reservation immediately.
 - Exactly one Discount Rule applies. A submitted valid code wins; otherwise the eligible automatic rule with the greatest reduction wins. Fixed and percentage reductions are bounded, never reduce Delivery fees, and allocate deterministically in integer MNT.
 - Discount redemption capacity is claimed atomically. Cancellation of an Order with no confirmed Payment writes a compensating release; confirmation followed by Cancellation or Refund does not restore capacity.
@@ -274,15 +273,14 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 - Confirmed money uses immutable Financial Entries. Refunds are manual immutable Order-level amount/reason/reference facts; v1 has no line/item/delivery allocation or line-level Refund API. Cumulative Refunds cannot exceed confirmed money.
 - Order, Payment, Fulfillment, and reservation states remain orthogonal. Derived UI labels never become stored combined truth.
 - Cancellation is whole-Order. It releases active reservation or restores consumed inventory, cancels eligible Fulfillment, and creates a Refund Obligation when confirmed money remains unrefunded. Delivery Failed does not restore inventory; verified Returned enables the narrow post-handoff path.
-- One small D1 idempotency record stores operation scope, key, canonical request hash, result identity, and time. D1 uniqueness, current-state predicates, provider-reference uniqueness, and idempotency guarantee exactly-once business effects under repeated delivery.
-- D1 is the only commerce truth. KV never owns idempotency, stock, Orders, Payments, durable work, or cacheable Catalog/CMS representation.
+- D1 is the only commerce truth. KV never owns stock, Orders, Payments, durable work, or cacheable Catalog/CMS representation.
 
 ### Background work and external failure
 
-- Every Store owns one statically registered Cloudflare Workflow accepting a small tagged task union for payment lifecycle, notification delivery, and reconciliation. Workflow steps call idempotent provider operations and kernel commands; Workflow state is never commerce truth.
+- Every Store owns one statically registered Cloudflare Workflow accepting a small tagged task union for payment lifecycle, notification delivery, and reconciliation. Workflow steps call provider operations and current-state kernel commands; Workflow state is never commerce truth.
 - `waitUntil` is restricted to short non-critical analytics and cleanup. There is no Queue, generic job table, command bus, outbox, notification-delivery table, Failed Notifications subsystem, lease runner, or Durable Object coordinator in v1.
-- A committed mutation followed by failed Workflow creation returns an explicit retryable partial outcome when observed. Retrying the original idempotent command may start the missing work.
-- A bounded scheduled reconciliation pass scans overdue authoritative Payment, reservation, and unresolved business state and idempotently starts or repairs Workflow work.
+- A committed mutation followed by failed Workflow creation returns an explicit retryable partial outcome when observed. A scheduled reconciliation pass starts missing work.
+- A bounded scheduled reconciliation pass scans overdue authoritative Payment, reservation, and unresolved business state and starts or repairs Workflow work from current authoritative state.
 - Notification failure never changes commerce state. Workflow retry and visibility are sufficient; exhausted delivery emits restricted diagnostics and leaves all advertised actions available in Admin.
 
 ### Authentication and authorization
@@ -293,13 +291,13 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 - Staff sessions are revocable rolling 14-day sessions using a role snapshot. Role change or revocation deletes all sessions. Normal authorization does not require a redundant D1 role read on every request.
 - The landed Customer artifacts are generated schema only. Implement Customer runtime in the existing Store-local namespace with SMS OTP and rolling 30-day sessions. Checkout remains anonymous-first except COD; the shared SMS Gateway owns delivery only, while OTP truth and limits stay in the Store.
 - Guest Tracking is one-Order/read-only, high-entropy, non-recoverably stored, mutation-ineligible. Expiry: issue+90 days or terminal Order+30 days, first wins. Nonterminal rotation presents/revokes current valid capability, restarts 90 days, never extends terminal expiry. Exact-phone auto-link covers unclaimed Orders ≤30 days old; older linking also presents that Order's valid capability in authenticated session.
-- Telegram financial actions authenticate the Store webhook, exact numeric operator allowlist, update replay state, one opaque bounded action reference, current Payment/Order/amount state, and scoped D1 idempotency.
+- Telegram financial actions authenticate the Store webhook, exact numeric operator allowlist, update replay state, one opaque bounded action reference, current Payment/Order/amount state, and atomic current-state predicates.
 - Telegram authority has no Staff identity, enrollment, role lookup, permission administration, or second confirmation tap. Financial evidence uses actor kind `telegram_operator` with configured label and numeric user ID.
 
 ### D1 schema and persistence
 
 - Every Store owns one D1 database with no repeated Store key. The schema uses canonical TypeID strings, integer MNT, integer quantities, UTC millisecond timestamps, closed text states, foreign keys, checks, and indexes tied to known access paths.
-- Relational tables own Catalog, SKU, Variant, grouping, Discount, Order, Payment, Fulfillment, Customer, Staff, inventory, media identity, idempotency, and consequential audit truth.
+- Relational tables own Catalog, SKU, Variant, grouping, Discount, Order, Payment, Fulfillment, Customer, Staff, inventory, media identity and consequential audit truth.
 - Order Lines store bounded immutable option, Personalization, and Bundle-component display snapshots as strictly validated JSON. Inventory Demand is expanded once into relational Reservation Items at placement rather than duplicated in a second Order-Line demand table. Discount adjustments and allocations remain relational because commands query and reconcile them independently.
 - Payment rows own current expected, confirmed, and refunded balances. Append-only Payment Entries store normalized deltas and evidence without repeating resulting balances. Stock Items own current on-hand and reserved balances. Append-only Inventory Entries store deltas and evidence without repeating resulting balances. Reconciliation sums entries against current rows. Audit Events record only consequential authorization, publication, cancellation, fulfillment, provider, and recovery decisions that are not already ledger facts.
 - Noncommercial CMS uses one `cms_documents` table keyed by closed `kind` and `draft|published` status. Kinds are `storefront_identity`, `homepage`, `navigation`, `locations`, `policies`, `announcement`, and `ordering_notices`; there is no runtime Theme document.
@@ -364,7 +362,7 @@ Private prospect demos and outreach are intentionally separated into #36, which 
 - The primary seam is deployed Өрнүүн 48 through ordinary Storefront/Admin browser flows, APIs, scheduled/Workflow entrypoints, real D1/KV/R2, and all eight Canary Scenarios. Inspect resulting Orders, Payments, Fulfillment, Customers, Discounts, reservations, ledgers, and Audit Events, including duplicate delivery and concurrency.
 - The landed local delivery seam is preserved. Until remote delivery is implemented, `store:create` and remote canary/Production commands must keep their explicit unavailable failures. Later real `store:apply`, `store:proof`, `store:doctor`, and eligible `store:cleanup` proof covers creation, generated types, zero migrations, seed, deploy, journal identity, failure/resume, missing secrets, safety-critical revalidation, bookmark, and Production cleanup refusal. Proof also confirms the absence of target locks, automatic drift adoption, generic desired-state reconciliation, and automatic rollback.
 - Agent-browser proves mobile/desktop Storefront, search, Variants/Bundles, Personalization, Cart, stale quote correction, Checkout/payment switch, Customer/Guest access, core Admin operations, keyboard/focus, 200% zoom, 320px reflow, reduced motion, representative screen-reader journeys, console, and overflow.
-- Curl and focused TypeScript harnesses prove HTTP statuses/envelopes, idempotency, auth/roles, callback replay, rate limits, search, health, and cache headers. Real Drizzle/D1 proves migrations, constraints, isolation, SKU uniqueness, atomic reservation, ledger reconciliation, CMS parsing, Guest linking, auth namespaces, FTS rebuild, and query plans.
+- Curl and focused TypeScript harnesses prove HTTP statuses/envelopes, auth/roles, callback replay, rate limits, search, health, and cache headers. Real Drizzle/D1 proves migrations, constraints, isolation, SKU uniqueness, atomic reservation, ledger reconciliation, CMS parsing, Guest linking, auth namespaces, FTS rebuild, and query plans.
 - Real provider test modes or merchant-authorized nominal journeys prove exact payment, callback/poll race, duplicates, closure/expiry, late evidence, transfer switch, and handoff recovery. SMS uses the private binding and controlled canary phone; Telegram uses an actual bot, exact allowlist, bounded one-tap references, replay rejection, and Admin parity.
 - Cache proof covers MISS/HIT, no stock leakage, fresh availability beside cached presentation, stale-price rejection, successful tag purge to fresh MISS, canonical redirects, cookie absence, and the deny-first private matrix.
 - Mongolia-like measurements report cold HTML (≤1.5s p75/2.0s p95), warm HTML (<50ms p75/<100ms p95), and availability (≤350ms p95). Accessibility uses WCAG 2.2 AA human proof; privacy inspects logs, PostHog, replay, URLs, and errors.

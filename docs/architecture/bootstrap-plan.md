@@ -57,7 +57,6 @@ customers/
 staff/
 storefront/
 background/
-idempotency/
 observability/
 ```
 
@@ -100,7 +99,6 @@ Install the approved baseline during #31 so later agents do not choose competing
 - `dismatch`
 - `es-toolkit`
 - `@solid-primitives/storage`
-- `json-canonicalize`
 - `culori`
 - `micromark`
 - `sherif`

@@ -8,7 +8,7 @@ import type {
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { resolvePendingCatalogCachePurge } from "./cache";
-import { inventoryQueries } from "./inventory-persistence";
+import { inventoryQueries } from "../inventory/persistence";
 import { catalogQueries } from "./persistence";
 
 export type CatalogOperationFailure = {
@@ -16,14 +16,11 @@ export type CatalogOperationFailure = {
     | "forbidden"
     | "not_found"
     | "duplicate_slug"
-    | "duplicate_sku"
     | "invalid_lifecycle"
     | "invalid_publication"
-    | "sku_locked"
     | "reservation_blocked"
     | "inventory_inconsistent"
     | "inventory_limit"
-    | "idempotency_conflict"
     | "conflict"
     | "infrastructure_unavailable";
   readonly blockers?: readonly {
@@ -167,8 +164,7 @@ export const adjustProductInventory = async (
       code:
         result.kind === "not_found" ||
         result.kind === "conflict" ||
-        result.kind === "inventory_limit" ||
-        result.kind === "idempotency_conflict"
+        result.kind === "inventory_limit"
           ? result.kind
           : "conflict",
     });

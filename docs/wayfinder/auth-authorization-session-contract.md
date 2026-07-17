@@ -55,7 +55,7 @@ V1 has exactly three roles:
 
 Manager may perform every normal Store operation, including financial actions, but may not manage identity or authentication authority. Staff may manage catalog, CMS, inventory, and non-financial Order operations, but may not perform financial actions, manage Staff, change auth/payment/deployment settings, or invoke Owner/Manager-only overrides. The previously proposed Fulfillment Staff role is excluded.
 
-Authorization is enforced by the shared-kernel command boundary, not merely by hiding Admin controls. Provider callbacks and Telegram handlers invoke the same authorized, idempotent commerce commands as web Admin.
+Authorization is enforced by the shared-kernel command boundary, not merely by hiding Admin controls. Provider callbacks and Telegram handlers invoke the same authorized commerce commands as web Admin.
 
 ## Customer identity and OTP
 
@@ -97,7 +97,7 @@ Telegram bank-transfer Confirm and Reject actions:
 1. verify the Store's Telegram webhook secret and reject replayed updates;
 2. require an exact allowlisted Telegram user ID;
 3. consume one opaque bounded action reference created for that Payment message;
-4. revalidate Payment state, expected amount, and command idempotency;
+4. revalidate Payment state and expected amount;
 5. execute the same shared-kernel Confirm or Reject command used by web Admin;
 6. record the configured operator label and Telegram user ID as consequential evidence.
 
