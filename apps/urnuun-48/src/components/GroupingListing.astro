@@ -11,6 +11,9 @@ interface Props {
 }
 const { listing, kindLabel } = Astro.props;
 const money = new Intl.NumberFormat("mn-MN");
+const imageWidths = [320, 640, 960, 1280];
+const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
+  imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
 ---
 <StoreLayout title={`${listing.grouping.name} · Өрнүүн 48`} description={listing.grouping.description || `${listing.grouping.name} бүтээгдэхүүн`}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
@@ -26,14 +29,37 @@ const money = new Intl.NumberFormat("mn-MN");
       {listing.grouping.description && <p class="mt-5 max-w-prose text-lg text-(--muted)">{listing.grouping.description}</p>}
     </header>
     <ul class="m-0 grid list-none grid-cols-1 p-0 sm:grid-cols-2 lg:grid-cols-3">
-      {listing.catalogItems.map((catalogItem) => (
-        <li class="border-b border-black/15 py-6 sm:px-5 sm:first:pl-0">
-          <a class="grid min-h-28 content-between gap-6 text-(--ink) no-underline" href={`/${catalogItem.kind === "bundle" ? "bundles" : "products"}/${catalogItem.slug}`}>
-            <strong class="text-xl tracking-tight">{catalogItem.name}</strong>
-            <span class="font-bold">{money.format(catalogItem.priceMnt)} ₮</span>
-          </a>
-        </li>
-      ))}
+      {listing.catalogItems.map((catalogItem) => {
+        const image = catalogItem.images.at(0);
+        return (
+          <li class="border-b border-black/15 py-6 sm:px-5 sm:first:pl-0">
+            <a class="grid min-h-28 content-between gap-6 text-(--ink) no-underline" href={`/${catalogItem.kind === "bundle" ? "bundles" : "products"}/${catalogItem.slug}`}>
+              {image && (
+                <picture>
+                  <source
+                    type="image/avif"
+                    srcset={imageSrcset(image.mediaAssetId, "avif")}
+                    sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
+                  />
+                  <img
+                    class="aspect-square w-full object-cover"
+                    src={`/media/${image.mediaAssetId}/960.webp`}
+                    srcset={imageSrcset(image.mediaAssetId, "webp")}
+                    sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
+                    alt={image.altText}
+                    width="960"
+                    height="960"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </picture>
+              )}
+              <strong class="text-xl tracking-tight">{catalogItem.name}</strong>
+              <span class="font-bold">{money.format(catalogItem.priceMnt)} ₮</span>
+            </a>
+          </li>
+        );
+      })}
     </ul>
   </main>
 </StoreLayout>

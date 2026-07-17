@@ -4,36 +4,16 @@ import {
   requestCreateCollection,
   requestCreateTag,
 } from "@ecom/client";
-import type { Category, GroupingClientError } from "@ecom/contracts";
+import type { Category } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
 import { For, Show } from "solid-js";
+import { groupingErrorMessage, submitAndFocusGroupingError } from "./grouping-form";
 
 const inputClass =
   "min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)";
 const labelClass = "grid gap-1.5 text-xs font-bold text-(--muted)";
-const errorMessage = (error: GroupingClientError) =>
-  error.kind === "api" ? error.error.message : "Өөрчлөлтийг хадгалж чадсангүй.";
-const submitAndFocusExpectedError = async (
-  form: HTMLFormElement,
-  submit: () => Promise<void>,
-  representedError: () => GroupingClientError | null,
-) => {
-  try {
-    await submit();
-  } catch (error) {
-    if (error !== representedError()) {
-      throw error;
-    }
-    form
-      .querySelector<HTMLElement>(
-        "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
-      )
-      ?.focus();
-  }
-};
-
 export const CreateCategoryForm = (props: { categories: readonly Category[] }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => groupingMutationOptions(queryClient, requestCreateCategory));
@@ -54,11 +34,7 @@ export const CreateCategoryForm = (props: { categories: readonly Category[] }) =
       class="grid gap-3 border-t border-black/10 py-5 md:grid-cols-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        await submitAndFocusExpectedError(
-          event.currentTarget,
-          () => form.handleSubmit(),
-          () => mutation.error,
-        );
+        await submitAndFocusGroupingError(event.currentTarget, () => form.handleSubmit());
       }}
     >
       <form.Field name="name">
@@ -125,7 +101,7 @@ export const CreateCategoryForm = (props: { categories: readonly Category[] }) =
         {mutation.isPending ? "Үүсгэж байна…" : "Ангилал үүсгэх"}
       </Button>
       <Show when={mutation.error} keyed>
-        {(error) => <p role="alert">{errorMessage(error)}</p>}
+        {(error) => <p role="alert">{groupingErrorMessage(error)}</p>}
       </Show>
     </form>
   );
@@ -150,11 +126,7 @@ export const CreateCollectionForm = () => {
       class="grid gap-3 border-t border-black/10 py-5 md:grid-cols-3"
       onSubmit={async (event) => {
         event.preventDefault();
-        await submitAndFocusExpectedError(
-          event.currentTarget,
-          () => form.handleSubmit(),
-          () => mutation.error,
-        );
+        await submitAndFocusGroupingError(event.currentTarget, () => form.handleSubmit());
       }}
     >
       <form.Field name="name">
@@ -202,7 +174,7 @@ export const CreateCollectionForm = () => {
         {mutation.isPending ? "Үүсгэж байна…" : "Collection үүсгэх"}
       </Button>
       <Show when={mutation.error} keyed>
-        {(error) => <p role="alert">{errorMessage(error)}</p>}
+        {(error) => <p role="alert">{groupingErrorMessage(error)}</p>}
       </Show>
     </form>
   );
@@ -223,11 +195,7 @@ export const CreateTagForm = () => {
       class="flex flex-wrap items-end gap-3 border-t border-black/10 py-5"
       onSubmit={async (event) => {
         event.preventDefault();
-        await submitAndFocusExpectedError(
-          event.currentTarget,
-          () => form.handleSubmit(),
-          () => mutation.error,
-        );
+        await submitAndFocusGroupingError(event.currentTarget, () => form.handleSubmit());
       }}
     >
       <form.Field name="label">
@@ -248,7 +216,7 @@ export const CreateTagForm = () => {
         {mutation.isPending ? "Үүсгэж байна…" : "Tag үүсгэх"}
       </Button>
       <Show when={mutation.error} keyed>
-        {(error) => <p role="alert">{errorMessage(error)}</p>}
+        {(error) => <p role="alert">{groupingErrorMessage(error)}</p>}
       </Show>
     </form>
   );

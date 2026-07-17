@@ -9,39 +9,18 @@ import {
   requestUpdateCollection,
   requestUpdateTag,
 } from "@ecom/client";
-import type { Category, Grouping, GroupingClientError, GroupingState } from "@ecom/contracts";
+import type { Category, Grouping, GroupingState } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { For, Show, untrack } from "solid-js";
 import { CreateCategoryForm, CreateCollectionForm, CreateTagForm } from "./GroupingCreateForms";
+import { groupingErrorMessage, submitAndFocusGroupingError } from "./grouping-form";
 import { GroupingMembershipEditor, type GroupingCatalogItem } from "./GroupingMembershipEditor";
 
 const inputClass =
   "min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)";
 const labelClass = "grid gap-1.5 text-xs font-bold text-(--muted)";
-const errorMessage = (error: GroupingClientError) =>
-  error.kind === "api" ? error.error.message : "Өөрчлөлтийг хадгалж чадсангүй.";
-
-const submitAndFocusExpectedError = async (
-  form: HTMLFormElement,
-  submit: () => Promise<void>,
-  representedError: () => GroupingClientError | null,
-) => {
-  try {
-    await submit();
-  } catch (error) {
-    if (error !== representedError()) {
-      throw error;
-    }
-    form
-      .querySelector<HTMLElement>(
-        "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
-      )
-      ?.focus();
-  }
-};
-
 const nextState = (state: GroupingState) => (state === "active" ? "archived" : "active");
 const lifecycleLabel = (state: GroupingState) => (state === "active" ? "Архивлах" : "Идэвхжүүлэх");
 
@@ -108,11 +87,7 @@ const GroupingEditor = (props: { grouping: Grouping; categories: readonly Catego
       onSubmit={async (event) => {
         event.preventDefault();
         lifecycleMutation.reset();
-        await submitAndFocusExpectedError(
-          event.currentTarget,
-          () => form.handleSubmit(),
-          () => updateMutation.error,
-        );
+        await submitAndFocusGroupingError(event.currentTarget, () => form.handleSubmit());
       }}
     >
       <form.Field name="name">
@@ -214,7 +189,7 @@ const GroupingEditor = (props: { grouping: Grouping; categories: readonly Catego
       <Show when={updateMutation.error ?? lifecycleMutation.error} keyed>
         {(error) => (
           <p class="md:col-span-full" role="alert">
-            {errorMessage(error)}
+            {groupingErrorMessage(error)}
           </p>
         )}
       </Show>
@@ -277,7 +252,7 @@ const CatalogCachePurgeWarning = (props: { attemptCount: number; requestId: stri
         Public cache шинэчлэлтийг дахин оролдох
       </Button>
       <Show when={mutation.error} keyed>
-        {(error) => <p>{errorMessage(error)}</p>}
+        {(error) => <p>{groupingErrorMessage(error)}</p>}
       </Show>
     </div>
   );

@@ -1,6 +1,6 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
-import type { ClientRequestError } from "./client-error";
+import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   CatalogItemIdSchema,
   CachePurgeDebtSchema,
@@ -152,6 +152,14 @@ export const GroupingApiErrorSchema = v.strictObject({
     reason: v.optional(GroupingFailureReasonSchema),
   }),
 });
+export const GroupingClientErrorSchema = v.variant("kind", [
+  NetworkClientErrorSchema,
+  ContractClientErrorSchema,
+  v.strictObject({
+    kind: v.literal("api"),
+    error: GroupingApiErrorSchema.entries.error,
+  }),
+]);
 
 export const PublicGroupingSchema = v.strictObject({
   id: v.union([CategoryIdSchema, CollectionIdSchema]),
@@ -176,9 +184,7 @@ export type CategoryInput = v.InferOutput<typeof CategoryInputSchema>;
 export type CollectionInput = v.InferOutput<typeof CollectionInputSchema>;
 export type TagInput = v.InferOutput<typeof TagInputSchema>;
 export type GroupingMembershipInput = v.InferOutput<typeof GroupingMembershipInputSchema>;
-export type GroupingClientError = ClientRequestError<
-  v.InferOutput<typeof GroupingApiErrorSchema>["error"]
->;
+export type GroupingClientError = v.InferOutput<typeof GroupingClientErrorSchema>;
 export type PublicGrouping = v.InferOutput<typeof PublicGroupingSchema>;
 export type PublicGroupingListing = v.InferOutput<typeof PublicGroupingListingSchema>;
 

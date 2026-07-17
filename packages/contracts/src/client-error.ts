@@ -11,12 +11,12 @@ export const ApiErrorCodeSchema = v.picklist([
   "internal",
 ]);
 
-const NetworkClientErrorSchema = v.strictObject({
+export const NetworkClientErrorSchema = v.strictObject({
   kind: v.literal("network"),
   message: v.string(),
 });
 
-const ContractClientErrorSchema = v.strictObject({
+export const ContractClientErrorSchema = v.strictObject({
   kind: v.literal("contract"),
   message: v.string(),
 });

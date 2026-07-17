@@ -4,28 +4,12 @@ import {
   requestReplaceCollectionMembership,
   requestReplaceTagMembership,
 } from "@ecom/client";
-import type { CatalogItemId, Grouping, GroupingClientError } from "@ecom/contracts";
+import type { CatalogItemId, Grouping } from "@ecom/contracts";
 import { AltArrowDown, AltArrowUp, Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show, untrack } from "solid-js";
-
-const errorMessage = (error: GroupingClientError) =>
-  error.kind === "api" ? error.error.message : "Өөрчлөлтийг хадгалж чадсангүй.";
-const submitAndFocusExpectedError = async (
-  form: HTMLFormElement,
-  submit: () => Promise<void>,
-  representedError: () => GroupingClientError | null,
-) => {
-  try {
-    await submit();
-  } catch (error) {
-    if (error !== representedError()) {
-      throw error;
-    }
-    form.querySelector<HTMLElement>("input:not(:disabled), button:not(:disabled)")?.focus();
-  }
-};
+import { groupingErrorMessage, submitAndFocusGroupingError } from "./grouping-form";
 
 export type GroupingCatalogItem = {
   readonly id: CatalogItemId;
@@ -71,11 +55,7 @@ export const GroupingMembershipEditor = (props: {
           class="mt-4"
           onSubmit={async (event) => {
             event.preventDefault();
-            await submitAndFocusExpectedError(
-              event.currentTarget,
-              () => form.handleSubmit(),
-              () => mutation.error,
-            );
+            await submitAndFocusGroupingError(event.currentTarget, () => form.handleSubmit());
           }}
         >
           <form.Field name="catalogItemIds">
@@ -168,7 +148,7 @@ export const GroupingMembershipEditor = (props: {
             Гишүүнчлэл хадгалах
           </Button>
           <Show when={mutation.error} keyed>
-            {(error) => <p role="alert">{errorMessage(error)}</p>}
+            {(error) => <p role="alert">{groupingErrorMessage(error)}</p>}
           </Show>
         </form>
       </Show>
