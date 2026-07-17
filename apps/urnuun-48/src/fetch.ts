@@ -1,7 +1,10 @@
 import { handle } from "@astrojs/cloudflare/handler";
 import {
+  isPublicMediaPath,
+  MediaUploadMultipartMaxBytes,
   resolveStaffRequest,
   resolveStoreRequestOrigin,
+  servePublicMedia,
   staffPresentationRoleHeader,
 } from "@ecom/api";
 import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
@@ -10,6 +13,7 @@ import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story"]);
 const publicProductPath = /^\/products\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const privateCatalogImageUploadPath = /^\/api\/catalog\/products\/[^/]+\/images$/;
 const isPublicStorefrontPath = (pathname: string) =>
   publicStorefrontPaths.has(pathname) || publicProductPath.test(pathname);
 
@@ -50,6 +54,26 @@ const rejectedHostResponse = () =>
     { status: 421, headers: { "cache-control": "private, no-store" } },
   );
 
+const rejectedMediaUploadSizeResponse = () =>
+  Response.json(
+    {
+      error: {
+        code: "validation",
+        message: `Multipart image uploads must declare no more than ${MediaUploadMultipartMaxBytes} bytes`,
+      },
+    },
+    { status: 413, headers: { "cache-control": "private, no-store" } },
+  );
+
+const acceptsMediaUploadSize = (request: Request) => {
+  const contentLength = request.headers.get("content-length");
+  return (
+    contentLength !== null &&
+    /^\d+$/.test(contentLength) &&
+    BigInt(contentLength) <= BigInt(MediaUploadMultipartMaxBytes)
+  );
+};
+
 export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
   if (!origin) {
@@ -58,7 +82,17 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
 
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
+  if (isPublicMediaPath(pathname)) {
+    return servePublicMedia(request);
+  }
   if (pathname === "/api" || pathname.startsWith("/api/")) {
+    if (
+      request.method === "POST" &&
+      privateCatalogImageUploadPath.test(pathname) &&
+      !acceptsMediaUploadSize(request)
+    ) {
+      return rejectedMediaUploadSizeResponse();
+    }
     return privateResponse(await api.fetch(request));
   }
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {

@@ -1,4 +1,5 @@
 import {
+  ProductIdSchema,
   ProductSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
@@ -9,6 +10,7 @@ import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
+import { catalogMediaQueries } from "../catalog-media/persistence";
 
 const ReturnedProductSchema = v.strictObject({
   id: v.string(),
@@ -57,7 +59,7 @@ const productQuery = () =>
     .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
     .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
 
-const projectProduct = (source: unknown): Product => {
+const projectProduct = (source: unknown, images: Product["images"]): Product => {
   const row = v.parse(ReturnedProductSchema, source);
   const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...product } =
     row;
@@ -71,6 +73,7 @@ const projectProduct = (source: unknown): Product => {
             requestId: cachePurgeRequestId,
             lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
           },
+    images,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
   });
@@ -79,7 +82,14 @@ const projectProduct = (source: unknown): Product => {
 export const findCatalogProductById = async (id: ProductId) => {
   const rows = await productQuery().where(eq(catalogItems.id, id)).limit(1);
   const row = rows.at(0);
-  return row ? projectProduct(row) : undefined;
+  if (!row) {
+    return undefined;
+  }
+  const images = await catalogMediaQueries.listForCatalogItems([id]);
+  return projectProduct(
+    row,
+    images.map(({ image }) => image),
+  );
 };
 
 export const catalogReaderQueries = {
@@ -87,7 +97,14 @@ export const catalogReaderQueries = {
 
   async listAll() {
     const rows = await productQuery().orderBy(desc(catalogItems.createdAt));
-    return rows.map(projectProduct);
+    const products = rows.map((row) => projectProduct(row, []));
+    const images = await catalogMediaQueries.listForCatalogItems(products.map(({ id }) => id));
+    return products.map((product) => ({
+      ...product,
+      images: images
+        .filter(({ catalogItemId }) => catalogItemId === product.id)
+        .map(({ image }) => image),
+    }));
   },
 
   async listPublished() {
@@ -110,7 +127,16 @@ export const catalogReaderQueries = {
       )
       .where(eq(catalogItems.state, "published"))
       .orderBy(desc(catalogItems.createdAt));
-    return rows.map((row) => v.parse(PublicProductSummarySchema, row));
+    const ids = rows.map((row) => v.parse(ProductIdSchema, row.id));
+    const images = await catalogMediaQueries.listPublicForCatalogItems(ids);
+    return rows.map((row) =>
+      v.parse(PublicProductSummarySchema, {
+        ...row,
+        images: images
+          .filter(({ catalogItemId }) => catalogItemId === row.id)
+          .map(({ image }) => image),
+      }),
+    );
   },
 
   async findPublishedBySlug(slug: string) {
@@ -135,6 +161,14 @@ export const catalogReaderQueries = {
       .where(and(eq(catalogItems.state, "published"), eq(catalogItems.slug, slug)))
       .limit(1);
     const row = rows.at(0);
-    return row ? v.parse(PublicProductDetailSchema, row) : undefined;
+    if (!row) {
+      return undefined;
+    }
+    const id = v.parse(ProductIdSchema, row.id);
+    const images = await catalogMediaQueries.listPublicForCatalogItems([id]);
+    return v.parse(PublicProductDetailSchema, {
+      ...row,
+      images: images.map(({ image }) => image),
+    });
   },
 };

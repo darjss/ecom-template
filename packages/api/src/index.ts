@@ -6,6 +6,13 @@ import {
   CreateProductInputSchema,
   HealthApiErrorSchema,
   InventoryAdjustmentInputSchema,
+  MediaAssetIdSchema,
+  MediaFormatSchema,
+  MediaUploadFieldsSchema,
+  MediaUploadMaxBytes,
+  MediaUploadMultipartMaxBytes,
+  MediaUploadResponseSchema,
+  MediaWidthSchema,
   ProductIdSchema,
   UpdateProductInputSchema,
   HealthResponseSchema,
@@ -22,6 +29,7 @@ import {
 import {
   adjustProductInventory,
   approveStaff,
+  attachCatalogImage,
   createProduct,
   changeStaffRole,
   createStaff,
@@ -29,6 +37,7 @@ import {
   createStorefrontReader,
   listCatalog,
   listStaff,
+  readCatalogMedia,
   readDatabaseHealth,
   readStaffAuthSession,
   removeStaff,
@@ -36,6 +45,7 @@ import {
   revokeStaff,
   transitionProduct,
   updateProduct,
+  type CatalogMediaFailure,
   type CatalogOperationFailure,
   type CustomerSmsDelivery,
   type StaffOperationFailure,
@@ -45,6 +55,8 @@ import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
+
+export { MediaUploadMultipartMaxBytes };
 
 export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
 
@@ -72,8 +84,14 @@ const apiError = (
     error: { code, message, ...(reason ? { reason } : {}) },
   });
 
+const MediaUploadBodySchema = v.strictObject({
+  file: v.instance(File),
+  position: v.union([v.string(), v.number()]),
+  altText: v.string(),
+});
+
 const catalogError = (
-  failure: CatalogOperationFailure,
+  failure: CatalogOperationFailure | CatalogMediaFailure,
   status: (code: number, body: unknown) => unknown,
 ) => {
   const code = failure.code;
@@ -90,13 +108,19 @@ const catalogError = (
               ? "Reserved inventory truth requires reconciliation"
               : code === "inventory_limit"
                 ? "Inventory on-hand cannot exceed 1,000,000"
-                : code === "not_found"
-                  ? "Product was not found"
-                  : code === "forbidden"
-                    ? "Catalog authority is required"
-                    : code === "conflict"
-                      ? "Inventory changed concurrently"
-                      : "Catalog infrastructure is unavailable";
+                : code === "unsupported_media_type"
+                  ? "The declared image type must match JPEG, PNG, or WebP bytes"
+                  : code === "invalid_media_bytes"
+                    ? "The upload is not a valid JPEG, PNG, or WebP image"
+                    : code === "media_too_large"
+                      ? "The image must be no larger than 8 MiB"
+                      : code === "not_found"
+                        ? "Product was not found"
+                        : code === "forbidden"
+                          ? "Catalog authority is required"
+                          : code === "conflict"
+                            ? "Inventory changed concurrently"
+                            : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403
@@ -104,7 +128,11 @@ const catalogError = (
         ? 404
         : code === "infrastructure_unavailable"
           ? 503
-          : 409;
+          : code === "unsupported_media_type" ||
+              code === "invalid_media_bytes" ||
+              code === "media_too_large"
+            ? 422
+            : 409;
   return status(
     httpStatus,
     v.parse(CatalogApiErrorSchema, {
@@ -116,13 +144,15 @@ const catalogError = (
               ? "not_found"
               : httpStatus === 503
                 ? "unavailable"
-                : "conflict",
+                : httpStatus === 422
+                  ? "validation"
+                  : "conflict",
         message,
         reason:
           code === "conflict" || code === "infrastructure_unavailable" || code === "forbidden"
             ? undefined
             : code,
-        blockers: failure.blockers,
+        blockers: "blockers" in failure ? failure.blockers : undefined,
       },
     }),
   );
@@ -376,6 +406,38 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         ? catalogError(result.error, status)
         : v.parse(CatalogProductResponseSchema, { data: result.value });
     })
+    .post("/catalog/products/:id/images", async ({ body, params, request, status }) => {
+      const id = v.safeParse(ProductIdSchema, params.id);
+      const multipart = v.safeParse(MediaUploadBodySchema, body);
+      const fields = multipart.success
+        ? v.safeParse(MediaUploadFieldsSchema, {
+            position: Number(multipart.output.position),
+            altText: multipart.output.altText,
+          })
+        : undefined;
+      if (!id.success || !multipart.success || !fields?.success) {
+        return status(
+          422,
+          apiError("validation", "A valid image, position, and alt text are required"),
+        );
+      }
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      if (multipart.output.file.size > MediaUploadMaxBytes) {
+        return catalogError({ code: "media_too_large" }, status);
+      }
+      const result = await attachCatalogImage(authorization.actor, id.output, {
+        declaredContentType: multipart.output.file.type,
+        bytes: new Uint8Array(await multipart.output.file.arrayBuffer()),
+        position: fields.output.position,
+        altText: fields.output.altText,
+      });
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(MediaUploadResponseSchema, { data: result.value });
+    })
     .post("/catalog/products/:id/publish", async ({ params, request, status }) => {
       const id = v.safeParse(ProductIdSchema, params.id);
       if (!id.success) {
@@ -473,6 +535,58 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         },
       });
     });
+
+const mediaPathPattern =
+  /^\/media\/(media_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25})\/(320|640|960|1280)\.(avif|webp)$/;
+
+export const isPublicMediaPath = (pathname: string) => mediaPathPattern.test(pathname);
+
+export const servePublicMedia = async (request: Request) => {
+  const match = mediaPathPattern.exec(new URL(request.url).pathname);
+  const mediaAssetId = v.safeParse(MediaAssetIdSchema, match?.[1]);
+  const width = v.safeParse(MediaWidthSchema, Number(match?.[2]));
+  const format = v.safeParse(MediaFormatSchema, match?.[3]);
+  if (
+    (request.method !== "GET" && request.method !== "HEAD") ||
+    !mediaAssetId.success ||
+    !width.success ||
+    !format.success
+  ) {
+    return privateResponse(
+      Response.json(
+        { error: { code: "validation", message: "An approved media path is required" } },
+        { status: 404 },
+      ),
+    );
+  }
+  const result = await readCatalogMedia(mediaAssetId.output, width.output, format.output);
+  if (result.isErr()) {
+    return privateResponse(
+      Response.json(
+        {
+          error: {
+            code: result.error.code === "not_found" ? "not_found" : "unavailable",
+            message:
+              result.error.code === "not_found"
+                ? "Media Asset was not found"
+                : "Media delivery is unavailable",
+          },
+        },
+        { status: result.error.code === "not_found" ? 404 : 503 },
+      ),
+    );
+  }
+  const transformed = result.value;
+  const headers = new Headers(transformed.headers);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set("cloudflare-cdn-cache-control", "public, max-age=31536000, immutable");
+  headers.delete("set-cookie");
+  return new Response(request.method === "HEAD" ? null : transformed.body, {
+    status: transformed.status,
+    statusText: transformed.statusText,
+    headers,
+  });
+};
 
 export type StoreElysiaApp = ReturnType<typeof createApi>;
 
