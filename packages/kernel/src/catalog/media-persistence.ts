@@ -104,9 +104,9 @@ export const catalogMediaQueries = {
       .innerJoin(mediaAssets, eq(mediaAssets.id, catalogItemImages.mediaAssetId))
       .where(inArray(catalogItemImages.catalogItemId, ids))
       .orderBy(asc(catalogItemImages.position));
-    return rows.map((row) => ({
-      catalogItemId: v.parse(ProductIdSchema, row.catalogItemId),
-      image: projectCatalogImage(row),
+    return rows.map(({ catalogItemId, ...image }) => ({
+      catalogItemId: v.parse(ProductIdSchema, catalogItemId),
+      image: projectCatalogImage(image),
     }));
   },
 
