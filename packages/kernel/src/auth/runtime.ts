@@ -153,26 +153,6 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
       : { kind: "identity_conflict" as const };
   }
 
-  const authority = await (async () => {
-    try {
-      return {
-        success: true as const,
-        role: await staffQueries.readCurrentSessionAuthority(session.user.id, staffId.output),
-      };
-    } catch {
-      return { success: false as const };
-    }
-  })();
-  if (!authority.success) {
-    return { kind: "unavailable" as const };
-  }
-  if (authority.role !== role.output) {
-    if (!(await deleteSession())) {
-      return { kind: "unavailable" as const };
-    }
-    return { kind: "unauthorized" as const };
-  }
-
   return {
     kind: "active" as const,
     actor: {

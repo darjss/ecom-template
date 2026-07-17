@@ -222,21 +222,6 @@ export const staffQueries = {
   findById,
   resolveApplicant,
 
-  async readCurrentSessionAuthority(authUserId: string, id: StaffId) {
-    const rows = await database()
-      .select({ role: staffMembers.role })
-      .from(staffMembers)
-      .where(
-        and(
-          eq(staffMembers.id, id),
-          eq(staffMembers.authUserId, authUserId),
-          eq(staffMembers.status, "active"),
-        ),
-      )
-      .limit(1);
-    return rows.at(0)?.role ?? undefined;
-  },
-
   async provisionOwner(email: string) {
     const normalizedEmail = normalizeEmail(email);
     const current = await findByNormalizedEmail(normalizedEmail);

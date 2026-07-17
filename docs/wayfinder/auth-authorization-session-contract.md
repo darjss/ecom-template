@@ -37,7 +37,7 @@ After bootstrap, Staff entry has two paths:
 
 Only Owners may approve, reject, revoke, or delete Staff records; change Staff roles; create another Owner; or change authentication settings. Multiple Owners are allowed. Admin must refuse to revoke, demote, or delete the final active Owner.
 
-A role change or revocation deletes every Staff Auth session for that Staff Member. Staff sessions contain a role snapshot, last 14 days, and use Better Auth's rolling refresh near expiry. Staff Auth must not use a client cookie cache that can remain valid after server-side session deletion. Every authorized request verifies that the session's auth user, Staff identity, and role still match the active D1 Staff record; a mismatch deletes the stale session and denies authority.
+Approval, role change, revocation, and removal delete every Staff Auth session for that Staff Member immediately before mutation and again after the committed target state. Repeating a target-state command repeats session cleanup. Staff sessions contain the role snapshot used for authorization, last 14 days, and use Better Auth's rolling refresh near expiry. Staff Auth must not use a client cookie cache that can remain valid after server-side session deletion. Normal requests validate the revocable KV-backed session and do not query D1 again solely for role authorization.
 
 ## Staff roles
 

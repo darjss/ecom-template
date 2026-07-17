@@ -66,6 +66,15 @@ const deleteSessions = async (origin: string, member: StaffRecord) => {
   }
 };
 
+const completeAuthorityChange = async (
+  origin: string,
+  sessionOwner: StaffRecord,
+  result: StaffRecord,
+): Promise<Result<StaffMember, StaffOperationFailure>> =>
+  (await deleteSessions(origin, sessionOwner))
+    ? Result.ok(publicMember(result))
+    : Result.err({ code: "session_revocation_failed" });
+
 export const listStaff = async (
   actor: StaffActor,
 ): Promise<Result<{ readonly members: readonly StaffMember[] }, StaffOperationFailure>> => {
@@ -136,14 +145,14 @@ export const approveStaff = async (
       return Result.err({ code: "session_revocation_failed" });
     }
     if (before.status === "active") {
-      return Result.ok(publicMember(before));
+      return completeAuthorityChange(origin, before, before);
     }
     const { changed, current } = await staffQueries.approve(commandContext(actor), id, role);
     if (changed) {
-      return Result.ok(publicMember(changed));
+      return completeAuthorityChange(origin, changed, changed);
     }
     return current?.status === "active" && current.role === role
-      ? Result.ok(publicMember(current))
+      ? completeAuthorityChange(origin, current, current)
       : Result.err({ code: current ? "invalid_transition" : "not_found" });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
@@ -179,14 +188,14 @@ export const changeStaffRole = async (
       return Result.err({ code: "session_revocation_failed" });
     }
     if (before.role === role) {
-      return Result.ok(publicMember(before));
+      return completeAuthorityChange(origin, before, before);
     }
     const { changed, current } = await staffQueries.changeRole(commandContext(actor), id, role);
     if (changed) {
-      return Result.ok(publicMember(changed));
+      return completeAuthorityChange(origin, changed, changed);
     }
     if (current?.status === "active" && current.role === role) {
-      return Result.ok(publicMember(current));
+      return completeAuthorityChange(origin, current, current);
     }
     return Result.err({
       code:
@@ -229,14 +238,14 @@ export const revokeStaff = async (
       return Result.err({ code: "session_revocation_failed" });
     }
     if (before.status === "revoked") {
-      return Result.ok(publicMember(before));
+      return completeAuthorityChange(origin, before, before);
     }
     const { changed, current } = await staffQueries.revoke(commandContext(actor), id);
     if (changed) {
-      return Result.ok(publicMember(changed));
+      return completeAuthorityChange(origin, changed, changed);
     }
     if (current?.status === "revoked") {
-      return Result.ok(publicMember(current));
+      return completeAuthorityChange(origin, current, current);
     }
     return Result.err({
       code:
@@ -277,7 +286,7 @@ export const removeStaff = async (
     }
     const { removed, current } = await staffQueries.remove(commandContext(actor), id);
     if (removed || !current) {
-      return Result.ok(publicMember(removed ?? before));
+      return completeAuthorityChange(origin, before, removed ?? before);
     }
     return Result.err({
       code:
