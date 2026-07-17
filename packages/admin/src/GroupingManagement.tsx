@@ -17,6 +17,25 @@ const labelClass = "grid gap-1.5 text-xs font-bold text-(--muted)";
 const errorMessage = (error: GroupingClientError) =>
   error.kind === "api" ? error.error.message : "Өөрчлөлтийг хадгалж чадсангүй.";
 
+const submitAndFocusExpectedError = async (
+  form: HTMLFormElement,
+  submit: () => Promise<void>,
+  representedError: () => GroupingClientError | null,
+) => {
+  try {
+    await submit();
+  } catch (error) {
+    if (error !== representedError()) {
+      throw error;
+    }
+    form
+      .querySelector<HTMLElement>(
+        "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
+      )
+      ?.focus();
+  }
+};
+
 const CreateCategoryForm = (props: { categories: readonly Category[] }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => groupingMutationOptions(queryClient));
@@ -40,7 +59,11 @@ const CreateCategoryForm = (props: { categories: readonly Category[] }) => {
       class="grid gap-3 border-t border-black/10 py-5 md:grid-cols-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        await submitAndFocusExpectedError(
+          event.currentTarget,
+          () => form.handleSubmit(),
+          () => mutation.error,
+        );
       }}
     >
       <form.Field name="name">
@@ -131,7 +154,11 @@ const CreateCollectionForm = () => {
       class="grid gap-3 border-t border-black/10 py-5 md:grid-cols-3"
       onSubmit={async (event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        await submitAndFocusExpectedError(
+          event.currentTarget,
+          () => form.handleSubmit(),
+          () => mutation.error,
+        );
       }}
     >
       <form.Field name="name">
@@ -200,7 +227,11 @@ const CreateTagForm = () => {
       class="flex flex-wrap items-end gap-3 border-t border-black/10 py-5"
       onSubmit={async (event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        await submitAndFocusExpectedError(
+          event.currentTarget,
+          () => form.handleSubmit(),
+          () => mutation.error,
+        );
       }}
     >
       <form.Field name="label">
@@ -287,7 +318,11 @@ const GroupingEditor = (props: { grouping: Grouping; categories: readonly Catego
       class="grid gap-3 md:grid-cols-[minmax(10rem,1fr)_minmax(10rem,1fr)_auto_auto]"
       onSubmit={async (event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        await submitAndFocusExpectedError(
+          event.currentTarget,
+          () => form.handleSubmit(),
+          () => mutation.error,
+        );
       }}
     >
       <form.Field name="name">
@@ -413,7 +448,11 @@ const MembershipEditor = (props: {
       class="mt-4 border-t border-black/10 pt-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        await submitAndFocusExpectedError(
+          event.currentTarget,
+          () => form.handleSubmit(),
+          () => mutation.error,
+        );
       }}
     >
       <p class="mt-0 mb-3 text-xs font-bold text-(--muted)">Бүтээгдэхүүний гишүүнчлэл</p>
