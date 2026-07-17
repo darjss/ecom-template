@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import type { Dirent } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -184,20 +185,47 @@ const readDeliveryJournal = async (targetName: string) => {
 const isMissingFile = (error: unknown) =>
   typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 
+const privateManifestLimit = 100;
+
+const readPrivateManifestPaths = async () => {
+  const paths: string[] = [];
+  const visit = async (directory: string, root = false): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (root && isMissingFile(error)) {
+        return;
+      }
+      throw error;
+    }
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+      } else if (entry.isFile() && /\.ya?ml$/.test(entry.name)) {
+        paths.push(path);
+        if (paths.length > privateManifestLimit) {
+          throw new Error("Canonical private delivery evidence exceeds its bounded file limit");
+        }
+      }
+    }
+  };
+  await visit(".private", true);
+  return paths.toSorted();
+};
+
 const resolveCanonicalRemoteTarget = async (slug: string) => {
-  const appDirectory = join("apps", slug);
-  const entries = await readdir(appDirectory, { withFileTypes: true });
-  const manifestPaths = entries
-    .filter(
-      (entry) => entry.isFile() && /^delivery\.[a-z0-9]+(?:-[a-z0-9]+)*\.yml$/.test(entry.name),
-    )
-    .map((entry) => join(appDirectory, entry.name))
-    .toSorted();
   const candidates: Array<Awaited<ReturnType<typeof readTarget>>> = [];
-  for (const path of manifestPaths) {
-    const { manifest, digest } = await readManifestPath(path);
-    for (const [targetName, target] of Object.entries(manifest.targets)) {
-      if (target.kind === "local" || targetSlug(target.app) !== slug) {
+  for (const path of await readPrivateManifestPaths()) {
+    let input: ManifestInput;
+    try {
+      input = await readManifestPath(path);
+    } catch {
+      throw new Error("Canonical private Production manifest evidence is malformed");
+    }
+    for (const [targetName, target] of Object.entries(input.manifest.targets)) {
+      if (target.kind !== "production" || targetSlug(target.app) !== slug) {
         continue;
       }
       let journalSource: string;
@@ -213,26 +241,43 @@ const resolveCanonicalRemoteTarget = async (slug: string) => {
       if (
         journal.target !== targetName ||
         journal.app !== target.app ||
-        journal.manifestDigest !== digest ||
+        journal.manifestDigest !== input.digest ||
         !journal.completedSteps.includes("remote-deploy")
       ) {
         throw new Error(
           "Canonical remote Owner evidence does not match its target, app, manifest, or deployment step",
         );
       }
-      candidates.push({ targetName, target, manifestDigest: digest });
+      candidates.push({ targetName, target, manifestDigest: input.digest });
     }
   }
   const candidate = candidates.length === 1 ? candidates.at(0) : undefined;
   if (!candidate) {
     throw new Error(
       candidates.length === 0
-        ? `Store ${slug} has no canonical deployed Owner target evidence`
-        : `Store ${slug} has ambiguous deployed Owner target evidence`,
+        ? `Store ${slug} has no canonical private Production Owner target evidence`
+        : `Store ${slug} has ambiguous private Production Owner target evidence`,
     );
   }
   return candidate;
 };
+
+const isCommitAncestor = (ancestor: string, descendant: string) =>
+  new Promise<boolean>((resolve, reject) => {
+    const child = spawn("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      stdio: "ignore",
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve(true);
+      } else if (code === 1) {
+        resolve(false);
+      } else {
+        reject(new Error("Recorded deployment commit is invalid or unavailable"));
+      }
+    });
+  });
 
 const verifyRemoteD1Resource = async (
   app: string,
@@ -297,10 +342,11 @@ const addOwner = async () => {
   const journal = await readDeliveryJournal(targetName);
   const commit = await readCommitIdentity();
   const expectedD1Name = `${target.resourcePrefix}-db`;
+  const compatibleCommit = await isCommitAncestor(journal.commit, commit);
   if (
     journal.target !== targetName ||
     journal.app !== target.app ||
-    journal.commit !== commit ||
+    !compatibleCommit ||
     journal.manifestDigest !== manifestDigest ||
     journal.resources.d1.name !== expectedD1Name ||
     !journal.completedSteps.includes("remote-deploy")
