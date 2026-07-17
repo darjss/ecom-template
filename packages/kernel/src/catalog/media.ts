@@ -11,7 +11,9 @@ import {
 import { Result } from "better-result";
 import { env } from "cloudflare:workers";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import { resolvePendingCatalogCachePurge } from "./cache";
 import { catalogMediaQueries } from "./media-persistence";
+import { catalogQueries } from "./persistence";
 
 export type CatalogMediaFailure = {
   readonly code:
@@ -93,6 +95,10 @@ export const attachCatalogImage = async (
       input.altText,
       new Date(),
     );
+    const product = await catalogQueries.findById(catalogItemId);
+    if (product?.cachePurgeDebt) {
+      await resolvePendingCatalogCachePurge(product);
+    }
     return Result.ok<CatalogImage, never>(image);
   } catch {
     return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
