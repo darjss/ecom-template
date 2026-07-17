@@ -4,6 +4,7 @@ export {
   expandBundleDemand,
   listBundles,
   readCatalogItemPersonalizations,
+  retryBundleCachePurge,
   saveBundleComponents,
   saveCatalogItemPersonalizations,
   transitionBundle,

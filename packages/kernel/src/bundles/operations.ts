@@ -116,6 +116,17 @@ export const createBundle = async (actor: StaffActor, input: CreateBundleInput) 
   }
 };
 
+export const retryBundleCachePurge = async (actor: StaffActor, id: BundleId) => {
+  if (!authorized(actor)) {
+    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
+  }
+  try {
+    return resolveBundle(id, true);
+  } catch {
+    return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
+  }
+};
+
 export const updateBundle = async (actor: StaffActor, id: BundleId, input: UpdateBundleInput) => {
   if (!authorized(actor)) {
     return Result.err<never, BundleOperationFailure>({ code: "forbidden" });

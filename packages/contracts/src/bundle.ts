@@ -1,6 +1,6 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
-import type { ClientRequestError } from "./client-error";
+import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   BundleIdSchema,
   CachePurgeDebtSchema,
@@ -228,6 +228,14 @@ export const BundleApiErrorSchema = v.strictObject({
     reason: v.optional(BundleFailureReasonSchema),
   }),
 });
+export const BundleClientErrorSchema = v.variant("kind", [
+  NetworkClientErrorSchema,
+  ContractClientErrorSchema,
+  v.strictObject({
+    kind: v.literal("api"),
+    error: BundleApiErrorSchema.entries.error,
+  }),
+]);
 
 export const PublicBundleDetailSchema = v.strictObject({
   id: BundleIdSchema,
@@ -273,9 +281,7 @@ export type PersonalizationDefinition = v.InferOutput<typeof PersonalizationDefi
 export type PersonalizationAnswer = v.InferOutput<typeof PersonalizationAnswerSchema>;
 export type PublicBundleDetail = v.InferOutput<typeof PublicBundleDetailSchema>;
 export type BundleDemand = v.InferOutput<typeof BundleDemandSchema>;
-export type BundleClientError = ClientRequestError<
-  v.InferOutput<typeof BundleApiErrorSchema>["error"]
->;
+export type BundleClientError = v.InferOutput<typeof BundleClientErrorSchema>;
 
 export const createPersonalizationId = () => typeidUnboxed("personalization");
 export const createPersonalizationValueId = () => typeidUnboxed("personalization_value");

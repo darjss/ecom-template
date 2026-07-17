@@ -9,6 +9,7 @@ import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
+import { submitBundleForm } from "./bundle-form";
 
 const PersonalizationKindSchema = v.picklist(["text", "single_select", "checkbox"]);
 const ActiveStateSchema = v.literal("active");
@@ -82,15 +83,20 @@ export const PersonalizationEditor = (props: { catalogItemId: CatalogItemId }) =
     },
   }));
 
-  const toggleState = (definition: PersonalizationDefinition) => {
+  const toggleState = (definition: PersonalizationDefinition, root: HTMLElement) => {
     const current = query.data?.data ?? [];
-    mutation.mutate({
-      definitions: current.map((candidate) =>
-        candidate.id === definition.id
-          ? { ...toDraft(candidate), state: candidate.state === "active" ? "archived" : "active" }
-          : toDraft(candidate),
-      ),
-    });
+    void submitBundleForm(root, () =>
+      mutation.mutateAsync({
+        definitions: current.map((candidate) =>
+          candidate.id === definition.id
+            ? {
+                ...toDraft(candidate),
+                state: candidate.state === "active" ? "archived" : "active",
+              }
+            : toDraft(candidate),
+        ),
+      }),
+    );
   };
 
   return (
@@ -114,7 +120,12 @@ export const PersonalizationEditor = (props: { catalogItemId: CatalogItemId }) =
                         type="button"
                         variant="secondary"
                         disabled={mutation.isPending}
-                        onClick={() => toggleState(definition)}
+                        onClick={(event) =>
+                          toggleState(
+                            definition,
+                            event.currentTarget.closest("li") ?? event.currentTarget,
+                          )
+                        }
                       >
                         {definition.state === "active" ? "Архивлах" : "Идэвхжүүлэх"}
                       </Button>
@@ -126,9 +137,9 @@ export const PersonalizationEditor = (props: { catalogItemId: CatalogItemId }) =
           </Show>
           <form
             class="grid grid-cols-1 gap-3 md:grid-cols-3"
-            onSubmit={async (event) => {
+            onSubmit={(event) => {
               event.preventDefault();
-              await form.handleSubmit();
+              void submitBundleForm(event.currentTarget, form.handleSubmit);
             }}
           >
             <form.Field name="kind">

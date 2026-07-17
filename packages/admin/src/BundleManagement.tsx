@@ -5,6 +5,7 @@ import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { For, Show } from "solid-js";
 import * as v from "valibot";
+import { submitBundleForm } from "./bundle-form";
 import { PersonalizationEditor } from "./PersonalizationEditor";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -30,9 +31,9 @@ const CreateBundleForm = () => {
   return (
     <form
       class="grid grid-cols-1 gap-3 pb-8 md:grid-cols-4"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        await form.handleSubmit();
+        void submitBundleForm(event.currentTarget, form.handleSubmit);
       }}
     >
       <form.Field name="name">
@@ -143,7 +144,12 @@ const BundleRow = (props: { bundle: Bundle }) => {
           type="button"
           variant="secondary"
           disabled={mutation.isPending}
-          onClick={() => mutation.mutate({ kind: nextAction(), id: props.bundle.id })}
+          onClick={(event) => {
+            const root = event.currentTarget.closest("li") ?? event.currentTarget;
+            const action = nextAction();
+            const id = props.bundle.id;
+            void submitBundleForm(root, () => mutation.mutateAsync({ kind: action, id }));
+          }}
         >
           {props.bundle.state === "draft"
             ? "Нийтлэх"
@@ -155,9 +161,9 @@ const BundleRow = (props: { bundle: Bundle }) => {
       <Show when={props.bundle.state === "draft"}>
         <form
           class="grid gap-2"
-          onSubmit={async (event) => {
+          onSubmit={(event) => {
             event.preventDefault();
-            await componentForm.handleSubmit();
+            void submitBundleForm(event.currentTarget, componentForm.handleSubmit);
           }}
         >
           <componentForm.Field name="components">
@@ -211,6 +217,26 @@ const BundleRow = (props: { bundle: Bundle }) => {
         </For>
       </ul>
       <PersonalizationEditor catalogItemId={props.bundle.id} />
+      <Show when={props.bundle.cachePurgeDebt} keyed>
+        {(debt) => (
+          <div role="alert" tabindex="-1">
+            <p>
+              Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Оролдлого: {debt.attemptCount}
+            </p>
+            <Show when={debt.requestId} keyed>
+              {(requestId) => <p>Cloudflare хүсэлтийн ID: {requestId}</p>}
+            </Show>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate({ kind: "retry-cache-purge", id: props.bundle.id })}
+            >
+              Cache цэвэрлэгээг дахин оролдох
+            </Button>
+          </div>
+        )}
+      </Show>
       <Show when={mutation.error} keyed>
         {(error) => <p role="alert">{errorMessage(error)}</p>}
       </Show>

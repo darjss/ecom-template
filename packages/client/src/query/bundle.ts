@@ -1,6 +1,10 @@
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
-import type { CatalogItemId, SavePersonalizationsInput } from "@ecom/contracts";
+import {
+  BundleIdSchema,
+  type CatalogItemId,
+  type SavePersonalizationsInput,
+} from "@ecom/contracts";
 import {
   requestBundleMutation,
   requestBundles,
@@ -9,6 +13,7 @@ import {
   type BundleMutation,
 } from "../bundle/request";
 import { unwrapRequestResult } from "../request";
+import * as v from "valibot";
 import { catalogQueryKey } from "./catalog";
 
 const bundleQueryKey = ["catalog", "bundles"] as const;
@@ -34,7 +39,19 @@ export const personalizationMutationOptions = (queryClient: QueryClient, id: Cat
     mutationFn: async (input: SavePersonalizationsInput) =>
       unwrapRequestResult(await requestPersonalizationMutation(id, input)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: personalizationQueryKey(id) });
+      const bundleId = v.safeParse(BundleIdSchema, id);
+      const authoritativeKey = bundleId.success ? bundleQueryKey : catalogQueryKey;
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: personalizationQueryKey(id),
+          refetchType: "none",
+        }),
+        queryClient.invalidateQueries({ queryKey: authoritativeKey, refetchType: "none" }),
+      ]);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: personalizationQueryKey(id), type: "active" }),
+        queryClient.refetchQueries({ queryKey: authoritativeKey, type: "active" }),
+      ]);
     },
   });
 
