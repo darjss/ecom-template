@@ -141,7 +141,21 @@ export const PersonalizationDefinitionDraftSchema = v.variant("kind", [
   }),
 ]);
 export const SavePersonalizationsInputSchema = v.strictObject({
-  definitions: v.pipe(v.array(PersonalizationDefinitionDraftSchema), v.maxLength(12)),
+  definitions: v.pipe(
+    v.array(PersonalizationDefinitionDraftSchema),
+    v.maxLength(12),
+    v.check(
+      (definitions) =>
+        definitions.every(
+          (definition) =>
+            definition.kind !== "single_select" ||
+            definition.state !== "active" ||
+            !definition.required ||
+            definition.values.some((value) => value.state === "active"),
+        ),
+      "An active required single-select definition needs an active value",
+    ),
+  ),
 });
 export const PersonalizationListResponseSchema = v.strictObject({
   data: PersonalizationDefinitionsSchema,
@@ -210,6 +224,7 @@ export const BundleFailureReasonSchema = v.picklist([
   "invalid_component",
   "duplicate_component",
   "immutable_components",
+  "slug_locked",
   "published_bundle_dependency",
   "invalid_personalization",
   "committed_but_not_purged",

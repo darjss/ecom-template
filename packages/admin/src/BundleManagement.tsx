@@ -1,9 +1,13 @@
 import { bundleMutationOptions, bundleQueryOptions, catalogQueryOptions } from "@ecom/client";
-import { VariantIdSchema, type Bundle, type BundleClientError } from "@ecom/contracts";
+import {
+  SaveBundleComponentsInputSchema,
+  type Bundle,
+  type BundleClientError,
+} from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
-import { For, Show } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
 import * as v from "valibot";
 import { submitBundleForm } from "./bundle-form";
 import { PersonalizationEditor } from "./PersonalizationEditor";
@@ -106,6 +110,7 @@ const BundleRow = (props: { bundle: Bundle }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => bundleMutationOptions(queryClient));
   const catalog = useQuery(() => catalogQueryOptions());
+  const [componentInputError, setComponentInputError] = createSignal(false);
   const componentForm = createForm(() => ({
     defaultValues: {
       components: props.bundle.components
@@ -113,15 +118,28 @@ const BundleRow = (props: { bundle: Bundle }) => {
         .join("\n"),
     },
     onSubmit: async ({ value }) => {
-      const components = value.components.split("\n").flatMap((line) => {
-        const [rawId = "", rawQuantity = ""] = line.split("|");
-        const id = v.safeParse(VariantIdSchema, rawId.trim());
-        const quantity = Number(rawQuantity);
-        return id.success && Number.isInteger(quantity) && quantity > 0 && quantity <= 999
-          ? [{ variantId: id.output, quantity }]
-          : [];
+      const input = v.safeParse(SaveBundleComponentsInputSchema, {
+        components: value.components
+          .split("\n")
+          .filter((line) => line.trim().length > 0)
+          .map((line) => {
+            const parts = line.split("|");
+            return {
+              variantId: (parts.at(0) ?? "").trim(),
+              quantity: parts.length === 2 ? Number(parts[1]) : Number.NaN,
+            };
+          }),
       });
-      await mutation.mutateAsync({ kind: "save-components", id: props.bundle.id, components });
+      if (!input.success) {
+        setComponentInputError(true);
+        return;
+      }
+      setComponentInputError(false);
+      await mutation.mutateAsync({
+        kind: "save-components",
+        id: props.bundle.id,
+        components: input.output.components,
+      });
     },
   }));
   const nextAction = () =>
@@ -182,18 +200,21 @@ const BundleRow = (props: { bundle: Bundle }) => {
           <Button type="submit" variant="secondary" disabled={mutation.isPending}>
             Бүрэлдэхүүн хадгалах
           </Button>
+          <Show when={componentInputError()}>
+            <p role="alert" tabindex="-1">
+              Хоосон бус мөр бүр хүчинтэй Variant ID|тоо хэлбэртэй байх ёстой.
+            </p>
+          </Show>
           <details class="text-sm text-(--muted)">
-            <summary class="cursor-pointer">Сонгох боломжтой non-default Variant ID</summary>
+            <summary class="cursor-pointer">Сонгох боломжтой Variant ID</summary>
             <ul>
               <For
                 each={
                   catalog.data?.data.flatMap((product) =>
-                    product.optionConfiguration.variants
-                      .filter((variant) => !variant.isDefault)
-                      .map((variant) => ({
-                        id: variant.id,
-                        label: `${product.name} · ${variant.sku}`,
-                      })),
+                    product.optionConfiguration.variants.map((variant) => ({
+                      id: variant.id,
+                      label: `${product.name} · ${variant.sku}`,
+                    })),
                   ) ?? []
                 }
               >
@@ -263,13 +284,26 @@ export const BundleManagement = () => {
         </span>
       </div>
       <CreateBundleForm />
-      <Show when={bundles.data} fallback={<p role="status">Bundle ачаалж байна…</p>}>
-        {(data) => (
-          <ul class="m-0 list-none border-b border-black/15 p-0">
-            <For each={data().data}>{(bundle) => <BundleRow bundle={bundle} />}</For>
-          </ul>
-        )}
-      </Show>
+      <Switch>
+        <Match when={bundles.isError}>
+          <div role="alert" class="grid justify-items-start gap-2">
+            <p>Bundle жагсаалтыг ачаалж чадсангүй.</p>
+            <Button type="button" variant="secondary" onClick={() => void bundles.refetch()}>
+              Дахин оролдох
+            </Button>
+          </div>
+        </Match>
+        <Match when={bundles.data}>
+          {(data) => (
+            <ul class="m-0 list-none border-b border-black/15 p-0">
+              <For each={data().data}>{(bundle) => <BundleRow bundle={bundle} />}</For>
+            </ul>
+          )}
+        </Match>
+        <Match when={true}>
+          <p role="status">Bundle ачаалж байна…</p>
+        </Match>
+      </Switch>
     </section>
   );
 };

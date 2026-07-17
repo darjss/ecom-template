@@ -29,6 +29,7 @@ export type BundleOperationFailure = {
     | "invalid_component"
     | "duplicate_component"
     | "immutable_components"
+    | "slug_locked"
     | "invalid_personalization"
     | "infrastructure_unavailable";
 };
@@ -137,7 +138,9 @@ export const updateBundle = async (actor: StaffActor, id: BundleId, input: Updat
       ? resolveBundle(id, true)
       : Result.err<never, BundleOperationFailure>({
           code:
-            result.kind === "not_found" || result.kind === "duplicate_slug"
+            result.kind === "not_found" ||
+            result.kind === "duplicate_slug" ||
+            result.kind === "slug_locked"
               ? result.kind
               : "infrastructure_unavailable",
         });

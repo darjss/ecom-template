@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8ca435f3-1c71-470e-b2f2-98505e95ecc7",
+  "id": "a6004b55-d67d-4596-8af7-33739f34b34d",
   "prevId": "fc014411-9844-4040-b465-33e142c27239",
   "tables": {
     "audit_events": {
@@ -197,13 +197,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "locked_at": {
-          "name": "locked_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },

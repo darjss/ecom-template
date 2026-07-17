@@ -57,10 +57,11 @@ const bundleError = (failure: BundleOperationFailure, status: Status) => {
     not_found: "Bundle or Catalog Item was not found",
     duplicate_slug: "Catalog slug is already in use",
     invalid_lifecycle: "Bundle lifecycle transition is not valid",
-    invalid_publication: "Bundle components must be active Published non-default Variants",
+    invalid_publication: "Bundle components must be active Variants of Published Products",
     invalid_component: "Every Bundle component must be a valid Variant",
     duplicate_component: "A Variant may occur only once in a Bundle",
     immutable_components: "Published Bundle component identities and quantities are locked",
+    slug_locked: "A Published Bundle slug cannot change",
     invalid_personalization: "Personalization definitions are invalid",
     infrastructure_unavailable: "Bundle infrastructure is unavailable",
   };

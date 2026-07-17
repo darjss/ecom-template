@@ -2,7 +2,6 @@ CREATE TABLE `bundle_components` (
 	`bundle_id` text NOT NULL,
 	`variant_id` text NOT NULL,
 	`quantity` integer NOT NULL,
-	`locked_at` integer,
 	PRIMARY KEY(`bundle_id`, `variant_id`),
 	FOREIGN KEY (`bundle_id`) REFERENCES `catalog_items`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`variant_id`) REFERENCES `variants`(`id`) ON UPDATE no action ON DELETE restrict,

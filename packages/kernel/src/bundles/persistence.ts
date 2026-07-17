@@ -13,7 +13,7 @@ import {
   type SavePersonalizationsInput,
   type UpdateBundleInput,
 } from "@ecom/contracts";
-import { and, asc, desc, eq, exists, inArray, notExists, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, ne, notExists, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import { compactSku } from "../catalog/sku";
@@ -36,7 +36,11 @@ export const readPersonalizations = async (catalogItemIds: readonly CatalogItemI
     return [];
   }
   const db = database();
-  const [definitions, values] = await Promise.all([
+  const [items, definitions, values] = await Promise.all([
+    db
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(inArray(catalogItems.id, catalogItemIds)),
     db
       .select()
       .from(personalizationDefinitions)
@@ -60,33 +64,35 @@ export const readPersonalizations = async (catalogItemIds: readonly CatalogItemI
       .where(inArray(personalizationDefinitions.catalogItemId, catalogItemIds))
       .orderBy(asc(personalizationValues.position)),
   ]);
-  return catalogItemIds.map((catalogItemId) => ({
-    catalogItemId,
-    definitions: v.parse(
-      PersonalizationDefinitionsSchema,
-      definitions
-        .filter((definition) => definition.catalogItemId === catalogItemId)
-        .map(
-          ({
-            catalogItemId: _catalogItemId,
-            createdAt: _createdAt,
-            updatedAt: _updatedAt,
-            ...definition
-          }) => ({
-            ...definition,
-            values: values
-              .filter((value) => value.personalizationId === definition.id)
-              .map(
-                ({
-                  catalogItemId: _valueCatalogItemId,
-                  personalizationId: _personalizationId,
-                  ...value
-                }) => value,
-              ),
-          }),
-        ),
-    ),
-  }));
+  return catalogItemIds
+    .filter((catalogItemId) => items.some((item) => item.id === catalogItemId))
+    .map((catalogItemId) => ({
+      catalogItemId,
+      definitions: v.parse(
+        PersonalizationDefinitionsSchema,
+        definitions
+          .filter((definition) => definition.catalogItemId === catalogItemId)
+          .map(
+            ({
+              catalogItemId: _catalogItemId,
+              createdAt: _createdAt,
+              updatedAt: _updatedAt,
+              ...definition
+            }) => ({
+              ...definition,
+              values: values
+                .filter((value) => value.personalizationId === definition.id)
+                .map(
+                  ({
+                    catalogItemId: _valueCatalogItemId,
+                    personalizationId: _personalizationId,
+                    ...value
+                  }) => value,
+                ),
+            }),
+          ),
+      ),
+    }));
 };
 
 const readBundles = async (id?: BundleId, publishedSlug?: string) => {
@@ -170,12 +176,13 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
   });
 };
 
-const cacheDebt = (catalogItemId: CatalogItemId, now: Date) =>
-  database()
+const cacheDebt = (catalogItemId: CatalogItemId, now: Date) => {
+  const revision = crypto.randomUUID();
+  return database()
     .insert(catalogCachePurgeDebts)
     .values({
       productId: catalogItemId,
-      revision: crypto.randomUUID(),
+      revision,
       attemptCount: 0,
       requestId: null,
       commandCommittedAt: now,
@@ -184,13 +191,14 @@ const cacheDebt = (catalogItemId: CatalogItemId, now: Date) =>
     .onConflictDoUpdate({
       target: catalogCachePurgeDebts.productId,
       set: {
-        revision: crypto.randomUUID(),
+        revision,
         attemptCount: 0,
         requestId: null,
         commandCommittedAt: now,
         lastAttemptedAt: null,
       },
     });
+};
 
 export const bundleQueries = {
   async listAll() {
@@ -242,21 +250,57 @@ export const bundleQueries = {
     }
   },
   async update(id: BundleId, input: UpdateBundleInput) {
+    const db = database();
     const now = new Date();
-    const existing = await this.findById(id);
-    if (!existing) {
-      return { kind: "not_found" as const };
-    }
+    const revision = crypto.randomUUID();
+    const updatedNow = and(
+      eq(catalogItems.id, id),
+      eq(catalogItems.kind, "bundle"),
+      eq(catalogItems.updatedAt, now),
+      ne(catalogItems.state, "draft"),
+    );
     try {
-      const results = await database().batch([
-        database()
+      const results = await db.batch([
+        db
           .update(catalogItems)
           .set({ ...input, updatedAt: now })
-          .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+          .where(
+            and(
+              eq(catalogItems.id, id),
+              eq(catalogItems.kind, "bundle"),
+              or(sql`${catalogItems.publishedAt} IS NULL`, eq(catalogItems.slug, input.slug)),
+            ),
+          )
           .returning({ id: catalogItems.id }),
-        ...(existing.state === "draft" ? [] : [cacheDebt(id, now)]),
+        db
+          .insert(catalogCachePurgeDebts)
+          .select(
+            db
+              .select({
+                productId: sql<string>`${id}`.as("product_id"),
+                revision: sql<string>`${revision}`.as("revision"),
+                attemptCount: sql<number>`0`.as("attempt_count"),
+                requestId: sql<null>`NULL`.as("request_id"),
+                commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+                lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+              })
+              .from(catalogItems)
+              .where(updatedNow),
+          )
+          .onConflictDoUpdate({
+            target: catalogCachePurgeDebts.productId,
+            set: {
+              revision,
+              attemptCount: 0,
+              requestId: null,
+              commandCommittedAt: now,
+              lastAttemptedAt: null,
+            },
+          }),
       ] as const);
-      return results[0].length ? { kind: "changed" as const } : { kind: "not_found" as const };
+      if (results[0].length) {
+        return { kind: "changed" as const };
+      }
     } catch (error) {
       return {
         kind:
@@ -265,6 +309,17 @@ export const bundleQueries = {
             : ("infrastructure" as const),
       };
     }
+    const rows = await db
+      .select({ slug: catalogItems.slug, publishedAt: catalogItems.publishedAt })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+      .limit(1);
+    const current = rows.at(0);
+    return !current
+      ? { kind: "not_found" as const }
+      : current.publishedAt && current.slug !== input.slug
+        ? { kind: "slug_locked" as const }
+        : { kind: "infrastructure" as const };
   },
   async saveComponents(id: BundleId, input: SaveBundleComponentsInput) {
     if (!distinct(input.components.map(({ variantId }) => variantId))) {
@@ -305,7 +360,6 @@ export const bundleQueries = {
             bundleId: sql<string>`${id}`.as("bundle_id"),
             variantId: sql<string>`${component.variantId}`.as("variant_id"),
             quantity: sql<number>`${component.quantity}`.as("quantity"),
-            lockedAt: sql<null>`NULL`.as("locked_at"),
           })
           .from(catalogItems)
           .where(
@@ -319,9 +373,17 @@ export const bundleQueries = {
     );
     try {
       const results = await db.batch([guard, clear, ...inserts] as const);
-      return results[0].length
-        ? { kind: "changed" as const }
-        : { kind: "immutable_components" as const };
+      if (results[0].length) {
+        return { kind: "changed" as const };
+      }
+      const rows = await db
+        .select({ id: catalogItems.id })
+        .from(catalogItems)
+        .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+        .limit(1);
+      return rows.length
+        ? { kind: "immutable_components" as const }
+        : { kind: "not_found" as const };
     } catch {
       return { kind: "invalid_component" as const };
     }
@@ -410,7 +472,8 @@ export const bundleQueries = {
   async transition(id: BundleId, action: "publish" | "archive" | "reactivate") {
     const db = database();
     const now = new Date();
-    if (action === "publish") {
+    const revision = crypto.randomUUID();
+    if (action === "publish" || action === "reactivate") {
       const invalidComponent = db
         .select({ id: bundleComponents.variantId })
         .from(bundleComponents)
@@ -419,13 +482,13 @@ export const bundleQueries = {
         .where(
           and(
             eq(bundleComponents.bundleId, id),
-            sql`(${variants.isDefault} = 1 OR ${variants.state} <> 'active' OR ${catalogItems.kind} <> 'product' OR ${catalogItems.state} <> 'published')`,
+            sql`(${variants.state} <> 'active' OR ${catalogItems.kind} <> 'product' OR ${catalogItems.state} <> 'published')`,
           ),
         );
       const valid = and(
         eq(catalogItems.id, id),
         eq(catalogItems.kind, "bundle"),
-        eq(catalogItems.state, "draft"),
+        eq(catalogItems.state, action === "publish" ? "draft" : "archived"),
         exists(
           db
             .select({ id: bundleComponents.variantId })
@@ -442,20 +505,21 @@ export const bundleQueries = {
             and(
               eq(catalogItems.id, id),
               eq(catalogItems.state, "published"),
-              eq(catalogItems.publishedAt, now),
+              eq(catalogItems.updatedAt, now),
             ),
           ),
       );
       const results = await db.batch([
         db
           .update(catalogItems)
-          .set({ state: "published", publishedAt: now, archivedAt: null, updatedAt: now })
+          .set({
+            state: "published",
+            publishedAt: action === "publish" ? now : undefined,
+            archivedAt: null,
+            updatedAt: now,
+          })
           .where(valid)
           .returning({ id: catalogItems.id }),
-        db
-          .update(bundleComponents)
-          .set({ lockedAt: now })
-          .where(and(eq(bundleComponents.bundleId, id), publishedNow)),
         db
           .update(skus)
           .set({ lockedAt: now, updatedAt: now })
@@ -466,7 +530,7 @@ export const bundleQueries = {
             db
               .select({
                 productId: sql<string>`${id}`.as("product_id"),
-                revision: sql<string>`${crypto.randomUUID()}`.as("revision"),
+                revision: sql<string>`${revision}`.as("revision"),
                 attemptCount: sql<number>`0`.as("attempt_count"),
                 requestId: sql<null>`NULL`.as("request_id"),
                 commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
@@ -477,14 +541,14 @@ export const bundleQueries = {
                 and(
                   eq(catalogItems.id, id),
                   eq(catalogItems.state, "published"),
-                  eq(catalogItems.publishedAt, now),
+                  eq(catalogItems.updatedAt, now),
                 ),
               ),
           )
           .onConflictDoUpdate({
             target: catalogCachePurgeDebts.productId,
             set: {
-              revision: crypto.randomUUID(),
+              revision,
               attemptCount: 0,
               requestId: null,
               commandCommittedAt: now,
@@ -492,12 +556,23 @@ export const bundleQueries = {
             },
           }),
       ] as const);
-      return results[0].length
-        ? { kind: "changed" as const }
-        : { kind: "invalid_publication" as const };
+      if (results[0].length) {
+        return { kind: "changed" as const };
+      }
+      const rows = await db
+        .select({ state: catalogItems.state })
+        .from(catalogItems)
+        .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+        .limit(1);
+      const current = rows.at(0);
+      return !current
+        ? { kind: "not_found" as const }
+        : current.state !== (action === "publish" ? "draft" : "archived")
+          ? { kind: "invalid_lifecycle" as const }
+          : { kind: "invalid_publication" as const };
     }
-    const from = action === "archive" ? "published" : "archived";
-    const to = action === "archive" ? "archived" : "published";
+    const from = "published";
+    const to = "archived";
     const changedNow = and(
       eq(catalogItems.id, id),
       eq(catalogItems.kind, "bundle"),
@@ -522,7 +597,7 @@ export const bundleQueries = {
           db
             .select({
               productId: sql<string>`${id}`.as("product_id"),
-              revision: sql<string>`${crypto.randomUUID()}`.as("revision"),
+              revision: sql<string>`${revision}`.as("revision"),
               attemptCount: sql<number>`0`.as("attempt_count"),
               requestId: sql<null>`NULL`.as("request_id"),
               commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
@@ -534,7 +609,7 @@ export const bundleQueries = {
         .onConflictDoUpdate({
           target: catalogCachePurgeDebts.productId,
           set: {
-            revision: crypto.randomUUID(),
+            revision,
             attemptCount: 0,
             requestId: null,
             commandCommittedAt: now,
@@ -542,9 +617,15 @@ export const bundleQueries = {
           },
         }),
     ] as const);
-    return results[0].length
-      ? { kind: "changed" as const }
-      : { kind: "invalid_lifecycle" as const };
+    if (results[0].length) {
+      return { kind: "changed" as const };
+    }
+    const rows = await db
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+      .limit(1);
+    return rows.length ? { kind: "invalid_lifecycle" as const } : { kind: "not_found" as const };
   },
   async findCachePurgeDebt(id: CatalogItemId) {
     const rows = await database()

@@ -116,7 +116,7 @@ const catalogError = (
             : code === "media_not_owned"
               ? "Variant images must be attached to this Product"
               : code === "published_bundle_dependency"
-                ? "A Published Bundle depends on this Variant"
+                ? "A Published Bundle depends on this Product"
                 : code === "invalid_publication"
                   ? "Product publication invariants are not satisfied"
                   : code === "invalid_lifecycle"

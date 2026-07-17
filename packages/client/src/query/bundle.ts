@@ -28,10 +28,11 @@ export const bundleQueryOptions = () =>
 
 const personalizationQueryKey = (id: CatalogItemId) => ["catalog", "personalizations", id] as const;
 
-export const personalizationQueryOptions = (id: CatalogItemId) =>
+export const personalizationQueryOptions = (id: CatalogItemId, enabled = true) =>
   queryOptions({
     queryKey: personalizationQueryKey(id),
     queryFn: async () => unwrapRequestResult(await requestPersonalizations(id)),
+    enabled,
   });
 
 export const personalizationMutationOptions = (queryClient: QueryClient, id: CatalogItemId) =>

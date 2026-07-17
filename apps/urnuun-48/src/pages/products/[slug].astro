@@ -60,7 +60,7 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
         <ProductVariantSelector product={product} client:load />
-        <PersonalizationControls definitions={personalizations} client:load />
+        <PersonalizationControls definitions={personalizations} />
       </div>
     </article>
   </main>

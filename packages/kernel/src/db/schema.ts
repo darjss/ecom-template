@@ -534,7 +534,6 @@ export const bundleComponents = sqliteTable(
       .notNull()
       .references(() => variants.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
-    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     primaryKey({ columns: [table.bundleId, table.variantId] }),
