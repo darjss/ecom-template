@@ -221,6 +221,7 @@ export const CatalogFailureReasonSchema = v.picklist([
   "duplicate_combination",
   "invalid_combination",
   "media_not_owned",
+  "published_bundle_dependency",
   "reservation_blocked",
   "inventory_inconsistent",
   "inventory_limit",

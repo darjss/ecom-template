@@ -1,4 +1,17 @@
 export { signOutCustomer } from "./auth/customer-runtime";
+export {
+  createBundle,
+  expandBundleDemand,
+  listBundles,
+  readCatalogItemPersonalizations,
+  saveBundleComponents,
+  saveCatalogItemPersonalizations,
+  transitionBundle,
+  updateBundle,
+  validatePersonalizationAnswers,
+  type BundleMutationResult,
+  type BundleOperationFailure,
+} from "./bundles/operations";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
 export {
   attachCatalogImage,

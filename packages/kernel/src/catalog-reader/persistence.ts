@@ -177,7 +177,7 @@ export const catalogReaderQueries = {
         priceMnt: catalogItems.priceMnt,
       })
       .from(catalogItems)
-      .where(eq(catalogItems.state, "published"))
+      .where(and(eq(catalogItems.state, "published"), eq(catalogItems.kind, "product")))
       .orderBy(desc(catalogItems.createdAt));
     const ids = rows.map((row) => v.parse(ProductIdSchema, row.id));
     const images = await catalogMediaQueries.listPublicForCatalogItems(ids);
@@ -201,7 +201,13 @@ export const catalogReaderQueries = {
         priceMnt: catalogItems.priceMnt,
       })
       .from(catalogItems)
-      .where(and(eq(catalogItems.state, "published"), eq(catalogItems.slug, slug)))
+      .where(
+        and(
+          eq(catalogItems.state, "published"),
+          eq(catalogItems.kind, "product"),
+          eq(catalogItems.slug, slug),
+        ),
+      )
       .limit(1);
     const row = rows.at(0);
     if (!row) {

@@ -134,6 +134,13 @@
       "when": 1784321355796,
       "tag": "0018_foamy_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1784323668112,
+      "tag": "0019_glossy_lilandra",
+      "breakpoints": true
     }
   ]
 }

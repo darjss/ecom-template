@@ -17,6 +17,7 @@ import { and, asc, count, eq, exists, gt, inArray, ne, notExists, or, sql } from
 import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import {
+  bundleComponents,
   catalogCachePurgeDebts,
   catalogItemImages,
   catalogItems,
@@ -800,18 +801,33 @@ export const catalogVariantQueries = {
             ownedVariant,
             or(
               exists(draftProduct),
-              exists(
-                db
-                  .select({ id: otherVariant.id })
-                  .from(otherVariant)
-                  .where(
-                    and(
-                      eq(otherVariant.productId, productId),
-                      ne(otherVariant.id, variantId),
-                      eq(otherVariant.isDefault, false),
-                      eq(otherVariant.state, "active"),
+              and(
+                exists(
+                  db
+                    .select({ id: otherVariant.id })
+                    .from(otherVariant)
+                    .where(
+                      and(
+                        eq(otherVariant.productId, productId),
+                        ne(otherVariant.id, variantId),
+                        eq(otherVariant.isDefault, false),
+                        eq(otherVariant.state, "active"),
+                      ),
                     ),
-                  ),
+                ),
+                notExists(
+                  db
+                    .select({ bundleId: bundleComponents.bundleId })
+                    .from(bundleComponents)
+                    .innerJoin(catalogItems, eq(catalogItems.id, bundleComponents.bundleId))
+                    .where(
+                      and(
+                        eq(bundleComponents.variantId, variantId),
+                        eq(catalogItems.kind, "bundle"),
+                        eq(catalogItems.state, "published"),
+                      ),
+                    ),
+                ),
               ),
             ),
           );
@@ -861,8 +877,26 @@ export const catalogVariantQueries = {
       .from(variants)
       .where(ownedVariant)
       .limit(1);
-    return existing.length
-      ? { kind: "invalid_publication" as const }
-      : { kind: "not_found" as const };
+    if (!existing.length) {
+      return { kind: "not_found" as const };
+    }
+    if (state === "archived") {
+      const dependency = await db
+        .select({ bundleId: bundleComponents.bundleId })
+        .from(bundleComponents)
+        .innerJoin(catalogItems, eq(catalogItems.id, bundleComponents.bundleId))
+        .where(
+          and(
+            eq(bundleComponents.variantId, variantId),
+            eq(catalogItems.kind, "bundle"),
+            eq(catalogItems.state, "published"),
+          ),
+        )
+        .limit(1);
+      if (dependency.length) {
+        return { kind: "published_bundle_dependency" as const };
+      }
+    }
+    return { kind: "invalid_publication" as const };
   },
 };
