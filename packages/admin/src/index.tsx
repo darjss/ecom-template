@@ -370,14 +370,20 @@ const Dashboard = (props: AdminAppProps) => (
   </div>
 );
 
-export const AdminApp = (props: AdminAppProps) => (
-  <QueryClientProvider client={createStoreQueryClient()}>
-    <Dashboard role={props.role} storeName={props.storeName} />
-  </QueryClientProvider>
-);
+export const AdminApp = (props: AdminAppProps) => {
+  const queryClient = createStoreQueryClient();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Dashboard role={props.role} storeName={props.storeName} />
+    </QueryClientProvider>
+  );
+};
 
-export const AdminHealthStatus = () => (
-  <QueryClientProvider client={createStoreQueryClient()}>
-    <HealthStatus />
-  </QueryClientProvider>
-);
+export const AdminHealthStatus = () => {
+  const queryClient = createStoreQueryClient();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <HealthStatus />
+    </QueryClientProvider>
+  );
+};
