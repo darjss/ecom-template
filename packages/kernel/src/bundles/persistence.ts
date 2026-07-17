@@ -142,16 +142,18 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
   ]);
   return rows.map((row) => {
     const bundleId = v.parse(BundleIdSchema, row.id);
+    const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...bundle } =
+      row;
     return v.parse(BundleSchema, {
-      ...row,
+      ...bundle,
       id: bundleId,
       cachePurgeDebt:
-        row.cachePurgeAttemptCount === null
+        cachePurgeAttemptCount === null
           ? null
           : {
-              attemptCount: row.cachePurgeAttemptCount,
-              requestId: row.cachePurgeRequestId,
-              lastAttemptedAt: row.cachePurgeLastAttemptedAt?.toISOString() ?? null,
+              attemptCount: cachePurgeAttemptCount,
+              requestId: cachePurgeRequestId,
+              lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
             },
       components: componentRows
         .filter((component) => component.bundleId === bundleId)
@@ -162,8 +164,8 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
       personalizations:
         personalizationRows.find((entry) => entry.catalogItemId === bundleId)?.definitions ?? [],
       images: images.filter((image) => image.catalogItemId === bundleId).map(({ image }) => image),
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
+      createdAt: bundle.createdAt.toISOString(),
+      updatedAt: bundle.updatedAt.toISOString(),
     });
   });
 };
