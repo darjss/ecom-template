@@ -11,7 +11,11 @@ export type StaffCapability =
   | "orders_fulfillment"
   | "analytics";
 
-export type StaffActor = { readonly authUserId: string; readonly role: StaffRole };
+export type StaffActor = {
+  readonly staffId: StaffId;
+  readonly authUserId: string;
+  readonly role: StaffRole;
+};
 
 const roleCapabilities: Record<StaffRole, readonly StaffCapability[]> = {
   owner: [
@@ -50,12 +54,24 @@ const requireOwner = (actor: StaffActor) =>
     ? undefined
     : Result.err<never, StaffOperationFailure>({ code: "forbidden" });
 
-const revokeSessions = async (origin: string, member: StaffRecord) => {
+const commandContext = (actor: StaffActor) => ({
+  actor: { staffId: actor.staffId, role: actor.role },
+  correlationId: crypto.randomUUID(),
+});
+
+const revokeSessions = async (
+  origin: string,
+  member: StaffRecord,
+  cleanupGeneration = member.sessionGeneration,
+) => {
   if (!member.authUserId) {
     return true;
   }
   try {
-    return await revokeStaffUserSessions(origin, member.authUserId);
+    if (!(await revokeStaffUserSessions(origin, member.authUserId))) {
+      return false;
+    }
+    return await staffQueries.clearCleanupDebt(member.authUserId, cleanupGeneration);
   } catch {
     return false;
   }
@@ -63,13 +79,22 @@ const revokeSessions = async (origin: string, member: StaffRecord) => {
 
 export const listStaff = async (
   actor: StaffActor,
-): Promise<Result<readonly StaffMember[], StaffOperationFailure>> => {
+): Promise<
+  Result<
+    { readonly members: readonly StaffMember[]; readonly cleanupRequiredCount: number },
+    StaffOperationFailure
+  >
+> => {
   const denied = requireOwner(actor);
   if (denied) {
     return denied;
   }
   try {
-    return Result.ok((await staffQueries.list()).map(publicMember));
+    const [members, cleanupRequiredCount] = await Promise.all([
+      staffQueries.list(),
+      staffQueries.countCleanupDebts(),
+    ]);
+    return Result.ok({ members: members.map(publicMember), cleanupRequiredCount });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }
@@ -85,7 +110,7 @@ export const createStaff = async (
     return denied;
   }
   try {
-    const member = await staffQueries.createActive(email, role);
+    const member = await staffQueries.createActive(commandContext(actor), email, role);
     return member ? Result.ok(publicMember(member)) : Result.err({ code: "invalid_transition" });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
@@ -103,7 +128,7 @@ export const approveStaff = async (
     return denied;
   }
   try {
-    const { changed, current } = await staffQueries.approve(id, role);
+    const { changed, current } = await staffQueries.approve(commandContext(actor), id, role);
     if (!changed) {
       return Result.err({ code: current ? "invalid_transition" : "not_found" });
     }
@@ -134,7 +159,7 @@ export const changeStaffRole = async (
     if (before.status !== "active" || before.role === role) {
       return Result.err({ code: "invalid_transition" });
     }
-    const { changed, current } = await staffQueries.changeRole(id, role);
+    const { changed, current } = await staffQueries.changeRole(commandContext(actor), id, role);
     if (!changed) {
       if (!current) {
         return Result.err({ code: "not_found" });
@@ -165,7 +190,7 @@ export const revokeStaff = async (
     return denied;
   }
   try {
-    const { changed, current } = await staffQueries.revoke(id);
+    const { changed, current } = await staffQueries.revoke(commandContext(actor), id);
     if (!changed) {
       if (!current) {
         return Result.err({ code: "not_found" });
@@ -196,7 +221,10 @@ export const removeStaff = async (
     return denied;
   }
   try {
-    const { removed, current } = await staffQueries.remove(id);
+    const { removed, cleanupGeneration, current } = await staffQueries.remove(
+      commandContext(actor),
+      id,
+    );
     if (!removed) {
       if (!current) {
         return Result.err({ code: "not_found" });
@@ -208,10 +236,53 @@ export const removeStaff = async (
             : "invalid_transition",
       });
     }
-    if (!(await revokeSessions(origin, removed))) {
+    if (!(await revokeSessions(origin, removed, cleanupGeneration))) {
       return Result.err({ code: "session_revocation_failed" });
     }
     return Result.ok(publicMember(removed));
+  } catch {
+    return Result.err({ code: "infrastructure_unavailable" });
+  }
+};
+
+const cleanupRetryLimit = 100;
+
+export type StaffCleanupResult = {
+  readonly attempted: number;
+  readonly cleared: number;
+  readonly remaining: number;
+};
+
+export const retryStaffSessionCleanup = async (
+  actor: StaffActor,
+  origin: string,
+): Promise<Result<StaffCleanupResult, StaffOperationFailure>> => {
+  const denied = requireOwner(actor);
+  if (denied) {
+    return denied;
+  }
+  try {
+    const debts = await staffQueries.listCleanupDebts(cleanupRetryLimit);
+    let cleared = 0;
+    for (const debt of debts) {
+      let sessionsDeleted = false;
+      try {
+        sessionsDeleted = await revokeStaffUserSessions(origin, debt.authUserId);
+      } catch {
+        sessionsDeleted = false;
+      }
+      if (
+        sessionsDeleted &&
+        (await staffQueries.clearCleanupDebt(debt.authUserId, debt.sessionGeneration))
+      ) {
+        cleared += 1;
+      }
+    }
+    return Result.ok({
+      attempted: debts.length,
+      cleared,
+      remaining: await staffQueries.countCleanupDebts(),
+    });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }

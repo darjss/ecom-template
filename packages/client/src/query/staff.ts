@@ -1,6 +1,11 @@
-import type { StaffClientError, StaffListResponse, StaffMutationResponse } from "@ecom/contracts";
+import type { StaffClientError, StaffListResponse } from "@ecom/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
-import { requestStaffList, requestStaffMutation, type StaffMutation } from "../staff/request";
+import {
+  requestStaffList,
+  requestStaffMutation,
+  type StaffMutation,
+  type StaffMutationResult,
+} from "../staff/request";
 
 const staffQueryKey = ["staff"] as const;
 
@@ -11,7 +16,7 @@ export const staffQueryOptions = () =>
   });
 
 export const staffMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<StaffMutationResponse, StaffClientError, StaffMutation>({
+  mutationOptions<StaffMutationResult, StaffClientError, StaffMutation>({
     mutationFn: requestStaffMutation,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: staffQueryKey });

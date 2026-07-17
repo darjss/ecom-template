@@ -254,6 +254,24 @@ const AddStaffForm = () => {
   );
 };
 
+const CleanupDebtControl = (props: { count: number }) => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(() => staffMutationOptions(queryClient));
+  return (
+    <div class="staff-cleanup-control">
+      <p role="status">{props.count} session цэвэрлэгээ хүлээгдэж байна.</p>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={mutation.isPending}
+        onClick={() => mutation.mutate({ kind: "cleanup" })}
+      >
+        {mutation.isPending ? "Цэвэрлэж байна…" : "Session цэвэрлэгээг дахин оролдох"}
+      </Button>
+    </div>
+  );
+};
+
 const StaffManagement = () => {
   const staff = useQuery(() => staffQueryOptions());
   return (
@@ -280,6 +298,9 @@ const StaffManagement = () => {
         {(data) => (
           <>
             <AddStaffForm />
+            <Show when={data.data.cleanupRequiredCount > 0}>
+              <CleanupDebtControl count={data.data.cleanupRequiredCount} />
+            </Show>
             <Show
               when={data.data.members.length > 0}
               fallback={<p class="staff-empty">Одоогоор ажилтны хүсэлт байхгүй байна.</p>}

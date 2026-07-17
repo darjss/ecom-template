@@ -8,8 +8,10 @@ export {
   hasStaffCapability,
   listStaff,
   removeStaff,
+  retryStaffSessionCleanup,
   revokeStaff,
   type StaffActor,
+  type StaffCleanupResult,
   type StaffCapability,
   type StaffOperationFailure,
 } from "./staff/operations";

@@ -179,17 +179,21 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
   if (!authorityAttempt.success) {
     return { kind: "unavailable" as const };
   }
-  if (authorityAttempt.authority !== "current") {
+  if (authorityAttempt.authority.kind !== "current") {
     if (!(await deleteSessions())) {
       return { kind: "unavailable" as const };
     }
-    return authorityAttempt.authority === "identity_conflict"
+    return authorityAttempt.authority.kind === "identity_conflict"
       ? { kind: "identity_conflict" as const }
       : { kind: "unauthorized" as const };
   }
   return {
     kind: "active" as const,
-    actor: { authUserId: session.user.id, role: role.output },
+    actor: {
+      staffId: authorityAttempt.authority.staffId,
+      authUserId: session.user.id,
+      role: role.output,
+    },
   };
 };
 

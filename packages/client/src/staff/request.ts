@@ -1,8 +1,10 @@
 import {
+  StaffCleanupResponseSchema,
   StaffClientErrorSchema,
   StaffLifecycleApiErrorSchema,
   StaffListResponseSchema,
   StaffMutationResponseSchema,
+  type StaffCleanupResponse,
   type StaffClientError,
   type StaffCreateInput,
   type StaffId,
@@ -36,29 +38,37 @@ export const requestStaffList = async (): Promise<StaffListResponse> => {
 
 export type StaffMutation =
   | ({ readonly kind: "create" } & StaffCreateInput)
+  | { readonly kind: "cleanup" }
   | { readonly kind: "approve"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "role"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "revoke"; readonly id: StaffId }
   | { readonly kind: "remove"; readonly id: StaffId };
 
+export type StaffMutationResult = StaffMutationResponse | StaffCleanupResponse;
+
 export const requestStaffMutation = async (
   mutation: StaffMutation,
-): Promise<StaffMutationResponse> => {
+): Promise<StaffMutationResult> => {
   const client = createApiClient();
   const response =
     mutation.kind === "create"
       ? await client.api.staff.post({ email: mutation.email, role: mutation.role })
-      : mutation.kind === "approve"
-        ? await client.api.staff({ id: mutation.id }).approve.post({ role: mutation.role })
-        : mutation.kind === "role"
-          ? await client.api.staff({ id: mutation.id }).role.patch({ role: mutation.role })
-          : mutation.kind === "revoke"
-            ? await client.api.staff({ id: mutation.id }).revoke.post()
-            : await client.api.staff({ id: mutation.id }).delete();
+      : mutation.kind === "cleanup"
+        ? await client.api.staff["session-cleanup"].retry.post()
+        : mutation.kind === "approve"
+          ? await client.api.staff({ id: mutation.id }).approve.post({ role: mutation.role })
+          : mutation.kind === "role"
+            ? await client.api.staff({ id: mutation.id }).role.patch({ role: mutation.role })
+            : mutation.kind === "revoke"
+              ? await client.api.staff({ id: mutation.id }).revoke.post()
+              : await client.api.staff({ id: mutation.id }).delete();
   if (response.error) {
     throw parseFailure(response.error.value);
   }
-  const parsed = v.safeParse(StaffMutationResponseSchema, response.data);
+  const parsed = v.safeParse(
+    mutation.kind === "cleanup" ? StaffCleanupResponseSchema : StaffMutationResponseSchema,
+    response.data,
+  );
   if (!parsed.success) {
     throw clientError({ kind: "contract", message: "Invalid Staff mutation response" });
   }

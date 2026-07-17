@@ -3,5 +3,10 @@ export { createApiClient } from "./eden";
 export { createStoreQueryClient } from "./query/client";
 export { healthQueryOptions } from "./query/health";
 export { staffMutationOptions, staffQueryOptions } from "./query/staff";
-export { requestStaffList, requestStaffMutation, type StaffMutation } from "./staff/request";
+export {
+  requestStaffList,
+  requestStaffMutation,
+  type StaffMutation,
+  type StaffMutationResult,
+} from "./staff/request";
 export { requestHealth } from "./request";

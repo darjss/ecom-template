@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   HealthApiErrorSchema,
   HealthResponseSchema,
+  StaffCleanupResponseSchema,
   StaffCreateInputSchema,
   StaffIdSchema,
   StaffLifecycleApiErrorSchema,
@@ -22,6 +23,7 @@ import {
   readDatabaseHealth,
   readStaffAuthSession,
   removeStaff,
+  retryStaffSessionCleanup,
   revokeStaff,
   type StaffOperationFailure,
   type StoreBackground,
@@ -177,7 +179,7 @@ const createApi = (definition: StoreDefinition) =>
       const result = await listStaff(authorization.actor);
       return result.isErr()
         ? mapFailure(result.error, status)
-        : v.parse(StaffListResponseSchema, { data: { members: result.value } });
+        : v.parse(StaffListResponseSchema, { data: result.value });
     })
     .post("/staff", async ({ body, request, status }) => {
       const input = v.safeParse(StaffCreateInputSchema, body);
@@ -192,6 +194,16 @@ const createApi = (definition: StoreDefinition) =>
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .post("/staff/session-cleanup/retry", async ({ request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await retryStaffSessionCleanup(authorization.actor, authorization.origin);
+      return result.isErr()
+        ? mapFailure(result.error, status)
+        : v.parse(StaffCleanupResponseSchema, { data: result.value });
     })
     .post("/staff/:id/approve", async ({ body, params, request, status }) => {
       const input = v.safeParse(StaffMutationInputSchema, body);
