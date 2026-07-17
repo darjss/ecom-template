@@ -1,0 +1,37 @@
+---
+import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+const product = await storefront.readPublishedProduct(Astro.params.slug ?? "");
+if (!product) {
+  return new Response("Бүтээгдэхүүн олдсонгүй", {
+    status: 404,
+    headers: { "cache-control": "private, no-store" },
+  });
+}
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
+const formattedPrice = new Intl.NumberFormat("mn-MN").format(product.priceMnt);
+---
+<StoreLayout title={`${product.name} · Өрнүүн 48`} description={product.description || product.name}>
+  <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
+  <header class="site-header">
+    <a class="wordmark" href="/" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
+    <nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
+    <a class="admin-link" href="/admin">Удирдлага</a>
+  </header>
+  <main id="content">
+    <article class="featured" aria-labelledby="product-title">
+      <div class="product-visual"><span class="bay-number">Каталог</span><img src="/media/p07-tote-sand.webp" alt="" width="1000" height="1000" /></div>
+      <div class="product-copy">
+        <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
+        <h1 id="product-title">{product.name}</h1>
+        {product.description && <p>{product.description}</p>}
+        <strong>{formattedPrice} ₮</strong>
+        <p>Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
+        <button type="button" disabled>Боломж шалгаж байна</button>
+      </div>
+    </article>
+  </main>
+</StoreLayout>

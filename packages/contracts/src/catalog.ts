@@ -1,0 +1,164 @@
+import { fromString, typeidUnboxed } from "typeid-js";
+import * as v from "valibot";
+
+const typeIdSchema = (prefix: string, label: string) =>
+  v.pipe(
+    v.string(),
+    v.check((value) => {
+      try {
+        fromString(value, prefix);
+        return true;
+      } catch {
+        return false;
+      }
+    }, `Invalid ${label}`),
+  );
+
+export const ProductIdSchema = typeIdSchema("product", "Product ID");
+export const VariantIdSchema = typeIdSchema("variant", "Variant ID");
+export const StockItemIdSchema = typeIdSchema("stock_item", "Stock Item ID");
+export const InventoryEntryIdSchema = typeIdSchema("inventory_entry", "Inventory Entry ID");
+export const InventoryReservationIdSchema = typeIdSchema("reservation", "Reservation ID");
+export const ProductStateSchema = v.picklist(["draft", "published", "archived"]);
+export const CatalogNameSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(120));
+export const CatalogSlugSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  v.maxLength(100),
+);
+export const SkuSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64));
+export const PriceMntSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(1_000_000_000),
+);
+export const InventoryReasonSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(240));
+export const InventoryQuantitySchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(1_000_000),
+);
+export const InventoryDeltaSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(-1_000_000),
+  v.maxValue(1_000_000),
+  v.check((value) => value !== 0),
+);
+
+export const ProductSchema = v.strictObject({
+  id: ProductIdSchema,
+  defaultVariantId: VariantIdSchema,
+  stockItemId: StockItemIdSchema,
+  slug: CatalogSlugSchema,
+  state: ProductStateSchema,
+  name: CatalogNameSchema,
+  description: v.pipe(v.string(), v.maxLength(5_000)),
+  priceMnt: PriceMntSchema,
+  sku: SkuSchema,
+  onHandQuantity: InventoryQuantitySchema,
+  reservedQuantity: InventoryQuantitySchema,
+  createdAt: v.pipe(v.string(), v.isoTimestamp()),
+  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
+});
+
+export const CatalogListResponseSchema = v.strictObject({ data: v.array(ProductSchema) });
+export const CatalogProductResponseSchema = v.strictObject({
+  data: v.strictObject({
+    product: ProductSchema,
+    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
+  }),
+});
+export const CreateProductInputSchema = v.strictObject({
+  name: CatalogNameSchema,
+  slug: CatalogSlugSchema,
+  description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
+  priceMnt: PriceMntSchema,
+  sku: SkuSchema,
+  openingQuantity: InventoryQuantitySchema,
+  inventoryReason: InventoryReasonSchema,
+});
+export const UpdateProductInputSchema = v.strictObject({
+  name: CatalogNameSchema,
+  slug: CatalogSlugSchema,
+  description: v.pipe(v.string(), v.maxLength(5_000)),
+  priceMnt: PriceMntSchema,
+  sku: SkuSchema,
+});
+export const InventoryAdjustmentInputSchema = v.strictObject({
+  delta: InventoryDeltaSchema,
+  reason: InventoryReasonSchema,
+});
+
+export const InventoryBlockingReservationSchema = v.strictObject({
+  reservationId: InventoryReservationIdSchema,
+  orderReference: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  quantity: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+export const CatalogFailureReasonSchema = v.picklist([
+  "duplicate_slug",
+  "duplicate_sku",
+  "not_found",
+  "invalid_lifecycle",
+  "invalid_publication",
+  "sku_locked",
+  "reservation_blocked",
+  "committed_but_not_purged",
+]);
+export const CatalogApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.picklist([
+      "unauthorized",
+      "forbidden",
+      "not_found",
+      "validation",
+      "conflict",
+      "unavailable",
+    ]),
+    message: v.string(),
+    reason: v.optional(CatalogFailureReasonSchema),
+    blockers: v.optional(v.array(InventoryBlockingReservationSchema)),
+  }),
+});
+export const CatalogClientErrorSchema = v.variant("kind", [
+  v.strictObject({ kind: v.literal("network"), message: v.string() }),
+  v.strictObject({ kind: v.literal("contract"), message: v.string() }),
+  v.strictObject({ kind: v.literal("api"), error: CatalogApiErrorSchema.entries.error }),
+]);
+
+export const PublicProductSummarySchema = v.strictObject({
+  id: ProductIdSchema,
+  slug: CatalogSlugSchema,
+  name: CatalogNameSchema,
+  description: v.string(),
+  priceMnt: PriceMntSchema,
+});
+export const PublicProductDetailSchema = v.strictObject({
+  ...PublicProductSummarySchema.entries,
+  variantId: VariantIdSchema,
+});
+
+export type ProductId = v.InferOutput<typeof ProductIdSchema>;
+export type VariantId = v.InferOutput<typeof VariantIdSchema>;
+export type StockItemId = v.InferOutput<typeof StockItemIdSchema>;
+export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
+export type Product = v.InferOutput<typeof ProductSchema>;
+export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
+export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
+export type InventoryAdjustmentInput = v.InferOutput<typeof InventoryAdjustmentInputSchema>;
+export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
+export type CatalogClientError = v.InferOutput<typeof CatalogClientErrorSchema>;
+export type PublicProductSummary = v.InferOutput<typeof PublicProductSummarySchema>;
+export type PublicProductDetail = v.InferOutput<typeof PublicProductDetailSchema>;
+
+export const createProductId = () => typeidUnboxed("product");
+export const createVariantId = () => typeidUnboxed("variant");
+export const createStockItemId = () => typeidUnboxed("stock_item");
+export const createInventoryEntryId = () => typeidUnboxed("inventory_entry");
+export const parseProductId = (value: string) => fromString(value, "product");
+export const parseVariantId = (value: string) => fromString(value, "variant");
+export const parseStockItemId = (value: string) => fromString(value, "stock_item");
+export const parseInventoryEntryId = (value: string) => fromString(value, "inventory_entry");

@@ -1,5 +1,14 @@
 export { signOutCustomer } from "./auth/customer-runtime";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
+export {
+  adjustProductInventory,
+  createProduct,
+  listCatalog,
+  transitionProduct,
+  updateProduct,
+  type CatalogMutationResult,
+  type CatalogOperationFailure,
+} from "./catalog/operations";
 export { createStoreBackground, type StoreBackground } from "./background/index";
 export {
   readCustomerSession,
@@ -23,5 +32,6 @@ export {
   type StaffCapability,
   type StaffOperationFailure,
 } from "./staff/operations";
+export { catalogQueries } from "./catalog/persistence";
 export { staffQueries } from "./staff/persistence";
 export { createStorefrontReader, type StorefrontReader } from "./storefront/reader";

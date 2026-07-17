@@ -16,6 +16,7 @@ import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tan
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
 import { resolveAdminSurface } from "./access";
+import { CatalogManagement } from "./CatalogManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
 export { StaffLoginForm } from "./StaffLoginForm";
@@ -318,20 +319,6 @@ const StaffManagement = () => {
   );
 };
 
-const AdminLanding = () => (
-  <section class="staff-management" aria-labelledby="admin-landing-title">
-    <div class="section-heading">
-      <div>
-        <h2 id="admin-landing-title">Тавтай морилно уу</h2>
-        <p>Дэлгүүрийн өдөр тутмын ажлын хэсгүүд энд байрлана.</p>
-      </div>
-    </div>
-    <a class="store-link" href="/">
-      Дэлгүүрийн нүүр рүү очих
-    </a>
-  </section>
-);
-
 export type AdminAppProps = { storeName: string; role: StaffRole };
 
 const Dashboard = (props: AdminAppProps) => (
@@ -360,10 +347,8 @@ const Dashboard = (props: AdminAppProps) => (
           <HealthStatus />
         </div>
       </header>
-      <Show
-        when={resolveAdminSurface(props.role) === "staff_management"}
-        fallback={<AdminLanding />}
-      >
+      <CatalogManagement />
+      <Show when={resolveAdminSurface(props.role) === "staff_management"}>
         <StaffManagement />
       </Show>
     </main>
