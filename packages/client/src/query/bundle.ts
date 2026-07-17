@@ -11,7 +11,7 @@ import {
 import { unwrapRequestResult } from "../request";
 import { catalogQueryKey } from "./catalog";
 
-export const bundleQueryKey = ["catalog", "bundles"] as const;
+const bundleQueryKey = ["catalog", "bundles"] as const;
 type BundleResult = Awaited<ReturnType<typeof requestBundles>>;
 type MutationResult = Awaited<ReturnType<typeof requestBundleMutation>>;
 
@@ -21,8 +21,7 @@ export const bundleQueryOptions = () =>
     queryFn: async () => unwrapRequestResult(await requestBundles()),
   });
 
-export const personalizationQueryKey = (id: CatalogItemId) =>
-  ["catalog", "personalizations", id] as const;
+const personalizationQueryKey = (id: CatalogItemId) => ["catalog", "personalizations", id] as const;
 
 export const personalizationQueryOptions = (id: CatalogItemId) =>
   queryOptions({
