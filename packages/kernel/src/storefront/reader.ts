@@ -92,21 +92,31 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
   },
   readPublishedBundle: async (slug) => {
     const bundle = await bundleQueries.findPublishedBySlug(slug);
-    return bundle
-      ? v.parse(PublicBundleDetailSchema, {
-          ...bundle,
-          images: bundle.images.map(({ mediaAsset, position, altText }) => ({
-            mediaAssetId: mediaAsset.id,
-            position,
-            altText,
-          })),
-          personalizations: bundle.personalizations.filter(({ state }) => state === "active"),
-        })
-      : undefined;
+    if (!bundle) {
+      return undefined;
+    }
+    const {
+      state: _state,
+      cachePurgeDebt: _cachePurgeDebt,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...publicBundle
+    } = bundle;
+    return v.parse(PublicBundleDetailSchema, {
+      ...publicBundle,
+      images: bundle.images.map(({ mediaAsset, position, altText }) => ({
+        mediaAssetId: mediaAsset.id,
+        position,
+        altText,
+      })),
+      personalizations: bundle.personalizations.filter(({ state }) => state === "active"),
+    });
   },
   readPersonalizations: async (catalogItemId) => {
     const parsedId = v.safeParse(CatalogItemIdSchema, catalogItemId);
-    if (!parsedId.success) return [];
+    if (!parsedId.success) {
+      return [];
+    }
     const rows = await readPersonalizations([parsedId.output]);
     return rows.at(0)?.definitions.filter(({ state }) => state === "active") ?? [];
   },
