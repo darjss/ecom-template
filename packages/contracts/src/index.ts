@@ -4,6 +4,7 @@ import { ApiErrorCodeSchema, type ClientRequestError } from "./client-error";
 
 export * from "./catalog";
 export * from "./client-error";
+export * from "./grouping";
 
 export const ApiErrorSchema = v.strictObject({
   error: v.strictObject({

@@ -16,6 +16,12 @@ export {
   type CatalogOperationFailure,
 } from "./catalog/operations";
 export {
+  listGroupings,
+  mutateGrouping,
+  type GroupingMutation,
+  type GroupingOperationFailure,
+} from "./grouping/operations";
+export {
   readCustomerSession,
   requestCustomerOtp,
   verifyCustomerOtp,
