@@ -89,11 +89,10 @@ CREATE TABLE `stock_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`variant_id` text NOT NULL,
 	`on_hand_quantity` integer NOT NULL,
-	`reserved_quantity` integer DEFAULT 0 NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`variant_id`) REFERENCES `variants`(`id`) ON UPDATE no action ON DELETE restrict,
 	CONSTRAINT "stock_items_id_check" CHECK(length("stock_items"."id") = 37 AND substr("stock_items"."id", 1, 11) = 'stock_item_' AND substr("stock_items"."id", 12, 1) GLOB '[0-7]' AND substr("stock_items"."id", 12) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'),
-	CONSTRAINT "stock_items_balance_check" CHECK("stock_items"."on_hand_quantity" >= 0 AND "stock_items"."reserved_quantity" >= 0 AND "stock_items"."reserved_quantity" <= "stock_items"."on_hand_quantity")
+	CONSTRAINT "stock_items_balance_check" CHECK("stock_items"."on_hand_quantity" >= 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `stock_items_variant_id_unique` ON `stock_items` (`variant_id`);--> statement-breakpoint

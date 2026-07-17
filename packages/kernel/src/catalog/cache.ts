@@ -1,18 +1,11 @@
 import { env } from "cloudflare:workers";
-import * as v from "valibot";
-
-const CachePurgeEnvironmentSchema = v.strictObject({
-  CLOUDFLARE_ZONE_ID: v.pipe(v.string(), v.minLength(1)),
-  CLOUDFLARE_CACHE_PURGE_TOKEN: v.pipe(v.string(), v.minLength(1)),
-});
-const CachePurgeResponseSchema = v.strictObject({
-  success: v.boolean(),
-  result: v.optional(v.unknown()),
-  errors: v.optional(v.array(v.unknown())),
-});
+import { parseCachePurgeEnvironment, parseCachePurgeResponse } from "./cache-contract";
 
 export const purgeCatalogCache = async (productId: string) => {
-  const configuration = v.safeParse(CachePurgeEnvironmentSchema, env);
+  const configuration = parseCachePurgeEnvironment({
+    CLOUDFLARE_ZONE_ID: env.CLOUDFLARE_ZONE_ID,
+    CLOUDFLARE_CACHE_PURGE_TOKEN: env.CLOUDFLARE_CACHE_PURGE_TOKEN,
+  });
   if (!configuration.success) {
     return { kind: "failed" as const };
   }
@@ -28,7 +21,7 @@ export const purgeCatalogCache = async (productId: string) => {
         body: JSON.stringify({ tags: ["catalog", `product:${productId}`] }),
       },
     );
-    const body = v.safeParse(CachePurgeResponseSchema, await response.json());
+    const body = parseCachePurgeResponse(await response.json());
     const requestId = response.headers.get("cf-ray") ?? response.headers.get("cf-request-id");
     return response.ok && body.success && body.output.success
       ? { kind: "purged" as const, requestId }

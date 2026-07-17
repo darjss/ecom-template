@@ -84,7 +84,7 @@ export const catalogQueries = {
           "INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES (?, ?, 'variant', ?, NULL, NULL, ?, ?)",
         ).bind(input.sku, compactSku(input.sku), variantId, now, now),
         env.DB.prepare(
-          "INSERT INTO stock_items (id, variant_id, on_hand_quantity, reserved_quantity, updated_at) VALUES (?, ?, ?, 0, ?)",
+          "INSERT INTO stock_items (id, variant_id, on_hand_quantity, updated_at) VALUES (?, ?, ?, ?)",
         ).bind(stockItemId, variantId, input.openingQuantity, now),
         env.DB.prepare(
           "INSERT INTO inventory_entries (id, stock_item_id, kind, on_hand_delta, resulting_on_hand_quantity, resulting_reserved_quantity, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) VALUES (?, ?, 'opening', ?, ?, 0, 'staff', ?, ?, ?, ?, ?)",
@@ -121,22 +121,35 @@ export const catalogQueries = {
     if (conflict) {
       return { kind: conflict };
     }
-    if (current.sku !== input.sku && current.state !== "draft") {
-      return { kind: "sku_locked" as const };
-    }
     const correlationId = crypto.randomUUID();
     const now = Date.now();
+    const catalogAcceptance = `(catalog_items.state = 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.locked_at IS NULL)) OR (catalog_items.state <> 'draft' AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND s.sku = ?))`;
     try {
-      await env.DB.batch([
+      const results = await env.DB.batch([
         env.DB.prepare(
-          "UPDATE catalog_items SET slug = ?, name = ?, description = ?, price_mnt = ?, updated_at = ? WHERE id = ?",
-        ).bind(input.slug, input.name, input.description, input.priceMnt, now, id),
+          `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', 'catalog.product.update', 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE id = ? AND (${catalogAcceptance})`,
+        ).bind(
+          createAuditEventId(),
+          ...catalogActorBindings(actor),
+          correlationId,
+          now,
+          id,
+          input.sku,
+        ),
         env.DB.prepare(
-          "UPDATE skus SET sku = ?, sku_compact = ?, updated_at = ? WHERE variant_id = ? AND locked_at IS NULL",
-        ).bind(input.sku, compactSku(input.sku), now, current.defaultVariantId),
-        acceptedProductAudit(actor, "catalog.product.update", id, correlationId, now),
+          `UPDATE catalog_items SET slug = ?, name = ?, description = ?, price_mnt = ?, updated_at = ? WHERE id = ? AND (${catalogAcceptance}) RETURNING state`,
+        ).bind(input.slug, input.name, input.description, input.priceMnt, now, id, input.sku),
+        env.DB.prepare(
+          "UPDATE skus SET sku = ?, sku_compact = ?, updated_at = ? WHERE variant_id = ? AND locked_at IS NULL AND EXISTS (SELECT 1 FROM catalog_items WHERE id = ? AND state = 'draft') RETURNING sku",
+        ).bind(input.sku, compactSku(input.sku), now, current.defaultVariantId, id),
       ]);
-      return { kind: "changed" as const, product: await findCatalogProductById(id) };
+      if (results.at(0)?.meta.changes === 1 && results.at(1)?.results.length === 1) {
+        const product = await findCatalogProductById(id);
+        if (product?.sku === input.sku) {
+          return { kind: "changed" as const, product };
+        }
+      }
+      return { kind: "sku_locked" as const };
     } catch {
       return { kind: (await findConflict(input.slug, input.sku, id)) ?? "infrastructure" };
     }
@@ -182,15 +195,21 @@ export const catalogQueries = {
     }
     const now = Date.now();
     const correlationId = crypto.randomUUID();
-    const results = await env.DB.batch([
+    const transitionPredicate =
+      transition === "archive"
+        ? "id = ? AND state = ?"
+        : "id = ? AND state = ? AND price_mnt > 0 AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND v.state = 'active' AND length(trim(s.sku)) > 0)";
+    const statements = [];
+    if (transition === "publish") {
+      statements.push(
+        env.DB.prepare(
+          "UPDATE skus AS s SET locked_at = COALESCE(locked_at, ?), updated_at = ? WHERE s.variant_id = ? AND EXISTS (SELECT 1 FROM catalog_items ci JOIN variants v ON v.product_id = ci.id WHERE ci.id = ? AND ci.state = 'draft' AND ci.price_mnt > 0 AND v.id = s.variant_id AND v.is_default = 1 AND v.state = 'active' AND length(trim(s.sku)) > 0) RETURNING sku",
+        ).bind(now, now, current.defaultVariantId, id),
+      );
+    }
+    statements.push(
       env.DB.prepare(
-        "UPDATE catalog_items SET state = ?, updated_at = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END, archived_at = CASE WHEN ? = 'archived' THEN ? ELSE NULL END WHERE id = ? AND state = ? AND price_mnt > 0 AND EXISTS (SELECT 1 FROM variants v JOIN skus s ON s.variant_id = v.id WHERE v.product_id = catalog_items.id AND v.is_default = 1 AND v.state = 'active' AND length(trim(s.sku)) > 0) RETURNING id",
-      ).bind(next, now, next, now, next, now, id, expected),
-      env.DB.prepare(
-        "UPDATE skus SET locked_at = COALESCE(locked_at, ?), updated_at = ? WHERE variant_id = ? AND ? = 'published'",
-      ).bind(now, now, current.defaultVariantId, next),
-      env.DB.prepare(
-        "INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', ?, 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE id = ? AND state = ? AND updated_at = ?",
+        `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, telegram_operator_label, telegram_user_id, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) SELECT ?, 'staff', ?, ?, NULL, NULL, 'admin', ?, 'accepted', 'product', id, NULL, ?, NULL, ? FROM catalog_items WHERE ${transitionPredicate}`,
       ).bind(
         createAuditEventId(),
         ...catalogActorBindings(actor),
@@ -198,11 +217,21 @@ export const catalogQueries = {
         correlationId,
         now,
         id,
-        next,
-        now,
+        expected,
       ),
-    ]);
-    if (results.at(0)?.results.length === 1) {
+      env.DB.prepare(
+        `UPDATE catalog_items SET state = ?, updated_at = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END, archived_at = CASE WHEN ? = 'archived' THEN ? ELSE NULL END WHERE ${transitionPredicate} RETURNING id`,
+      ).bind(next, now, next, now, next, now, id, expected),
+    );
+    const results = await env.DB.batch(statements);
+    const publicationLockChanged = transition !== "publish" || results.at(0)?.results.length === 1;
+    const auditIndex = transition === "publish" ? 1 : 0;
+    const transitionIndex = auditIndex + 1;
+    if (
+      publicationLockChanged &&
+      results.at(auditIndex)?.meta.changes === 1 &&
+      results.at(transitionIndex)?.results.length === 1
+    ) {
       return { kind: "changed" as const, product: await findCatalogProductById(id) };
     }
     await recordRejectedAttempt(

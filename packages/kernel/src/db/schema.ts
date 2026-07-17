@@ -296,7 +296,6 @@ export const stockItems = sqliteTable(
       .unique()
       .references(() => variants.id, { onDelete: "restrict" }),
     onHandQuantity: integer("on_hand_quantity").notNull(),
-    reservedQuantity: integer("reserved_quantity").notNull().default(0),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
@@ -304,10 +303,7 @@ export const stockItems = sqliteTable(
       "stock_items_id_check",
       sql`length(${table.id}) = 37 AND substr(${table.id}, 1, 11) = 'stock_item_' AND substr(${table.id}, 12, 1) GLOB '[0-7]' AND substr(${table.id}, 12) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
-    check(
-      "stock_items_balance_check",
-      sql`${table.onHandQuantity} >= 0 AND ${table.reservedQuantity} >= 0 AND ${table.reservedQuantity} <= ${table.onHandQuantity}`,
-    ),
+    check("stock_items_balance_check", sql`${table.onHandQuantity} >= 0`),
   ],
 );
 

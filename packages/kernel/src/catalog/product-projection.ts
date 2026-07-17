@@ -18,7 +18,7 @@ const ReturnedProductSchema = v.strictObject({
   updatedAt: v.number(),
 });
 
-export const productProjection = `ci.id, v.id AS defaultVariantId, si.id AS stockItemId, ci.slug, ci.state, ci.name, ci.description, ci.price_mnt AS priceMnt, s.sku, si.on_hand_quantity AS onHandQuantity, si.reserved_quantity AS reservedQuantity, ci.created_at AS createdAt, ci.updated_at AS updatedAt`;
+export const productProjection = `ci.id, v.id AS defaultVariantId, si.id AS stockItemId, ci.slug, ci.state, ci.name, ci.description, ci.price_mnt AS priceMnt, s.sku, si.on_hand_quantity AS onHandQuantity, COALESCE((SELECT SUM(iri.quantity) FROM inventory_reservation_items iri JOIN inventory_reservations ir ON ir.id = iri.reservation_id WHERE iri.stock_item_id = si.id AND ir.state = 'active'), 0) AS reservedQuantity, ci.created_at AS createdAt, ci.updated_at AS updatedAt`;
 export const productJoins =
   "FROM catalog_items ci JOIN variants v ON v.product_id = ci.id AND v.is_default = 1 JOIN skus s ON s.variant_id = v.id JOIN stock_items si ON si.variant_id = v.id";
 

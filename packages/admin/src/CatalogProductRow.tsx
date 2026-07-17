@@ -100,6 +100,19 @@ const ProductEditForm = (props: { product: Product }) => {
       <Button type="submit" variant="secondary" disabled={mutation.isPending}>
         Хадгалах
       </Button>
+      <Show when={mutation.data?.data.cache === "committed_but_not_purged"}>
+        <div role="alert">
+          <p>Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй.</p>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={mutation.isPending}
+            onClick={() => form.handleSubmit()}
+          >
+            Дахин хадгалж cache цэвэрлэх
+          </Button>
+        </div>
+      </Show>
     </form>
   );
 };
