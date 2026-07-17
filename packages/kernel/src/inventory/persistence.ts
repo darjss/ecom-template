@@ -117,7 +117,10 @@ export const inventoryQueries = {
       );
       return { kind: "inventory_inconsistent" as const, blockers };
     }
-    if (refreshed.onHandQuantity + input.delta > 1_000_000) {
+    if (
+      refreshed.onHandQuantity + input.delta < 0 ||
+      refreshed.onHandQuantity + input.delta > 1_000_000
+    ) {
       await recordRejectedAttempt(
         actor,
         "inventory.adjust",

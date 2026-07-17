@@ -80,6 +80,23 @@ export const listStaff = async (
   }
 };
 
+export type OwnerProvisioningFailure = {
+  readonly code: "linked_identity" | "infrastructure_unavailable";
+};
+
+export const provisionOwner = async (
+  email: string,
+): Promise<Result<StaffMember, OwnerProvisioningFailure>> => {
+  try {
+    const result = await staffQueries.provisionOwner(email);
+    return result.kind === "provisioned"
+      ? Result.ok(publicMember(result.member))
+      : Result.err({ code: "linked_identity" });
+  } catch {
+    return Result.err({ code: "infrastructure_unavailable" });
+  }
+};
+
 export const createStaff = async (
   actor: StaffActor,
   email: string,

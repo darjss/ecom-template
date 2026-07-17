@@ -29,9 +29,9 @@ export const ClientFailureSchema = v.variant("kind", [
 export const ClientErrorSchema = v.variant("kind", [
   NetworkClientErrorSchema,
   ContractClientErrorSchema,
-  v.object({
+  v.strictObject({
     kind: v.literal("api"),
-    error: v.object({
+    error: v.strictObject({
       code: ApiErrorCodeSchema,
       message: v.string(),
     }),

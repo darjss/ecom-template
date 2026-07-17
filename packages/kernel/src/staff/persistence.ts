@@ -8,7 +8,19 @@ import {
   type StaffStatus,
 } from "@ecom/contracts";
 import * as v from "valibot";
-import { and, asc, eq, exists, isNull, ne, notExists, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  isNotNull,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { staff_auth_users } from "../auth/staff.generated";
 import { database } from "../db/database";
@@ -61,6 +73,16 @@ const findById = async (id: StaffId) => {
     .select(selection)
     .from(staffMembers)
     .where(eq(staffMembers.id, id))
+    .limit(1);
+  const row = rows.at(0);
+  return row ? projectStaff(row) : undefined;
+};
+
+const findByNormalizedEmail = async (normalizedEmail: string) => {
+  const rows = await database()
+    .select(selection)
+    .from(staffMembers)
+    .where(eq(staffMembers.normalizedEmail, normalizedEmail))
     .limit(1);
   const row = rows.at(0);
   return row ? projectStaff(row) : undefined;
@@ -199,6 +221,103 @@ const insertAudit = (
 export const staffQueries = {
   findById,
   resolveApplicant,
+
+  async readCurrentSessionAuthority(authUserId: string, id: StaffId) {
+    const rows = await database()
+      .select({ role: staffMembers.role })
+      .from(staffMembers)
+      .where(
+        and(
+          eq(staffMembers.id, id),
+          eq(staffMembers.authUserId, authUserId),
+          eq(staffMembers.status, "active"),
+        ),
+      )
+      .limit(1);
+    return rows.at(0)?.role ?? undefined;
+  },
+
+  async provisionOwner(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const current = await findByNormalizedEmail(normalizedEmail);
+    if (current?.status === "active" && current.role === "owner") {
+      return { kind: "provisioned" as const, member: current };
+    }
+    if (current?.authUserId) {
+      return { kind: "linked_identity" as const };
+    }
+
+    const id = current?.id ?? createStaffId();
+    const now = Date.now();
+    const db = database();
+    const [provisionedRows] = await db.batch([
+      db
+        .insert(staffMembers)
+        .values({
+          id,
+          normalizedEmail,
+          status: "active",
+          role: "owner",
+          createdAt: new Date(now),
+          updatedAt: new Date(now),
+          approvedAt: new Date(now),
+        })
+        .onConflictDoUpdate({
+          target: staffMembers.normalizedEmail,
+          set: {
+            status: "active",
+            role: "owner",
+            approvedAt: new Date(now),
+            revokedAt: null,
+            updatedAt: new Date(now),
+          },
+          where:
+            and(
+              isNull(staffMembers.authUserId),
+              or(
+                ne(staffMembers.status, "active"),
+                ne(staffMembers.role, "owner"),
+                isNull(staffMembers.approvedAt),
+                isNotNull(staffMembers.revokedAt),
+              ),
+            ) ?? isNull(staffMembers.authUserId),
+        })
+        .returning(selection),
+      db.insert(auditEvents).select(
+        db
+          .select({
+            id: sql<string>`${createAuditEventId()}`.as("id"),
+            actorKind: sql<"system">`${"system"}`.as("actor_kind"),
+            actorId: sql<null>`null`.as("actor_id"),
+            staffRole: sql<null>`null`.as("staff_role"),
+            telegramOperatorLabel: sql<null>`null`.as("telegram_operator_label"),
+            telegramUserId: sql<null>`null`.as("telegram_user_id"),
+            sourceChannel: sql<"provisioning">`${"provisioning"}`.as("source_channel"),
+            action: sql<string>`${"staff.provision_owner"}`.as("action"),
+            outcome: sql<"accepted">`${"accepted"}`.as("outcome"),
+            entityKind: sql<string>`${"staff_member"}`.as("entity_kind"),
+            entityId: staffMembers.id,
+            reason: sql<null>`null`.as("reason"),
+            commandCorrelationId: sql<string>`${crypto.randomUUID()}`.as("command_correlation_id"),
+            metadataJson: sql<string>`${JSON.stringify({
+              before: current ? { status: current.status, role: current.role } : null,
+              after: { status: "active", role: "owner" },
+            })}`.as("metadata_json"),
+            createdAt: sql<Date>`${now}`.as("created_at"),
+          })
+          .from(staffMembers)
+          .where(and(eq(staffMembers.id, id), eq(staffMembers.updatedAt, new Date(now)))),
+      ),
+    ] as const);
+    const provisioned = provisionedRows.at(0);
+    if (provisioned) {
+      return { kind: "provisioned" as const, member: projectStaff(provisioned) };
+    }
+    const resolved = await findByNormalizedEmail(normalizedEmail);
+    return resolved?.status === "active" && resolved.role === "owner"
+      ? { kind: "provisioned" as const, member: resolved }
+      : { kind: "linked_identity" as const };
+  },
 
   async createActive(context: StaffCommandContext, email: string, role: StaffRole) {
     const id = createStaffId();

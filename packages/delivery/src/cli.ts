@@ -141,87 +141,91 @@ const readDeliveryJournal = async (targetName: string) => {
   return v.parse(DeliveryJournalSchema, JSON.parse(source));
 };
 
+const RemoteD1InfoSchema = v.object({
+  uuid: D1DatabaseIdSchema,
+  name: D1DatabaseNameSchema,
+});
+const WorkerDeploymentSchema = v.object({
+  versions: v.array(
+    v.object({
+      version_id: v.pipe(v.string(), v.uuid()),
+      percentage: v.number(),
+    }),
+  ),
+});
+const WorkerVersionSchema = v.object({
+  annotations: v.record(v.string(), v.string()),
+});
+
+const verifyRemoteOwnerTarget = async (
+  workerName: string,
+  commit: string,
+  d1: { readonly name: string; readonly databaseId: string },
+) => {
+  const { stdout: d1Source } = await execFileOutput("pnpm", [
+    "exec",
+    "wrangler",
+    "d1",
+    "info",
+    d1.name,
+    "--json",
+  ]);
+  const remoteD1 = v.parse(RemoteD1InfoSchema, JSON.parse(d1Source));
+  if (remoteD1.name !== d1.name || remoteD1.uuid !== d1.databaseId) {
+    throw new Error("Deployed D1 resource does not match the delivery journal");
+  }
+
+  const { stdout: deploymentSource } = await execFileOutput("pnpm", [
+    "exec",
+    "wrangler",
+    "deployments",
+    "status",
+    "--name",
+    workerName,
+    "--json",
+  ]);
+  const deployment = v.parse(WorkerDeploymentSchema, JSON.parse(deploymentSource));
+  const activeVersion = deployment.versions.find(({ percentage }) => percentage === 100);
+  if (!activeVersion || deployment.versions.length !== 1) {
+    throw new Error("Deployed Worker does not have one active version");
+  }
+  const { stdout: versionSource } = await execFileOutput("pnpm", [
+    "exec",
+    "wrangler",
+    "versions",
+    "view",
+    activeVersion.version_id,
+    "--name",
+    workerName,
+    "--json",
+  ]);
+  const version = v.parse(WorkerVersionSchema, JSON.parse(versionSource));
+  if (
+    version.annotations["workers/message"] !== commit &&
+    version.annotations["workers/tag"] !== commit
+  ) {
+    throw new Error("Deployed Worker commit does not match the delivery journal");
+  }
+};
+
 const ownerProvisioningWorker = (token: string) => `
-import { createAuditEventId, createStaffId } from "../../packages/contracts/src/index";
-import { eq } from "../../packages/kernel/node_modules/drizzle-orm";
-import { database } from "../../packages/kernel/src/db/database";
-import { auditEvents, staffMembers } from "../../packages/kernel/src/db/schema";
+import { provisionOwner } from "../../packages/kernel/src/index";
 
 export default {
   async fetch(request) {
     if (request.headers.get("authorization") !== ${JSON.stringify(`Bearer ${token}`)}) {
       return new Response("Unauthorized", { status: 401 });
     }
-    const email = await request.text();
-    const db = database();
-    const current = (
-      await db
-        .select({
-          id: staffMembers.id,
-          authUserId: staffMembers.authUserId,
-          status: staffMembers.status,
-          role: staffMembers.role,
-        })
-        .from(staffMembers)
-        .where(eq(staffMembers.normalizedEmail, email))
-        .limit(1)
-    ).at(0);
-    if (current?.status === "active" && current.role === "owner") {
+    const result = await provisionOwner(await request.text());
+    if (result.isOk()) {
       return new Response("ok");
     }
-    if (current?.authUserId) {
-      return new Response("Use Staff Admin to change authority for a linked identity", {
-        status: 409,
-      });
-    }
-
-    const now = new Date();
-    const id = current?.id ?? createStaffId();
-    const audit = db.insert(auditEvents).values({
-      id: createAuditEventId(),
-      actorKind: "system",
-      sourceChannel: "provisioning",
-      action: "staff.provision_owner",
-      outcome: "accepted",
-      entityKind: "staff_member",
-      entityId: id,
-      commandCorrelationId: crypto.randomUUID(),
-      metadataJson: JSON.stringify({
-        before: current ? { status: current.status, role: current.role } : null,
-        after: { status: "active", role: "owner" },
-      }),
-      createdAt: now,
-    });
-    if (!current) {
-      await db.batch([
-        db.insert(staffMembers).values({
-          id,
-          normalizedEmail: email,
-          status: "active",
-          role: "owner",
-          createdAt: now,
-          updatedAt: now,
-          approvedAt: now,
-        }),
-        audit,
-      ]);
-      return new Response("ok");
-    }
-
-    await db.batch([
-      db
-        .update(staffMembers)
-        .set({
-          status: "active",
-          role: "owner",
-          approvedAt: now,
-          revokedAt: null,
-          updatedAt: now,
-        })
-        .where(eq(staffMembers.normalizedEmail, email)),
-      audit,
-    ]);
-    return new Response("ok");
+    return new Response(
+      result.error.code === "linked_identity"
+        ? "Use Staff Admin to change authority for a linked identity"
+        : "Owner provisioning is unavailable",
+      { status: result.error.code === "linked_identity" ? 409 : 503 },
+    );
   },
 };
 `;
@@ -258,6 +262,9 @@ const provisionOwner = async (
   const child = spawn("pnpm", commandArgs, {
     detached: true,
     stdio: ["ignore", "ignore", "pipe"],
+  });
+  const closed = new Promise<void>((resolve) => {
+    child.once("close", () => resolve());
   });
   let stderr = "";
   child.stderr.setEncoding("utf8");
@@ -305,14 +312,26 @@ const provisionOwner = async (
         }
       }
     }
-    await new Promise<void>((resolve) => {
-      if (child.exitCode !== null) {
-        resolve();
-        return;
+    let shutdownTimeout: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      closed,
+      new Promise<void>((resolve) => {
+        shutdownTimeout = setTimeout(resolve, 5_000);
+      }),
+    ]);
+    if (shutdownTimeout) {
+      clearTimeout(shutdownTimeout);
+    }
+    if (child.exitCode === null && child.pid) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+        }
       }
-      child.once("close", () => resolve());
-      setTimeout(resolve, 5_000);
-    });
+      await closed;
+    }
     await rm(directory, { recursive: true, force: true });
   }
 };
@@ -379,6 +398,8 @@ const addOwner = async () => {
   ) {
     throw new Error("Remote Owner target does not match its manifest and delivery journal");
   }
+
+  await verifyRemoteOwnerTarget(target.workerName, journal.commit, journal.resources.d1);
 
   const directory = await mkdtemp(join(tmpdir(), "ecom-owner-provisioning-"));
   try {

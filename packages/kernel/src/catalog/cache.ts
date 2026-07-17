@@ -24,7 +24,7 @@ const purgeCatalogCache = async (productId: string) => {
         json: { tags: ["catalog", `product:${productId}`] },
         retry: 0,
         throwHttpErrors: false,
-        timeout: false,
+        timeout: 10_000,
       },
     );
     const body = parseCachePurgeResponse(await response.json());

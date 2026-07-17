@@ -150,7 +150,7 @@ Oxfmt owns formatting. Oxlint starts from `npx @letstri/oxlint-config init`, the
 
 The bootstrap installs the approved dependency baseline instead of leaving feature agents to choose foundational libraries ad hoc. In addition to the accepted framework, Cloudflare, auth, database, UI, query, form, date, motion, icon, logging, and validation packages, this baseline includes `better-result`, `dismatch`, `es-toolkit`, `@solid-primitives/storage`, `culori`, and `micromark`. Installing a baseline dependency does not justify using it outside its owning need: Culori to the Theme compiler, and Micromark to the constrained CMS renderer. Major additions or competing libraries require an explicit reviewed decision.
 
-Remote apply requires a clean checkout and records the exact commit and lockfile digest. Production apply additionally requires an explicit typed target confirmation. It does not require tags, changelogs, artifact registries, or a release branch.
+Remote apply requires a clean checkout and records the exact commit and lockfile digest. The deployed Worker version records that commit in its Wrangler message or tag so later privileged delivery commands can verify live code identity, and the journal records the exact D1 UUID returned by Cloudflare. Production apply additionally requires an explicit typed target confirmation. It does not require changelogs, artifact registries, or a release branch.
 
 ## One resumable apply workflow
 

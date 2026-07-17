@@ -15,7 +15,7 @@ The concrete v1 provider decision is recorded separately in issue #32: both Byl 
 
 The system uses atomic transactions, current-state predicates, and direct uniqueness constraints for commercial truth. HTTP mutations are not automatically retried: repeating a request may repeat an effect when its state predicate still permits it.
 
-Every consequential mutation commits its domain state, balances, ledger entries, required audit evidence, and durable notification intent in one D1 transaction. Provider references use direct uniqueness constraints, and state transitions use current-state predicates. There is no shared replay-record table, request hashing, or result recovery.
+Every consequential mutation commits its domain state, balances, ledger entries, and required audit evidence in one D1 transaction. When that state requires a notification, its causal entity and deterministic task identity are sufficient for Workflow handoff and scheduled reconciliation; no separate notification intent row is added. Provider references use direct uniqueness constraints, and state transitions use current-state predicates. There is no shared replay-record table, request hashing, or result recovery.
 
 D1 is authoritative for commerce. Provider transaction references and financial evidence are retained for the Store lifetime.
 
@@ -106,7 +106,7 @@ D1 commit and Workflow creation cannot be atomic. The minimum recovery contract 
 3. If handoff fails after commit, return a retryable infrastructure failure; scheduled reconciliation discovers the committed state and starts the missing Workflow.
 4. A Store Cron trigger starts a bounded reconciliation Workflow that finds overdue or incomplete authoritative state and starts or repairs missing work from authoritative state.
 
-Notification delivery has a narrow delivery record created with the causal transaction. It records logical notification identity, channel, status, attempts, and sanitized last failure. It is not a general outbox or command queue.
+Notification delivery adds no generic outbox or delivery table. The causal Order, Payment, or Fulfillment state plus its deterministic notification task identity is the recovery record used to create or repair the Workflow.
 
 ## Adapter scope
 

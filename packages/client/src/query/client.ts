@@ -23,9 +23,6 @@ const presentGlobalError = (error: unknown) => {
     toast.error("Тодорхойгүй алдаа гарлаа.");
     return;
   }
-  if (parsed.output.kind === "api" && parsed.output.error.code === "validation") {
-    return;
-  }
   if (parsed.output.kind === "network") {
     toast.error("Холболт тасарлаа. Дахин оролдоно уу.");
     return;
