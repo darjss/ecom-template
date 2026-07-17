@@ -80,6 +80,7 @@ export const MediaUploadResponseSchema = v.strictObject({
   }),
 });
 export const MediaUploadMaxBytes = 8 * 1024 * 1024;
+export const MediaUploadMultipartMaxBytes = MediaUploadMaxBytes + 64 * 1024;
 
 export const CachePurgeDebtSchema = v.strictObject({
   attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),

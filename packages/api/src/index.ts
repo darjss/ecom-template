@@ -10,6 +10,7 @@ import {
   MediaFormatSchema,
   MediaUploadFieldsSchema,
   MediaUploadMaxBytes,
+  MediaUploadMultipartMaxBytes,
   MediaUploadResponseSchema,
   MediaWidthSchema,
   ProductIdSchema,
@@ -54,6 +55,8 @@ import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
+
+export { MediaUploadMultipartMaxBytes };
 
 export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
 

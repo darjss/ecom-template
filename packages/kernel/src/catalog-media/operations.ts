@@ -154,29 +154,18 @@ export const attachCatalogImage = async (
     return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
   }
 
-  if (attachment.displacedAsset) {
-    try {
-      await env.MEDIA.delete(attachment.displacedAsset.objectKey);
-      if (!(await catalogMediaQueries.deleteMediaAsset(attachment.displacedAsset.id))) {
-        return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
-      }
-    } catch {
-      return Result.err<never, CatalogMediaFailure>({ code: "infrastructure_unavailable" });
-    }
-  }
-
   try {
     const product = await catalogQueries.findById(catalogItemId);
     if (!product) {
-      return completedAttachment(attachment.image, "committed_but_not_purged", null);
+      return completedAttachment(attachment, "committed_but_not_purged", null);
     }
     if (!product.cachePurgeDebt) {
-      return completedAttachment(attachment.image, "not_required", null);
+      return completedAttachment(attachment, "not_required", null);
     }
     const cache = await resolvePendingCatalogCachePurge(product);
-    return completedAttachment(attachment.image, cache.cache, cache.cachePurgeRequestId);
+    return completedAttachment(attachment, cache.cache, cache.cachePurgeRequestId);
   } catch {
-    return completedAttachment(attachment.image, "committed_but_not_purged", null);
+    return completedAttachment(attachment, "committed_but_not_purged", null);
   }
 };
 

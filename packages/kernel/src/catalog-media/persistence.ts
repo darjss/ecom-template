@@ -80,22 +80,7 @@ export const catalogMediaQueries = {
   ) {
     const db = database();
     const cacheRevision = crypto.randomUUID();
-    const [displacedRows] = await db.batch([
-      db
-        .select({
-          id: mediaAssets.id,
-          objectKey: mediaAssets.objectKey,
-          declaredContentType: mediaAssets.declaredContentType,
-        })
-        .from(catalogItemImages)
-        .innerJoin(mediaAssets, eq(mediaAssets.id, catalogItemImages.mediaAssetId))
-        .where(
-          and(
-            eq(catalogItemImages.catalogItemId, catalogItemId),
-            eq(catalogItemImages.position, position),
-          ),
-        )
-        .limit(1),
+    await db.batch([
       db.insert(mediaAssets).values({
         id: mediaAssetId,
         objectKey,
@@ -134,26 +119,14 @@ export const catalogMediaQueries = {
             lastAttemptedAt: null,
           },
         }),
-    ] as const);
-    const displaced = displacedRows.at(0);
-    return {
-      image: projectCatalogImage({
-        mediaAssetId,
-        declaredContentType,
-        createdAt,
-        position,
-        altText,
-      }),
-      displacedAsset: displaced ? projectStoredMedia(displaced) : undefined,
-    };
-  },
-
-  async deleteMediaAsset(id: MediaAssetId) {
-    const removed = await database()
-      .delete(mediaAssets)
-      .where(eq(mediaAssets.id, id))
-      .returning({ id: mediaAssets.id });
-    return removed.length === 1;
+    ]);
+    return projectCatalogImage({
+      mediaAssetId,
+      declaredContentType,
+      createdAt,
+      position,
+      altText,
+    });
   },
 
   async listForCatalogItems(ids: readonly ProductId[]) {
