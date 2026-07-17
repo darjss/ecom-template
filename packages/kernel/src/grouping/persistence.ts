@@ -12,7 +12,19 @@ import {
   type TagId,
   type TagInput,
 } from "@ecom/contracts";
-import { and, asc, eq, exists, inArray, isNull, ne, notExists, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   catalogItemCategories,
@@ -404,14 +416,34 @@ export const groupingQueries = {
     }
     const now = new Date();
     try {
-      await database().batch([
-        database()
-          .update(collections)
-          .set({ ...input, updatedAt: now })
-          .where(eq(collections.id, id)),
-        catalogDebtStatement(now),
-      ]);
-      return { kind: "changed" as const, value: await findCollection(id) };
+      const changed = (
+        await database().batch([
+          database()
+            .update(collections)
+            .set({ ...input, updatedAt: now })
+            .where(
+              and(
+                eq(collections.id, id),
+                or(isNull(collections.activatedAt), eq(collections.slug, input.slug)),
+              ),
+            )
+            .returning({ id: collections.id }),
+          catalogDebtStatement(now),
+        ])
+      )[0];
+      if (changed.length === 1) {
+        return { kind: "changed" as const, value: await findCollection(id) };
+      }
+      const resolved = await findCollection(id);
+      if (!resolved) {
+        return { kind: "not_found" as const };
+      }
+      return {
+        kind:
+          resolved.activatedAt && resolved.slug !== input.slug
+            ? ("slug_locked" as const)
+            : ("infrastructure" as const),
+      };
     } catch {
       return {
         kind: (await collectionSlugExists(input.slug, id))
