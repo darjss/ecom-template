@@ -31,7 +31,7 @@ export const CreateProductForm = () => {
   }));
   return (
     <form
-      class="catalog-create-form"
+      class="grid grid-cols-1 gap-3 pb-8 md:grid-cols-3"
       onSubmit={async (event) => {
         event.preventDefault();
         await form.handleSubmit();
@@ -39,9 +39,10 @@ export const CreateProductForm = () => {
     >
       <form.Field name="name">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Нэр</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               required
               maxlength={120}
               value={field().state.value}
@@ -52,9 +53,10 @@ export const CreateProductForm = () => {
       </form.Field>
       <form.Field name="slug">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>URL slug</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               required
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
               value={field().state.value}
@@ -65,9 +67,10 @@ export const CreateProductForm = () => {
       </form.Field>
       <form.Field name="priceMnt">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Үнэ (₮)</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               type="number"
               min="1"
               required
@@ -79,9 +82,10 @@ export const CreateProductForm = () => {
       </form.Field>
       <form.Field name="openingQuantity">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Анхны үлдэгдэл</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               type="number"
               min="0"
               required
@@ -93,9 +97,10 @@ export const CreateProductForm = () => {
       </form.Field>
       <form.Field name="inventoryReason">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Үлдэгдлийн шалтгаан</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               required
               maxlength={240}
               value={field().state.value}
@@ -106,9 +111,10 @@ export const CreateProductForm = () => {
       </form.Field>
       <form.Field name="description">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Тайлбар</span>
             <textarea
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               maxlength={5000}
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}

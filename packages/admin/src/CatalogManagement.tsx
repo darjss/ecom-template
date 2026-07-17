@@ -8,13 +8,19 @@ import { CreateProductForm } from "./CreateProductForm";
 export const CatalogManagement = () => {
   const catalog = useQuery(() => catalogQueryOptions());
   return (
-    <section class="staff-management catalog-management" aria-labelledby="catalog-title">
-      <div class="section-heading">
+    <section class="border-t border-black/15" aria-labelledby="catalog-title">
+      <div class="flex flex-col items-start justify-between gap-4 py-8 md:flex-row md:gap-8">
         <div>
-          <h2 id="catalog-title">Бүтээгдэхүүн ба нөөц</h2>
-          <p>Default Variant, байнгын SKU болон шалтгаант үлдэгдлийг нэг дор удирдана.</p>
+          <h2 id="catalog-title" class="m-0 text-xl font-bold tracking-tight">
+            Бүтээгдэхүүн ба нөөц
+          </h2>
+          <p class="mt-2 mb-0 max-w-prose text-(--muted)">
+            Default Variant, байнгын SKU болон шалтгаант үлдэгдлийг нэг дор удирдана.
+          </p>
         </div>
-        <span class="staff-count">{catalog.data?.data.length ?? 0} бүтээгдэхүүн</span>
+        <span class="rounded-full bg-(--surface) px-2.5 py-1.5 text-xs font-bold whitespace-nowrap">
+          {catalog.data?.data.length ?? 0} бүтээгдэхүүн
+        </span>
       </div>
       <CreateProductForm />
       <Show
@@ -42,7 +48,7 @@ export const CatalogManagement = () => {
         >
           {(data) => (
             <Show when={data.data.length > 0} fallback={<p>Анхны бүтээгдэхүүнээ үүсгэнэ үү.</p>}>
-              <ul class="staff-list">
+              <ul class="m-0 list-none border-b border-black/15 p-0">
                 <For each={data.data}>{(product) => <CatalogProductRow product={product} />}</For>
               </ul>
             </Show>

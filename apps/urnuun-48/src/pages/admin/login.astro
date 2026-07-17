@@ -5,17 +5,28 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 Astro.response.headers.set("Cache-Control", "private, no-store");
 ---
 <AdminLayout title="Ажилтны нэвтрэх · Өрнүүн 48">
-  <main id="admin-content" class="login-shell">
-    <section class="login-panel" aria-labelledby="login-title">
-      <p class="eyebrow">Өрнүүн 48 · Удирдлага</p>
-      <h1 id="login-title">Ажилтны нэвтрэх</h1>
-      <p>Зөвшөөрөгдсөн Google хаягаар нэвтэрсний дараа удирдлагын хэсэг нээгдэнэ.</p>
+  <main id="admin-content" class="grid min-h-screen place-items-center p-6">
+    <section
+      class="w-full max-w-lg rounded-(--radius) border border-black/15 bg-(--paper) p-8 sm:p-16"
+      aria-labelledby="login-title"
+    >
+      <p class="mb-2 text-xs font-extrabold tracking-widest text-(--muted) uppercase">
+        Өрнүүн 48 · Удирдлага
+      </p>
+      <h1 id="login-title" class="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
+        Ажилтны нэвтрэх
+      </h1>
+      <p class="mt-5 mb-8 leading-relaxed text-(--muted)">
+        Зөвшөөрөгдсөн Google хаягаар нэвтэрсний дараа удирдлагын хэсэг нээгдэнэ.
+      </p>
       <StaffLoginForm client:only="solid-js" />
-      <div class="login-health">
+      <div class="mt-8 flex items-center justify-between gap-4 border-t border-black/10 pt-5 text-sm">
         <span>Системийн төлөв</span>
         <AdminHealthStatus client:only="solid-js" />
       </div>
-      <a class="store-link-back" href="/">Дэлгүүр рүү буцах</a>
+      <a class="mt-6 block w-max text-(--muted) underline-offset-4" href="/">
+        Дэлгүүр рүү буцах
+      </a>
     </section>
   </main>
 </AdminLayout>

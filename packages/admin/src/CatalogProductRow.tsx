@@ -34,7 +34,7 @@ const ProductEditForm = (props: { product: Product }) => {
   }));
   return (
     <form
-      class="catalog-edit-form"
+      class="col-span-full grid grid-cols-1 items-end gap-3 md:grid-cols-4"
       onSubmit={async (event) => {
         event.preventDefault();
         await form.handleSubmit();
@@ -42,9 +42,10 @@ const ProductEditForm = (props: { product: Product }) => {
     >
       <form.Field name="name">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Нэр</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               required
               maxlength={120}
               value={field().state.value}
@@ -55,9 +56,10 @@ const ProductEditForm = (props: { product: Product }) => {
       </form.Field>
       <form.Field name="slug">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>URL slug</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               required
               pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
               value={field().state.value}
@@ -68,9 +70,10 @@ const ProductEditForm = (props: { product: Product }) => {
       </form.Field>
       <form.Field name="priceMnt">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Үнэ (₮)</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               type="number"
               min="1"
               required
@@ -82,9 +85,10 @@ const ProductEditForm = (props: { product: Product }) => {
       </form.Field>
       <form.Field name="description">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Тайлбар</span>
             <textarea
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
               maxlength={5000}
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}
@@ -118,9 +122,9 @@ export const CatalogProductRow = (props: { product: Product }) => {
         ? "Архивлах"
         : "Дахин идэвхжүүлэх";
   return (
-    <li class="catalog-product-row">
-      <div>
-        <strong>{props.product.name}</strong>
+    <li class="grid grid-cols-1 gap-4 border-t border-black/10 py-5 md:grid-cols-[minmax(14rem,1fr)_auto]">
+      <div class="grid gap-1 text-sm text-(--muted)">
+        <strong class="text-base text-(--ink)">{props.product.name}</strong>
         <span>
           {props.product.sku} · {money.format(props.product.priceMnt)} ₮ · {props.product.state}
         </span>

@@ -51,7 +51,7 @@ export const StaffLoginForm = () => {
       <Button type="submit">Google-ээр үргэлжлүүлэх</Button>
       <form.Subscribe selector={(state) => state.values.message}>
         {(message) => (
-          <p class="login-message" role="status">
+          <p class="mt-4 min-h-6 text-sm text-red-800" role="status">
             {message()}
           </p>
         )}

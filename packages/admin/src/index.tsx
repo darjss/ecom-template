@@ -36,9 +36,25 @@ const statusLabels = {
 const HealthStatus = () => {
   const health = useQuery(() => healthQueryOptions());
   return (
-    <Show when={!health.isError} fallback={<span class="health unavailable">Сааталтай</span>}>
-      <Show when={health.data} fallback={<span class="health pending">Шалгаж байна</span>}>
-        <span class="health ready">Хэвийн</span>
+    <Show
+      when={!health.isError}
+      fallback={
+        <span class="rounded-full bg-red-200 px-3 py-2 text-xs font-bold whitespace-nowrap">
+          Сааталтай
+        </span>
+      }
+    >
+      <Show
+        when={health.data}
+        fallback={
+          <span class="rounded-full bg-(--surface) px-3 py-2 text-xs font-bold whitespace-nowrap">
+            Шалгаж байна
+          </span>
+        }
+      >
+        <span class="rounded-full bg-green-200 px-3 py-2 text-xs font-bold whitespace-nowrap">
+          Хэвийн
+        </span>
       </Show>
     </Show>
   );
@@ -58,7 +74,7 @@ const StaffRoleForm = (props: {
 
   return (
     <form
-      class="staff-role-form"
+      class="flex flex-wrap items-center gap-2"
       onSubmit={async (event) => {
         event.preventDefault();
         await form.handleSubmit();
@@ -69,6 +85,7 @@ const StaffRoleForm = (props: {
           <label>
             <span class="sr-only">{props.member.email} эрх</span>
             <select
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) pr-9 pl-3 text-(--ink)"
               value={field().state.value}
               onChange={(event) => {
                 const role = v.safeParse(StaffRoleSchema, event.currentTarget.value);
@@ -100,10 +117,17 @@ const StaffRow = (props: { member: StaffMember }) => {
   const remove = () => mutation.mutate({ kind: "remove", id: props.member.id });
 
   return (
-    <li class="staff-row">
-      <div class="staff-identity">
-        <strong>{props.member.email}</strong>
-        <span class={`staff-status staff-status--${props.member.status}`}>
+    <li class="grid grid-cols-1 items-start gap-4 border-t border-black/10 py-4 md:grid-cols-[minmax(14rem,1fr)_auto_auto] md:items-center">
+      <div class="grid min-w-0 justify-items-start gap-2">
+        <strong class="max-w-full break-all">{props.member.email}</strong>
+        <span
+          class="rounded-full px-2.5 py-1.5 text-xs font-bold whitespace-nowrap"
+          classList={{
+            "bg-(--surface)": props.member.status === "pending",
+            "bg-green-200": props.member.status === "active",
+            "bg-red-200": props.member.status === "revoked",
+          }}
+        >
           {statusLabels[props.member.status]}
         </span>
       </div>
@@ -122,7 +146,7 @@ const StaffRow = (props: { member: StaffMember }) => {
           />
         )}
       </Show>
-      <div class="staff-actions">
+      <div class="flex flex-wrap items-center gap-2">
         <Show when={props.member.status === "active"}>
           <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={revoke}>
             Эрх цуцлах
@@ -142,7 +166,7 @@ const StaffRow = (props: { member: StaffMember }) => {
           }
         >
           <span
-            class="remove-confirmation"
+            class="flex items-center gap-2"
             role="group"
             aria-label={`${props.member.email} устгах баталгаа`}
           >
@@ -200,7 +224,7 @@ const AddStaffForm = () => {
 
   return (
     <form
-      class="staff-add-form"
+      class="grid grid-cols-1 items-end gap-3 border-b border-black/15 pb-8 md:grid-cols-[minmax(14rem,1fr)_minmax(8rem,0.4fr)_auto]"
       onSubmit={async (event) => {
         event.preventDefault();
         await form.handleSubmit();
@@ -208,9 +232,10 @@ const AddStaffForm = () => {
     >
       <form.Field name="email">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Google и-мэйл</span>
             <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 font-normal text-(--ink)"
               type="email"
               autocomplete="email"
               required
@@ -224,9 +249,10 @@ const AddStaffForm = () => {
       </form.Field>
       <form.Field name="role">
         {(field) => (
-          <label>
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
             <span>Эрх</span>
             <select
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 font-normal text-(--ink)"
               value={field().state.value}
               onChange={(event) => {
                 const role = v.safeParse(StaffRoleSchema, event.currentTarget.value);
@@ -243,12 +269,12 @@ const AddStaffForm = () => {
           </label>
         )}
       </form.Field>
-      <Button type="submit" disabled={mutation.isPending}>
+      <Button class="w-full md:w-auto" type="submit" disabled={mutation.isPending}>
         {mutation.isPending ? "Нэмж байна…" : "Ажилтан нэмэх"}
       </Button>
       <Show when={mutation.error} keyed>
         {(error) => (
-          <p class="staff-add-error" role="alert">
+          <p class="col-span-full m-0 text-sm text-red-800" role="alert">
             {addStaffErrorMessage(error)}
           </p>
         )}
@@ -261,7 +287,7 @@ const CleanupDebtControl = (props: { count: number }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => staffMutationOptions(queryClient));
   return (
-    <div class="staff-cleanup-control">
+    <div class="flex flex-wrap items-center justify-between gap-4 py-4">
       <p role="status">{props.count} session цэвэрлэгээ хүлээгдэж байна.</p>
       <Button
         type="button"
@@ -278,13 +304,19 @@ const CleanupDebtControl = (props: { count: number }) => {
 const StaffManagement = () => {
   const staff = useQuery(() => staffQueryOptions());
   return (
-    <section class="staff-management" aria-labelledby="staff-title">
-      <div class="section-heading">
+    <section class="border-t border-black/15" aria-labelledby="staff-title">
+      <div class="flex flex-col items-start justify-between gap-4 py-8 md:flex-row md:gap-8">
         <div>
-          <h2 id="staff-title">Ажилтны эрх</h2>
-          <p>Ажилтны Google и-мэйлийг урьдчилан нэмж эсвэл хүсэлтийг зөвшөөрч эрхийг удирдана.</p>
+          <h2 id="staff-title" class="m-0 text-xl font-bold tracking-tight">
+            Ажилтны эрх
+          </h2>
+          <p class="mt-2 mb-0 max-w-prose text-(--muted)">
+            Ажилтны Google и-мэйлийг урьдчилан нэмж эсвэл хүсэлтийг зөвшөөрч эрхийг удирдана.
+          </p>
         </div>
-        <span class="staff-count">{staff.data?.data.members.length ?? 0} бүртгэл</span>
+        <span class="rounded-full bg-(--surface) px-2.5 py-1.5 text-xs font-bold whitespace-nowrap">
+          {staff.data?.data.members.length ?? 0} бүртгэл
+        </span>
       </div>
       <Show
         when={staff.isSuccess ? staff.data : undefined}
@@ -306,9 +338,9 @@ const StaffManagement = () => {
             </Show>
             <Show
               when={data.data.members.length > 0}
-              fallback={<p class="staff-empty">Одоогоор ажилтны хүсэлт байхгүй байна.</p>}
+              fallback={<p class="py-10 text-(--muted)">Одоогоор ажилтны хүсэлт байхгүй байна.</p>}
             >
-              <ul class="staff-list">
+              <ul class="m-0 list-none border-b border-black/15 p-0">
                 <For each={data.data.members}>{(member) => <StaffRow member={member} />}</For>
               </ul>
             </Show>
@@ -322,27 +354,41 @@ const StaffManagement = () => {
 export type AdminAppProps = { storeName: string; role: StaffRole };
 
 const Dashboard = (props: AdminAppProps) => (
-  <div class="admin-shell">
-    <aside class="admin-sidebar" aria-label="Үндсэн цэс">
-      <a class="admin-brand" href="/">
+  <div class="grid min-h-screen grid-cols-1 md:grid-cols-[15rem_1fr]">
+    <aside
+      class="sticky top-0 z-20 grid min-w-0 grid-cols-[1fr_auto] bg-(--ink) px-4 py-3 text-stone-100 md:static md:flex md:flex-col md:px-4 md:py-6"
+      aria-label="Үндсэн цэс"
+    >
+      <a class="self-center font-extrabold no-underline md:mx-3 md:mt-2 md:mb-10" href="/">
         {props.storeName}
       </a>
-      <nav>
-        <a class="active" aria-current="page" href="/admin">
+      <nav class="order-3 col-span-full mt-3 flex min-w-0 max-w-full gap-1 overflow-x-auto md:order-none md:mt-0 md:grid">
+        <a
+          class="rounded-xl bg-white/10 px-3 py-3 text-sm no-underline hover:bg-white/10"
+          aria-current="page"
+          href="/admin"
+        >
           {props.role === "owner" ? "Ажилтны эрх" : "Хяналтын самбар"}
         </a>
       </nav>
-      <a class="store-link" href="/">
+      <a
+        class="col-start-2 row-start-1 p-2 text-sm text-stone-300 no-underline md:mt-auto md:p-3"
+        href="/"
+      >
         Дэлгүүр рүү очих
       </a>
     </aside>
-    <main id="admin-content" class="admin-main" tabindex="-1">
-      <header>
+    <main id="admin-content" class="min-w-0 p-6 sm:p-10 lg:p-20" tabindex="-1">
+      <header class="mb-8 flex flex-col items-start justify-between gap-4 md:mb-20 md:flex-row md:items-center">
         <div>
-          <p class="eyebrow">Удирдлага</p>
-          <h1>{props.role === "owner" ? "Store-ийн баг" : "Удирдлагын самбар"}</h1>
+          <p class="mb-2 text-xs font-extrabold tracking-widest text-(--muted) uppercase">
+            Удирдлага
+          </p>
+          <h1 class="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
+            {props.role === "owner" ? "Store-ийн баг" : "Удирдлагын самбар"}
+          </h1>
         </div>
-        <div class="system-health">
+        <div class="flex items-center gap-3 text-sm text-(--muted)">
           <span>Систем</span>
           <HealthStatus />
         </div>
