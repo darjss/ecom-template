@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -38,7 +38,7 @@ Commands:
   dev --store <slug>
   preview --store <slug>
   build --store <slug>
-  owner-add --store <slug> --email <email> (--local | --manifest <path> --target <name>)
+  owner-add --store <slug> --email <email> [--local | --manifest <path> --target <name>]
   create --slug <slug> --name <name>
   apply --manifest <path> --target <name>
   proof --manifest <path> --target <name>
@@ -80,14 +80,16 @@ type ManifestInput = {
   readonly digest: string;
 };
 
-const readManifest = async (): Promise<ManifestInput> => {
-  const source = await readFile(requireOption("--manifest"), "utf8");
+const readManifestPath = async (path: string): Promise<ManifestInput> => {
+  const source = await readFile(path, "utf8");
   const parsed: unknown = parseYaml(source);
   return {
     manifest: v.parse(DeliveryManifestSchema, parsed),
     digest: createHash("sha256").update(source).digest("hex"),
   };
 };
+
+const readManifest = () => readManifestPath(requireOption("--manifest"));
 
 const readTarget = async () => {
   const { manifest, digest } = await readManifest();
@@ -155,6 +157,20 @@ const readAppD1Resource = async (slug: string) => {
   return { name: resource.database_name, databaseId: resource.database_id };
 };
 
+const parseDeliveryJournal = (source: string) => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
+  }
+  const result = v.safeParse(DeliveryJournalSchema, parsed);
+  if (!result.success) {
+    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
+  }
+  return result.output;
+};
+
 const readDeliveryJournal = async (targetName: string) => {
   let source: string;
   try {
@@ -162,12 +178,60 @@ const readDeliveryJournal = async (targetName: string) => {
   } catch {
     throw new Error("Remote Owner target lacks a deployed delivery journal");
   }
-  const parsed: unknown = JSON.parse(source);
-  const result = v.safeParse(DeliveryJournalSchema, parsed);
-  if (!result.success) {
-    throw new Error("Remote Owner target has a legacy or invalid delivery journal");
+  return parseDeliveryJournal(source);
+};
+
+const isMissingFile = (error: unknown) =>
+  typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+
+const resolveCanonicalRemoteTarget = async (slug: string) => {
+  const appDirectory = join("apps", slug);
+  const entries = await readdir(appDirectory, { withFileTypes: true });
+  const manifestPaths = entries
+    .filter(
+      (entry) => entry.isFile() && /^delivery\.[a-z0-9]+(?:-[a-z0-9]+)*\.yml$/.test(entry.name),
+    )
+    .map((entry) => join(appDirectory, entry.name))
+    .toSorted();
+  const candidates: Array<Awaited<ReturnType<typeof readTarget>>> = [];
+  for (const path of manifestPaths) {
+    const { manifest, digest } = await readManifestPath(path);
+    for (const [targetName, target] of Object.entries(manifest.targets)) {
+      if (target.kind === "local" || targetSlug(target.app) !== slug) {
+        continue;
+      }
+      let journalSource: string;
+      try {
+        journalSource = await readFile(journalPath(targetName), "utf8");
+      } catch (error) {
+        if (isMissingFile(error)) {
+          continue;
+        }
+        throw error;
+      }
+      const journal = parseDeliveryJournal(journalSource);
+      if (
+        journal.target !== targetName ||
+        journal.app !== target.app ||
+        journal.manifestDigest !== digest ||
+        !journal.completedSteps.includes("remote-deploy")
+      ) {
+        throw new Error(
+          "Canonical remote Owner evidence does not match its target, app, manifest, or deployment step",
+        );
+      }
+      candidates.push({ targetName, target, manifestDigest: digest });
+    }
   }
-  return result.output;
+  const candidate = candidates.length === 1 ? candidates.at(0) : undefined;
+  if (!candidate) {
+    throw new Error(
+      candidates.length === 0
+        ? `Store ${slug} has no canonical deployed Owner target evidence`
+        : `Store ${slug} has ambiguous deployed Owner target evidence`,
+    );
+  }
+  return candidate;
 };
 
 const verifyRemoteD1Resource = async (
@@ -197,8 +261,10 @@ const verifyRemoteD1Resource = async (
 const addOwner = async () => {
   const slug = v.parse(StoreSlugSchema, requireOption("--store"));
   const email = v.parse(SqlEmailSchema, requireOption("--email"));
+  const hasManifestOverride = args.includes("--manifest");
+  const hasTargetOverride = args.includes("--target");
   if (args.includes("--local")) {
-    if (option("--manifest") || option("--target")) {
+    if (hasManifestOverride || hasTargetOverride) {
       throw new Error("Owner provisioning accepts either --local or a manifest target, not both");
     }
     const localStore = await resolveLocalStore(slug);
@@ -219,7 +285,12 @@ const addOwner = async () => {
     return;
   }
 
-  const { targetName, target, manifestDigest } = await readTarget();
+  if (hasManifestOverride !== hasTargetOverride) {
+    throw new Error("Remote Owner manifest and target overrides must be provided together");
+  }
+  const { targetName, target, manifestDigest } = hasManifestOverride
+    ? await readTarget()
+    : await resolveCanonicalRemoteTarget(slug);
   if (target.kind === "local" || targetSlug(target.app) !== slug) {
     throw new Error("Remote Owner target does not match the selected deployed Store");
   }
