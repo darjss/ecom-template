@@ -30,6 +30,7 @@
     "store:delivery": "tsx packages/delivery/src/cli.ts",
     "store:owner:add": "tsx packages/delivery/src/cli.ts owner-add",
     "staff:id:create": "tsx packages/contracts/scripts/create-staff-id.ts",
+    "audit:id:create": "tsx packages/contracts/scripts/create-audit-event-id.ts",
     "store:create": "tsx packages/delivery/src/cli.ts create",
     "store:apply": "tsx packages/delivery/src/cli.ts apply",
     "store:proof": "tsx packages/delivery/src/cli.ts proof",

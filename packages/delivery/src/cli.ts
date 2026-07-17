@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import * as v from "valibot";
 import {
   D1DatabaseIdSchema,
   D1DatabaseNameSchema,
+  DeliveryAuditEventIdSchema,
   DeliveryJournalSchema,
   DeliveryManifestSchema,
   DeliveryStaffIdSchema,
@@ -122,10 +123,17 @@ const hasCanonicalStaffIdSql =
   "length(staff_members.id) = 32 AND substr(staff_members.id, 1, 6) = 'staff_' AND substr(staff_members.id, 7, 1) GLOB '[0-7]' AND substr(staff_members.id, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'";
 
 const createOwnerStatement = async (email: string) => {
-  const { stdout: staffIdSource } = await execFileOutput("pnpm", ["--silent", "staff:id:create"]);
+  const [{ stdout: staffIdSource }, { stdout: auditIdSource }] = await Promise.all([
+    execFileOutput("pnpm", ["--silent", "staff:id:create"]),
+    execFileOutput("pnpm", ["--silent", "audit:id:create"]),
+  ]);
   const staffId = v.parse(DeliveryStaffIdSchema, staffIdSource.trim());
+  const auditId = v.parse(DeliveryAuditEventIdSchema, auditIdSource.trim());
+  const correlationId = randomUUID();
   const now = Date.now();
-  return `INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET id = CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE excluded.id END, status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
+  const finalStaffId = `coalesce((SELECT CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE ${sqlString(staffId)} END FROM staff_members WHERE normalized_email = ${sqlString(email)}), ${sqlString(staffId)})`;
+  const metadata = `json_object('before', (SELECT json_object('status', status, 'role', role) FROM staff_members WHERE normalized_email = ${sqlString(email)}), 'after', json_object('status', 'active', 'role', 'owner'))`;
+  return `INSERT INTO audit_events (id, actor_kind, actor_id, staff_role, source_channel, action, outcome, entity_kind, entity_id, reason, command_correlation_id, metadata_json, created_at) VALUES (${sqlString(auditId)}, 'system', NULL, NULL, 'provisioning', 'staff.provision_owner', 'accepted', 'staff_member', ${finalStaffId}, NULL, ${sqlString(correlationId)}, ${metadata}, ${now}); INSERT INTO staff_session_cleanup_debts (auth_user_id, staff_id, session_generation, operation, created_at, updated_at) SELECT auth_user_id, ${finalStaffId}, session_generation + 1, 'provision', ${now}, ${now} FROM staff_members WHERE normalized_email = ${sqlString(email)} AND auth_user_id IS NOT NULL ON CONFLICT(auth_user_id) DO UPDATE SET staff_id = excluded.staff_id, session_generation = excluded.session_generation, operation = excluded.operation, updated_at = excluded.updated_at; INSERT INTO staff_members (id, normalized_email, auth_user_id, status, role, session_generation, created_at, updated_at, approved_at, revoked_at) VALUES (${sqlString(staffId)}, ${sqlString(email)}, NULL, 'active', 'owner', 0, ${now}, ${now}, ${now}, NULL) ON CONFLICT(normalized_email) DO UPDATE SET id = CASE WHEN ${hasCanonicalStaffIdSql} THEN staff_members.id ELSE excluded.id END, status = 'active', role = 'owner', session_generation = staff_members.session_generation + 1, approved_at = excluded.approved_at, revoked_at = NULL, updated_at = excluded.updated_at`;
 };
 
 const readAppD1Resource = async (slug: string) => {
