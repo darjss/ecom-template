@@ -8,6 +8,7 @@ import type {
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { purgeCatalogCache } from "./cache";
+import { inventoryQueries } from "./inventory-persistence";
 import { catalogQueries } from "./persistence";
 
 export type CatalogOperationFailure = {
@@ -142,7 +143,7 @@ export const adjustProductInventory = async (
     return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
   }
   try {
-    const result = await catalogQueries.adjust(actor, id, input);
+    const result = await inventoryQueries.adjust(actor, id, input);
     if (result.kind === "changed" && result.product) {
       return Result.ok<CatalogMutationResult, never>({
         product: result.product,
