@@ -380,7 +380,11 @@ const AddVariantForm = (props: { product: Product }) => {
       <Button
         type="submit"
         variant="secondary"
-        disabled={mutation.isPending || groups().length === 0}
+        disabled={
+          mutation.isPending ||
+          groups().length === 0 ||
+          currentDraft(props.product).variants.length >= 100
+        }
       >
         Variant нэмэх
       </Button>

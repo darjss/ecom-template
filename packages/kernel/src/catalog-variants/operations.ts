@@ -84,20 +84,6 @@ export const setVariantState = async (
     return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
   }
   try {
-    if (state === "archived") {
-      const product = await findCatalogProductById(productId);
-      if (!product) {
-        return Result.err<never, CatalogVariantFailure>({ code: "not_found" });
-      }
-      if (
-        product.state !== "draft" &&
-        product.optionConfiguration.variants.filter(
-          (variant) => variant.state === "active" && !variant.isDefault,
-        ).length <= 1
-      ) {
-        return Result.err<never, CatalogVariantFailure>({ code: "invalid_publication" });
-      }
-    }
     const result = await catalogVariantQueries.transition(productId, variantId, state);
     return result.kind === "changed"
       ? changedProduct(productId, true)

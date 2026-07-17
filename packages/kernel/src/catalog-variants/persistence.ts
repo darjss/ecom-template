@@ -148,43 +148,6 @@ const temporaryPositions = (
 };
 
 export const catalogVariantQueries = {
-  async validatePublication(productId: ProductId) {
-    const configuration = await readProductOptionConfiguration(productId);
-    const groups = configuration.groups.filter(({ state }) => state === "active");
-    const activeValuesByGroup = groups.map(
-      (group) =>
-        new Set(group.values.filter(({ state }) => state === "active").map(({ id }) => id)),
-    );
-    const activeVariants = configuration.variants.filter(({ state }) => state === "active");
-    if (groups.length === 0) {
-      return activeVariants.some(
-        ({ isDefault, priceOverrideMnt }) =>
-          isDefault && (priceOverrideMnt === null || priceOverrideMnt > 0),
-      );
-    }
-    const explicit = activeVariants.filter(({ isDefault }) => !isDefault);
-    if (
-      explicit.length === 0 ||
-      groups.some((group) => group.values.every(({ state }) => state !== "active"))
-    ) {
-      return false;
-    }
-    const combinations = explicit.map(({ optionValueIds }) => combinationKey(optionValueIds));
-    return (
-      distinct(combinations) &&
-      explicit.every(
-        (variant) => variant.priceOverrideMnt === null || variant.priceOverrideMnt > 0,
-      ) &&
-      explicit.every(
-        (variant) =>
-          variant.optionValueIds.length === groups.length &&
-          activeValuesByGroup.every(
-            (valueIds) => variant.optionValueIds.filter((id) => valueIds.has(id)).length === 1,
-          ),
-      )
-    );
-  },
-
   async saveConfiguration(productId: ProductId, input: SaveProductOptionsInput) {
     const db = database();
     const [productRows, defaultVariantRows] = await Promise.all([
