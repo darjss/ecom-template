@@ -29,8 +29,51 @@ const isStaffId = (value: string) => {
 };
 
 export const StaffIdSchema = v.pipe(v.string(), v.check(isStaffId, "Invalid Staff ID"));
+export const AuditActorKindSchema = v.picklist([
+  "system",
+  "staff",
+  "customer",
+  "provider",
+  "telegram_operator",
+]);
+export const TelegramOperatorLabelSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(64),
+);
+export const TelegramUserIdSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(Number.MAX_SAFE_INTEGER),
+);
 export const StaffRoleSchema = v.picklist(["owner", "manager", "staff"]);
 export const StaffStatusSchema = v.picklist(["pending", "active", "revoked"]);
+
+export const AuditActorSchema = v.variant("kind", [
+  v.strictObject({
+    kind: v.literal("staff"),
+    actorId: StaffIdSchema,
+    staffRole: StaffRoleSchema,
+    telegramOperatorLabel: v.null(),
+    telegramUserId: v.null(),
+  }),
+  v.strictObject({
+    kind: v.literal("telegram_operator"),
+    actorId: v.null(),
+    staffRole: v.null(),
+    telegramOperatorLabel: TelegramOperatorLabelSchema,
+    telegramUserId: TelegramUserIdSchema,
+  }),
+  v.strictObject({
+    kind: v.picklist(["system", "customer", "provider"]),
+    actorId: v.nullable(v.string()),
+    staffRole: v.null(),
+    telegramOperatorLabel: v.null(),
+    telegramUserId: v.null(),
+  }),
+]);
 
 const StaffTimestampSchema = v.pipe(v.string(), v.isoTimestamp());
 export const StaffMemberSchema = v.pipe(
@@ -191,6 +234,10 @@ export const HealthClientErrorSchema = v.variant("kind", [
 ]);
 
 export type StaffId = v.InferOutput<typeof StaffIdSchema>;
+export type AuditActorKind = v.InferOutput<typeof AuditActorKindSchema>;
+export type AuditActor = v.InferOutput<typeof AuditActorSchema>;
+export type TelegramOperatorLabel = v.InferOutput<typeof TelegramOperatorLabelSchema>;
+export type TelegramUserId = v.InferOutput<typeof TelegramUserIdSchema>;
 export type StaffRole = v.InferOutput<typeof StaffRoleSchema>;
 export type StaffStatus = v.InferOutput<typeof StaffStatusSchema>;
 export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;

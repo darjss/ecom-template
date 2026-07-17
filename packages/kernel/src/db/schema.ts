@@ -68,9 +68,13 @@ export const auditEvents = sqliteTable(
   "audit_events",
   {
     id: text("id").primaryKey(),
-    actorKind: text("actor_kind", { enum: ["system", "staff", "customer", "provider"] }).notNull(),
+    actorKind: text("actor_kind", {
+      enum: ["system", "staff", "customer", "provider", "telegram_operator"],
+    }).notNull(),
     actorId: text("actor_id"),
     staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
+    telegramOperatorLabel: text("telegram_operator_label"),
+    telegramUserId: integer("telegram_user_id"),
     sourceChannel: text("source_channel", {
       enum: ["admin", "storefront", "provider_callback", "workflow", "telegram", "provisioning"],
     }).notNull(),
@@ -90,11 +94,11 @@ export const auditEvents = sqliteTable(
     ),
     check(
       "audit_events_actor_check",
-      sql`(${table.actorKind} = 'staff' AND ${table.actorId} IS NOT NULL AND ${table.staffRole} IS NOT NULL) OR (${table.actorKind} <> 'staff' AND ${table.staffRole} IS NULL)`,
+      sql`(${table.actorKind} = 'staff' AND ${table.actorId} IS NOT NULL AND ${table.staffRole} IS NOT NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL) OR (${table.actorKind} = 'telegram_operator' AND ${table.actorId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NOT NULL AND ${table.telegramUserId} IS NOT NULL) OR (${table.actorKind} NOT IN ('staff', 'telegram_operator') AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL)`,
     ),
     check(
       "audit_events_actor_kind_check",
-      sql`${table.actorKind} IN ('system', 'staff', 'customer', 'provider')`,
+      sql`${table.actorKind} IN ('system', 'staff', 'customer', 'provider', 'telegram_operator')`,
     ),
     check(
       "audit_events_staff_actor_id_check",
@@ -103,6 +107,10 @@ export const auditEvents = sqliteTable(
     check(
       "audit_events_staff_role_check",
       sql`${table.staffRole} IS NULL OR ${table.staffRole} IN ('owner', 'manager', 'staff')`,
+    ),
+    check(
+      "audit_events_telegram_operator_check",
+      sql`${table.actorKind} <> 'telegram_operator' OR (${table.telegramOperatorLabel} = trim(${table.telegramOperatorLabel}) AND length(${table.telegramOperatorLabel}) BETWEEN 1 AND 64 AND ${table.telegramUserId} > 0 AND ${table.telegramUserId} <= 9007199254740991)`,
     ),
     check(
       "audit_events_source_channel_check",

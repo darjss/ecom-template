@@ -43,6 +43,20 @@
       "when": 1784262717818,
       "tag": "0005_lethal_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784264075524,
+      "tag": "0006_kind_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784264098885,
+      "tag": "0007_organic_yellowjacket",
+      "breakpoints": true
     }
   ]
 }
