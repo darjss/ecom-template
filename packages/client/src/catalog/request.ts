@@ -63,7 +63,6 @@ export const requestCatalogMutation = (mutation: CatalogMutation) => {
                 : requestInventoryAdjustment(client, mutation.id, {
                     delta: mutation.delta,
                     reason: mutation.reason,
-                    idempotencyKey: mutation.idempotencyKey,
                   });
   return requestResult(
     request,
