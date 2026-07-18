@@ -27,7 +27,7 @@ import { readDatabaseHealth } from "../db/health";
 import { groupingQueries } from "../grouping/persistence";
 import { cmsQueries } from "../cms/persistence";
 
-export type StoreShellLink = {
+type StoreShellLink = {
   readonly label: string;
   readonly href: string;
   readonly openInNewTab: boolean;
