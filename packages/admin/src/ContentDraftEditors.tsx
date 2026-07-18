@@ -9,7 +9,7 @@ import { Button } from "@ecom/ui";
 import { makePersisted } from "@solid-primitives/storage";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
-import { createEffect, createSignal, For, Index, on, Show } from "solid-js";
+import { createEffect, createSignal, For, Index, on, Show, type Signal } from "solid-js";
 import * as v from "valibot";
 
 const fieldClass =
@@ -42,10 +42,12 @@ const LocalContentDraftSchema = v.variant("kind", [
   }),
 ]);
 
-const createLocalDraft = (store: string, initial: ContentDocument) => {
+const createLocalDraft = (readStore: () => string, initial: ContentDocument) => {
   const [issue, setIssue] = createSignal<DraftIssue>();
+  const store = readStore();
   const key = `ecom:cms:${store}:${initial.kind}:v1`;
-  const localSignal = createSignal<ContentDocument | null>(null);
+  const [localDraft, setLocalDraft] = createSignal<ContentDocument | null>(null);
+  const localSignal: Signal<ContentDocument | null> = [localDraft, setLocalDraft];
   const [draft, setDraft] = makePersisted<ContentDocument | null, typeof localSignal>(localSignal, {
     name: key,
     deserialize: (serialized) => {
@@ -216,7 +218,7 @@ type EditorProps<T extends ContentDocument> = { store: string; initial: T };
 export const HomepageEditor = (
   props: EditorProps<Extract<ContentDocument, { kind: "homepage" }>>,
 ) => {
-  const local = createLocalDraft(props.store, props.initial);
+  const local = createLocalDraft(() => props.store, props.initial);
   const compatible = local.compatible();
   const restored = compatible.kind === "homepage" ? compatible : props.initial;
   const catalog = useQuery(() => catalogQueryOptions());
@@ -255,9 +257,13 @@ export const HomepageEditor = (
     on(
       valuesVersion,
       () => {
-        if (local.issue()) return;
+        if (local.issue()) {
+          return;
+        }
         const parsed = v.safeParse(HomepageDocumentSchema, content());
-        if (parsed.success) local.setDraft({ kind: "homepage", content: parsed.output });
+        if (parsed.success) {
+          local.setDraft({ kind: "homepage", content: parsed.output });
+        }
       },
       { defer: true },
     ),
@@ -372,7 +378,9 @@ export const HomepageEditor = (
                           onClick={() => {
                             const next = [...field().state.value];
                             const previous = next[index() - 1];
-                            if (previous === undefined) return;
+                            if (previous === undefined) {
+                              return;
+                            }
                             next[index() - 1] = id;
                             next[index()] = previous;
                             field().handleChange(next);
@@ -387,7 +395,9 @@ export const HomepageEditor = (
                           onClick={() => {
                             const next = [...field().state.value];
                             const following = next[index() + 1];
-                            if (following === undefined) return;
+                            if (following === undefined) {
+                              return;
+                            }
                             next[index() + 1] = id;
                             next[index()] = following;
                             field().handleChange(next);
@@ -418,8 +428,9 @@ export const HomepageEditor = (
                   value=""
                   onChange={(event) => {
                     const id = event.currentTarget.value;
-                    if (id && !field().state.value.includes(id))
+                    if (id && !field().state.value.includes(id)) {
                       field().handleChange([...field().state.value, id]);
+                    }
                     event.currentTarget.value = "";
                   }}
                 >
@@ -443,7 +454,7 @@ export const HomepageEditor = (
 export const AnnouncementEditor = (
   props: EditorProps<Extract<ContentDocument, { kind: "announcement" }>>,
 ) => {
-  const local = createLocalDraft(props.store, props.initial);
+  const local = createLocalDraft(() => props.store, props.initial);
   const compatible = local.compatible();
   const restored = compatible.kind === "announcement" ? compatible : props.initial;
   const form = createForm(() => ({ defaultValues: { ...restored.content } }));
@@ -456,9 +467,13 @@ export const AnnouncementEditor = (
     on(
       valuesVersion,
       () => {
-        if (local.issue()) return;
+        if (local.issue()) {
+          return;
+        }
         const parsed = v.safeParse(AnnouncementDocumentSchema, form.state.values);
-        if (parsed.success) local.setDraft({ kind: "announcement", content: parsed.output });
+        if (parsed.success) {
+          local.setDraft({ kind: "announcement", content: parsed.output });
+        }
       },
       { defer: true },
     ),
@@ -508,7 +523,7 @@ const placements = [
 export const OrderingNoticesEditor = (
   props: EditorProps<Extract<ContentDocument, { kind: "ordering_notices" }>>,
 ) => {
-  const local = createLocalDraft(props.store, props.initial);
+  const local = createLocalDraft(() => props.store, props.initial);
   const compatible = local.compatible();
   const restored = compatible.kind === "ordering_notices" ? compatible : props.initial;
   const form = createForm(() => ({
@@ -523,9 +538,13 @@ export const OrderingNoticesEditor = (
     on(
       valuesVersion,
       () => {
-        if (local.issue()) return;
+        if (local.issue()) {
+          return;
+        }
         const parsed = v.safeParse(OrderingNoticesDocumentSchema, form.state.values);
-        if (parsed.success) local.setDraft({ kind: "ordering_notices", content: parsed.output });
+        if (parsed.success) {
+          local.setDraft({ kind: "ordering_notices", content: parsed.output });
+        }
       },
       { defer: true },
     ),
