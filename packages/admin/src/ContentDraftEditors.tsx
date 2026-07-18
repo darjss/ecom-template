@@ -512,6 +512,76 @@ export const AnnouncementEditor = (
             </label>
           )}
         </form.Field>
+        <form.Field name="emphasis">
+          {(field) => (
+            <label class={labelClass}>
+              Онцлох хэлбэр
+              <select
+                class={fieldClass}
+                value={field().state.value}
+                onChange={(event) =>
+                  field().handleChange(
+                    v.parse(
+                      v.picklist(["neutral", "promotion", "important"]),
+                      event.currentTarget.value,
+                    ),
+                  )
+                }
+              >
+                <option value="neutral">Энгийн</option>
+                <option value="promotion">Урамшуулал</option>
+                <option value="important">Чухал</option>
+              </select>
+            </label>
+          )}
+        </form.Field>
+        <form.Field name="link">
+          {(field) => (
+            <div class="grid gap-3">
+              <label class="flex min-h-11 items-center gap-2 font-bold">
+                <input
+                  type="checkbox"
+                  checked={field().state.value !== null}
+                  onChange={(event) =>
+                    field().handleChange(
+                      event.currentTarget.checked ? { label: "Дэлгэрэнгүй", href: "/" } : null,
+                    )
+                  }
+                />
+                Дотоод холбоос нэмэх
+              </label>
+              <Show when={field().state.value}>
+                {(link) => (
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <label class={labelClass}>
+                      Холбоосын бичвэр
+                      <input
+                        class={fieldClass}
+                        maxlength="60"
+                        value={link().label}
+                        onInput={(event) =>
+                          field().handleChange({ ...link(), label: event.currentTarget.value })
+                        }
+                      />
+                    </label>
+                    <label class={labelClass}>
+                      Store доторх зам
+                      <input
+                        class={fieldClass}
+                        maxlength="240"
+                        placeholder="/products/..."
+                        value={link().href}
+                        onInput={(event) =>
+                          field().handleChange({ ...link(), href: event.currentTarget.value })
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
+              </Show>
+            </div>
+          )}
+        </form.Field>
         <ContentActions document={document} clearLocal={local.discard} />
       </fieldset>
     </div>
@@ -519,7 +589,6 @@ export const AnnouncementEditor = (
 };
 
 const placements = [
-  ["home", "Нүүр"],
   ["product", "Бүтээгдэхүүн"],
   ["cart", "Сагс"],
   ["checkout", "Захиалга"],
@@ -674,7 +743,7 @@ export const OrderingNoticesEditor = (
                       enabled: true,
                       title: "Захиалгын мэдээлэл",
                       contentMarkdown: "Захиалгын нөхцөлийг энд тайлбарлана.",
-                      placements: ["home"],
+                      placements: ["product"],
                     },
                   ])
                 }

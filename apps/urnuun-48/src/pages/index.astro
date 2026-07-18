@@ -20,6 +20,6 @@ const storeName = identity?.displayName ?? summary.storeName;
 <StoreLayout title={`${storeName} · Өдөр бүрийн хэрэгцээ`} description={identity?.summary ?? "Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт"}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
   <StoreShell shell={{ ...shell, announcement: homeContent.announcement }} currentPath="/" fallbackName={summary.storeName}>
-    <HomeContent homepage={homeContent.homepage} orderingNotices={homeContent.orderingNotices} shell={shell} catalogItems={catalogItems} groupings={groupings} />
+    <HomeContent homepage={homeContent.homepage} shell={shell} catalogItems={catalogItems} groupings={groupings} />
   </StoreShell>
 </StoreLayout>

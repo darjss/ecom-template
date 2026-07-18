@@ -1,7 +1,6 @@
 ---
 import type { StoreBackend } from "@ecom/api";
 import { CustomerAuthIsland } from "@ecom/storefront";
-import { renderPolicyMarkdown } from "@ecom/storefront/policy";
 
 type Storefront = StoreBackend["storefront"];
 type CatalogItems = Awaited<ReturnType<Storefront["listPublishedCatalogItems"]>>;
@@ -10,12 +9,11 @@ type HomeCmsContent = Awaited<ReturnType<Storefront["readHomeCmsContent"]>>;
 type Shell = Awaited<ReturnType<Storefront["readShell"]>>;
 interface Props {
   homepage: HomeCmsContent["homepage"];
-  orderingNotices: HomeCmsContent["orderingNotices"];
   shell: Shell;
   catalogItems: CatalogItems;
   groupings: Groupings;
 }
-const { homepage, orderingNotices, shell, catalogItems, groupings } = Astro.props;
+const { homepage, shell, catalogItems, groupings } = Astro.props;
 const commerceSettings = shell.commerceSettings;
 const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
 const fallbackProducts = catalogItems.filter(({ kind }) => kind === "product");
@@ -31,14 +29,6 @@ const headlineLead = headlineParts.slice(0, -1).join(" ") || headline;
 const headlineAccent = headlineParts.length > 1 ? headlineParts.at(-1) : undefined;
 const summary =
   homepage?.summary ?? "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.";
-const homeNotices =
-  orderingNotices?.notices.filter(
-    ({ enabled, placements }) => enabled && placements.includes("home"),
-  ) ?? [];
-const formattedNotices = homeNotices.map((notice) => ({
-  ...notice,
-  html: renderPolicyMarkdown(notice.contentMarkdown),
-}));
 ---
 <main id="content">
   <section class="pantry" aria-labelledby="pantry-title">
@@ -85,7 +75,6 @@ const formattedNotices = homeNotices.map((notice) => ({
       {featuredItems.length === 0 ? <p>Одоогоор сонгосон бүтээгдэхүүн алга.</p> : <ol class="catalog-list">{featuredItems.map((item) => <li><a href={`/${item.kind === "bundle" ? "bundles" : "products"}/${item.slug}`}><strong>{item.name}</strong><span>{new Intl.NumberFormat("mn-MN").format(item.priceMnt)} ₮</span></a></li>)}</ol>}
     </div>
   </section>
-  {formattedNotices.length > 0 && <section class="ordering-notices" aria-labelledby="ordering-notices-title"><div><h2 id="ordering-notices-title">Захиалгын мэдээлэл</h2><p>Үнэ, үлдэгдэл, хүргэлт болон төлбөрийн эцсийн нөхцөлийг захиалгын үед дахин шалгана.</p></div><div>{formattedNotices.map((notice) => <article><h3>{notice.title}</h3><div class="notice-prose" set:html={notice.html} /></article>)}</div></section>}
   <section class="customer-auth" aria-labelledby="customer-auth-title">
     <div>
       <h2 id="customer-auth-title">Захиалгын түүхээ хадгалах</h2>

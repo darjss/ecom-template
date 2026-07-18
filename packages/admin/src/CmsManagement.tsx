@@ -385,7 +385,13 @@ export const CmsManagement = (props: { store: string }) => {
   };
   const emptyAnnouncement: Extract<CmsDocument, { kind: "announcement" }> = {
     kind: "announcement",
-    content: { version: 1, enabled: false, message: "Дэлгүүрийн мэдэгдэл" },
+    content: {
+      version: 1,
+      enabled: false,
+      message: "Дэлгүүрийн мэдэгдэл",
+      emphasis: "neutral",
+      link: null,
+    },
   };
   const emptyOrderingNotices: Extract<CmsDocument, { kind: "ordering_notices" }> = {
     kind: "ordering_notices",

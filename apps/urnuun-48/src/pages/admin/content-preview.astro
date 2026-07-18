@@ -1,6 +1,7 @@
 ---
 import { parseCmsPreviewDocument } from "@ecom/api";
 import HomeContent from "../../components/HomeContent.astro";
+import OrderingNotices from "../../components/OrderingNotices.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -38,13 +39,15 @@ if (Astro.request.method === "POST") {
 const preview = validationMessage
   ? undefined
   : await (async () => {
-      const [summary, shell, draftContent, catalogItems, groupings] = await Promise.all([
-        storefront.readSummary(),
-        storefront.readShell(),
-        storefront.readHomeCmsContent("draft"),
-        storefront.listPublishedCatalogItems(),
-        storefront.listPublishedGroupings(),
-      ]);
+      const [summary, shell, draftContent, orderingNotices, catalogItems, groupings] =
+        await Promise.all([
+          storefront.readSummary(),
+          storefront.readShell(),
+          storefront.readHomeCmsContent("draft"),
+          storefront.readOrderingNotices("draft"),
+          storefront.listPublishedCatalogItems(),
+          storefront.listPublishedGroupings(),
+        ]);
       return {
         summary,
         shell,
@@ -59,11 +62,11 @@ const preview = validationMessage
             localDocument?.kind === "announcement"
               ? localDocument.content
               : draftContent.announcement,
-          orderingNotices:
-            localDocument?.kind === "ordering_notices"
-              ? localDocument.content
-              : draftContent.orderingNotices,
         },
+        orderingNotices:
+          localDocument?.kind === "ordering_notices"
+            ? localDocument.content
+            : orderingNotices,
       };
     })();
 ---
@@ -72,6 +75,7 @@ const preview = validationMessage
   {validationMessage || !preview
     ? <main id="content" class="preview-error"><h1>Preview нээж чадсангүй</h1><p role="alert">{validationMessage}</p><a href="/admin">Засварлагч руу буцах</a></main>
     : <StoreShell shell={{ ...preview.shell, announcement: preview.homeContent.announcement }} currentPath="/" fallbackName={preview.summary.storeName}>
-        <HomeContent homepage={preview.homeContent.homepage} orderingNotices={preview.homeContent.orderingNotices} shell={preview.shell} catalogItems={preview.catalogItems} groupings={preview.groupings} />
+        <HomeContent homepage={preview.homeContent.homepage} shell={preview.shell} catalogItems={preview.catalogItems} groupings={preview.groupings} />
+        <OrderingNotices document={preview.orderingNotices} />
       </StoreShell>}
 </StoreLayout>

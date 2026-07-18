@@ -1,6 +1,7 @@
 ---
 import { PersonalizationControls, ProductVariantSelector } from "@ecom/storefront";
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import OrderingNotices from "../../components/OrderingNotices.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -13,9 +14,10 @@ if (!product) {
     headers: { "cache-control": "private, no-store" },
   });
 }
-const [personalizations, shell] = await Promise.all([
+const [personalizations, shell, orderingNotices] = await Promise.all([
   storefront.readPersonalizations(product.id),
   storefront.readShell(),
+  storefront.readOrderingNotices(),
 ]);
 const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
@@ -64,6 +66,7 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <PersonalizationControls definitions={personalizations} />
       </div>
     </article>
+    <OrderingNotices document={orderingNotices} placement="product" />
   </main>
   </StoreShell>
 </StoreLayout>

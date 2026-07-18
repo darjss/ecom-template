@@ -12,7 +12,7 @@ const storeName = shell.identity?.displayName ?? fallbackName;
 const linkAttributes = (openInNewTab: boolean) =>
   openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
 ---
-{shell.announcement?.enabled && <aside class="announcement" aria-label="Дэлгүүрийн мэдэгдэл">{shell.announcement.message}</aside>}
+{shell.announcement?.enabled && <aside class="announcement" data-emphasis={shell.announcement.emphasis} aria-label="Дэлгүүрийн мэдэгдэл"><span>{shell.announcement.message}</span>{shell.announcement.link && <a href={shell.announcement.link.href}>{shell.announcement.link.label}</a>}</aside>}
 <header class="site-header">
   <a class="wordmark" href="/" aria-current={currentPath === "/" ? "page" : undefined} transition:name="wordmark"><b>48</b><span>{storeName}</span></a>
   <nav aria-label="Үндсэн цэс">

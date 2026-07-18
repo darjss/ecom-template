@@ -50,7 +50,6 @@ export type StoreShell = {
 type HomeCmsContent = {
   readonly homepage: HomepageDocument | undefined;
   readonly announcement: AnnouncementDocument | undefined;
-  readonly orderingNotices: OrderingNoticesDocument | undefined;
 };
 
 export type StorefrontReader = {
@@ -62,6 +61,9 @@ export type StorefrontReader = {
   readonly readCommerceSettings: () => Promise<CommerceSettings | undefined>;
   readonly readShell: () => Promise<StoreShell>;
   readonly readHomeCmsContent: (status?: "draft" | "published") => Promise<HomeCmsContent>;
+  readonly readOrderingNotices: (
+    status?: "draft" | "published",
+  ) => Promise<OrderingNoticesDocument | undefined>;
   readonly listPublishedCatalogItems: () => Promise<readonly PublicCatalogItemSummary[]>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
@@ -236,23 +238,27 @@ const readStoreShell = async (
   };
 };
 
+const readCmsWithPublishedFallback = async (
+  kind: "homepage" | "announcement" | "ordering_notices",
+  status: "draft" | "published",
+) =>
+  (await cmsQueries.read(kind, status)) ??
+  (status === "draft" ? await cmsQueries.read(kind, "published") : undefined);
+
 const readHomeCmsContent = async (status: "draft" | "published") => {
-  const readWithPublishedFallback = async (
-    kind: "homepage" | "announcement" | "ordering_notices",
-  ) =>
-    (await cmsQueries.read(kind, status)) ??
-    (status === "draft" ? await cmsQueries.read(kind, "published") : undefined);
-  const [homepage, announcement, orderingNotices] = await Promise.all([
-    readWithPublishedFallback("homepage"),
-    readWithPublishedFallback("announcement"),
-    readWithPublishedFallback("ordering_notices"),
+  const [homepage, announcement] = await Promise.all([
+    readCmsWithPublishedFallback("homepage", status),
+    readCmsWithPublishedFallback("announcement", status),
   ]);
   return {
     homepage: homepage?.kind === "homepage" ? homepage.content : undefined,
     announcement: announcement?.kind === "announcement" ? announcement.content : undefined,
-    orderingNotices:
-      orderingNotices?.kind === "ordering_notices" ? orderingNotices.content : undefined,
   };
+};
+
+const readOrderingNotices = async (status: "draft" | "published") => {
+  const document = await readCmsWithPublishedFallback("ordering_notices", status);
+  return document?.kind === "ordering_notices" ? document.content : undefined;
 };
 
 export const createStorefrontReader = (
@@ -285,6 +291,7 @@ export const createStorefrontReader = (
   readCommerceSettings: () => cmsQueries.readSettings(),
   readShell: () => readStoreShell(capabilities),
   readHomeCmsContent: (status = "published") => readHomeCmsContent(status),
+  readOrderingNotices: (status = "published") => readOrderingNotices(status),
   listPublishedCatalogItems: () => catalogQueries.listPublishedCatalogItems(),
   listPublishedProducts,
   readPublishedProduct: async (slug) => {

@@ -33,13 +33,30 @@ html {
   text-align: center;
 }
 .announcement {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1rem;
   margin: 0;
   padding: 0.65rem clamp(1.2rem, 4vw, 4.5rem);
-  background: var(--yellow);
-  color: var(--ink);
+  background: var(--navy);
+  color: var(--paper);
   font-size: 0.82rem;
   font-weight: 800;
   text-align: center;
+}
+.announcement[data-emphasis="promotion"] {
+  background: var(--yellow);
+  color: var(--ink);
+}
+.announcement[data-emphasis="important"] {
+  background: var(--tomato);
+  color: var(--paper);
+}
+.announcement a {
+  color: inherit;
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.18em;
 }
 .site-header {
   min-height: 5rem;
