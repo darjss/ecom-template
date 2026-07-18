@@ -37,6 +37,7 @@ import {
   approveStaff,
   attachCatalogImage,
   changeStaffRole,
+  createLocalOwnerSession,
   createProduct,
   createStaff,
   createStaffAuth,
@@ -102,6 +103,10 @@ const apiError = (
   v.parse(StaffLifecycleApiErrorSchema, {
     error: { code, message, ...(reason ? { reason } : {}) },
   });
+
+const LocalStaffLoginBodySchema = v.strictObject({
+  email: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+});
 
 const MediaUploadBodySchema = v.strictObject({
   file: v.instance(File),
@@ -279,6 +284,29 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )
+    .post("/auth/staff/dev-login", async ({ body, request, status }) => {
+      const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
+      if (!origin || !new URL(origin).hostname.endsWith(".localhost")) {
+        return new Response(null, { status: 404 });
+      }
+      if (request.headers.get("origin") !== origin) {
+        return status(403, apiError("forbidden", "Request origin is not accepted"));
+      }
+      const input = v.safeParse(LocalStaffLoginBodySchema, body);
+      if (!input.success) {
+        return status(422, apiError("validation", "A valid email is required"));
+      }
+      const result = await createLocalOwnerSession(input.output.email, origin);
+      if (result.isErr()) {
+        return result.error.code === "linked_identity"
+          ? status(409, apiError("conflict", "The email is linked to another Staff identity"))
+          : status(503, apiError("unavailable", "Local Staff login is unavailable"));
+      }
+      return new Response(null, {
+        status: 303,
+        headers: { location: "/admin", "set-cookie": result.value.cookie },
+      });
+    })
     .all("/auth/staff/*", async ({ body, request }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
       if (!origin) {

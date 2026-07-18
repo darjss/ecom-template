@@ -543,7 +543,14 @@ const serveStore = async () => {
     pid: process.ppid,
   });
   await writeFile(devProcessPath(slug), JSON.stringify(processRecord, null, 2));
-  await run("pnpm", ["--filter", `@shops/${slug}`, `${mode}:direct`]);
+  await run("pnpm", [
+    "--filter",
+    `@shops/${slug}`,
+    `${mode}:direct`,
+    ...(mode === "preview"
+      ? ["--host", new URL(origin).hostname, "--var", `PUBLIC_STORE_ORIGIN:${origin}`]
+      : []),
+  ]);
 };
 
 const startStore = async (mode: "dev" | "preview") => {

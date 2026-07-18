@@ -15,6 +15,7 @@ export {
   type BundleMutationResult,
   type BundleOperationFailure,
 } from "./bundles/operations";
+export { createLocalOwnerSession } from "./auth/local-staff-login";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
 export {
   attachCatalogImage,
