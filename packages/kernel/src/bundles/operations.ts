@@ -16,7 +16,7 @@ import {
 import { Result } from "better-result";
 import * as v from "valibot";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { purgeCacheTags } from "../catalog/cache";
+import { purgeCatalogItemCache } from "../catalog/cache";
 import { bundleQueries, readPersonalizations } from "./persistence";
 
 export type BundleOperationFailure = {
@@ -65,7 +65,7 @@ const resolveBundle = async (id: BundleId, purge: boolean) => {
       cachePurgeRequestId: null,
     });
   }
-  const purgeResult = await purgeCacheTags(["catalog", `product:${id}`]);
+  const purgeResult = await purgeCatalogItemCache(id);
   const recorded = await bundleQueries.recordCachePurgeOutcome(
     id,
     debt.revision,
@@ -229,7 +229,7 @@ export const saveCatalogItemPersonalizations = async (
     if (!debt) {
       return Result.ok({ definitions, cache: "not_required" as const, cachePurgeRequestId: null });
     }
-    const purgeResult = await purgeCacheTags(["catalog", `product:${catalogItemId}`]);
+    const purgeResult = await purgeCatalogItemCache(catalogItemId);
     const recorded = await bundleQueries.recordCachePurgeOutcome(
       catalogItemId,
       debt.revision,

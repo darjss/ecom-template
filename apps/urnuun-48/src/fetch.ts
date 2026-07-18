@@ -12,6 +12,7 @@ import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story", "/locations"]);
+const previewSearchParameters = new Set(["preview", "draft"]);
 const publicCatalogPath =
   /^\/(?:products|bundles|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const publicCmsPath =
@@ -23,16 +24,19 @@ const isPublicStorefrontPath = (pathname: string) =>
   publicCatalogPath.test(pathname) ||
   publicCmsPath.test(pathname);
 
-const privateResponse = (response: Response) => {
-  const headers = new Headers(response.headers);
-  headers.set("cache-control", "private, no-store");
-  headers.delete("cloudflare-cdn-cache-control");
-  headers.delete("cache-tag");
-  return new Response(response.body, {
+const responseWithHeaders = (request: Request, response: Response, headers: Headers) =>
+  new Response(request.method === "HEAD" ? null : response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+
+const privateResponse = (request: Request, response: Response) => {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "private, no-store");
+  headers.delete("cloudflare-cdn-cache-control");
+  headers.delete("cache-tag");
+  return responseWithHeaders(request, response, headers);
 };
 
 const classifyResponse = (request: Request, response: Response) => {
@@ -51,7 +55,33 @@ const classifyResponse = (request: Request, response: Response) => {
     response.headers.get("cloudflare-cdn-cache-control") === "public, max-age=1209600" &&
     cacheTags !== null &&
     isPublicCacheTagHeader(cacheTags);
-  return retainsPublicPolicy ? response : privateResponse(response);
+  return retainsPublicPolicy
+    ? responseWithHeaders(request, response, new Headers(response.headers))
+    : privateResponse(request, response);
+};
+
+const canonicalRedirect = (request: Request) => {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return undefined;
+  }
+  const url = new URL(request.url);
+  const withoutTrailingSlash = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : "/";
+  const canonicalPath = isPublicStorefrontPath(withoutTrailingSlash) ? withoutTrailingSlash : null;
+  if (
+    canonicalPath === null ||
+    [...url.searchParams.keys()].some((key) => previewSearchParameters.has(key))
+  ) {
+    return undefined;
+  }
+  if (url.pathname === canonicalPath && url.search === "") {
+    return undefined;
+  }
+  url.pathname = canonicalPath;
+  url.search = "";
+  return new Response(null, {
+    status: 308,
+    headers: { location: url.toString(), "cache-control": "private, no-store" },
+  });
 };
 
 const rejectedHostResponse = () =>
@@ -86,6 +116,11 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     return rejectedHostResponse();
   }
 
+  const redirect = canonicalRedirect(request);
+  if (redirect) {
+    return redirect;
+  }
+
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
   if (isPublicMediaPath(pathname)) {
@@ -99,7 +134,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     ) {
       return rejectedMediaUploadSizeResponse();
     }
-    return privateResponse(await api.fetch(request));
+    return privateResponse(request, await api.fetch(request));
   }
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     try {
@@ -109,10 +144,11 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
       });
       if (staff.kind === "awaiting_approval") {
         const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
-        return privateResponse(await handle(awaitingRequest, environment, context));
+        return privateResponse(request, await handle(awaitingRequest, environment, context));
       }
       if (staff.kind === "unavailable") {
         return privateResponse(
+          request,
           Response.json(
             { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
             { status: 503 },
@@ -133,6 +169,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
       presentationRequest = new Request(request, { headers: presentationHeaders });
     } catch {
       return privateResponse(
+        request,
         Response.json(
           { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
           { status: 503 },

@@ -14,7 +14,11 @@ const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
 if (!policy) {
   Astro.response.status = 404;
 }
-applyPublicHtmlCache(Astro.response.headers, ["store-shell", ...(policy ? [`policy:${policy.id}`] : [])]);
+applyPublicHtmlCache(Astro.response.headers, [
+  "store-shell",
+  "cms",
+  ...(policy ? [`policy:${policy.id}`] : []),
+]);
 const content = policy ? renderPolicyMarkdown(policy.contentMarkdown) : "";
 ---
 <StoreLayout title={`${policy?.title ?? "Бодлого олдсонгүй"} · ${storeName}`} description={policy?.title ?? "Бодлого олдсонгүй"}>

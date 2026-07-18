@@ -9,7 +9,7 @@ import {
 } from "./cache-contract";
 import { catalogQueries } from "./persistence";
 
-export const purgeCacheTags = async (tags: readonly string[]) => {
+const purgeCacheTags = async (tags: readonly string[]) => {
   const configuration = parseCachePurgeEnvironment(env);
   if (!configuration.success) {
     return { kind: "failed" as const, requestId: null };
@@ -41,13 +41,18 @@ export const purgeCacheTags = async (tags: readonly string[]) => {
 
 export const purgeCatalogListingCache = () => purgeCacheTags(["catalog"]);
 
+export const purgeCatalogItemCache = (catalogItemId: string) =>
+  purgeCacheTags(["catalog", `product:${catalogItemId}`]);
+
+export const purgeCmsCache = () => purgeCacheTags(["store-shell", "homepage", "catalog", "cms"]);
+
 export const resolvePendingCatalogCachePurge = async (product: Product) => {
   const debt = await catalogQueries.findCachePurgeDebt(product.id);
   if (!debt) {
     return { product, cache: "not_required" as const, cachePurgeRequestId: null };
   }
 
-  const purge = await purgeCacheTags(["catalog", `product:${product.id}`]);
+  const purge = await purgeCatalogItemCache(product.id);
   const log = createLogger({ action: "catalog.cache_purge", productId: product.id });
   let outcomeRecorded = false;
   try {
