@@ -68,6 +68,14 @@ const sourceLabels = {
   native: "Монгол нэрээр таарсан",
   krilleer_transliteration: "Латин галиг таарсан",
 };
+const fieldLabels = {
+  sku: "SKU талбар",
+  slug: "Хаяг талбар",
+  title: "Нэр талбар",
+  category_tags: "Ангилал, шошго талбар",
+  description: "Тайлбар талбар",
+  mixed: "Олон талбарт таарсан",
+};
 ---
 <StoreLayout title={`Хайлт · ${storeName}`} description={`${storeName} каталогийн хайлт`} noindex>
   <StoreShell shell={shell} currentPath="/search" fallbackName={summary.storeName}>
@@ -131,7 +139,7 @@ const sourceLabels = {
                     <p class="m-0 mb-1 text-sm font-bold text-stone-700">{item.kind === "product" ? "Бүтээгдэхүүн" : "Багц"}</p>
                     <h3 class="m-0 text-xl font-extrabold text-[var(--ink)]"><a class="underline decoration-transparent underline-offset-4 hover:decoration-current" href={`/${item.kind === "product" ? "products" : "bundles"}/${item.slug}`}>{item.name}</a></h3>
                     <p class="my-2 line-clamp-2 max-w-prose text-stone-700">{item.description}</p>
-                    <p class="m-0 text-sm text-stone-700">{sourceLabels[item.matchedSource]} · Итгэлцэл: {item.confidence}</p>
+                    <p class="m-0 text-sm text-stone-700">{sourceLabels[item.matchedSource]} · {fieldLabels[item.matchedField]} · Итгэлцэл: {item.confidence}</p>
                   </div>
                   <strong class="whitespace-nowrap text-lg tabular-nums text-[var(--ink)]">{new Intl.NumberFormat("mn-MN").format(item.priceMnt)} ₮</strong>
                 </li>)}

@@ -21,6 +21,7 @@ export const SearchMatchFieldSchema = v.picklist([
   "title",
   "category_tags",
   "description",
+  "mixed",
 ]);
 export const SearchConfidenceSchema = v.picklist(["exact", "high", "medium", "low"]);
 

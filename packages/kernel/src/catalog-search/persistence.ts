@@ -42,8 +42,10 @@ const transliterationPlans = [
 ] as const;
 type SearchPlan = (typeof nativePlans)[number] | (typeof transliterationPlans)[number];
 
-const matchExpression = (tokens: readonly string[], column: SearchPlan["column"]) =>
-  tokens.map((token) => `${column} : "${token.replaceAll('"', '""')}"*`).join(" AND ");
+const matchExpression = (tokens: readonly string[], columns: readonly SearchPlan["column"][]) => {
+  const scope = columns.length === 1 ? columns[0] : `{${columns.join(" ")}}`;
+  return tokens.map((token) => `${scope} : "${token.replaceAll('"', '""')}"*`).join(" AND ");
+};
 
 const SearchRowSchema = v.strictObject({
   item_id: v.string(),
@@ -52,7 +54,7 @@ const SearchRowSchema = v.strictObject({
   title: v.string(),
   description: v.string(),
   price_mnt: v.number(),
-  matched_field: v.picklist(["slug", "title", "category_tags", "description"]),
+  matched_field: v.picklist(["slug", "title", "category_tags", "description", "mixed"]),
   rank: v.number(),
 });
 type SearchRow = v.InferOutput<typeof SearchRowSchema>;
@@ -65,17 +67,28 @@ const searchRows = async (
   limit: number,
   offset: number,
 ) => {
-  const fieldMatches = plans
-    .map(
+  const fieldMatches = [
+    ...plans.map(
       ({ field, priority }) => `
         SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 1, 2, 3, 6, 1, 2) AS rank,
-          '${field}' AS matched_field, ${priority} AS field_priority
+          '${field}' AS matched_field, ${priority} AS field_priority, 0 AS scope_priority
         FROM catalog_search
         WHERE catalog_search MATCH ?`,
-    )
-    .join(" UNION ALL ");
+    ),
+    `
+        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 1, 2, 3, 6, 1, 2) AS rank,
+          'mixed' AS matched_field, ${plans.length} AS field_priority, 1 AS scope_priority
+        FROM catalog_search
+        WHERE catalog_search MATCH ?`,
+  ].join(" UNION ALL ");
   const filters = ["best.field_rank = 1", "item.state = 'published'"];
-  const bindings: (string | number)[] = plans.map(({ column }) => matchExpression(tokens, column));
+  const bindings: (string | number)[] = [
+    ...plans.map(({ column }) => matchExpression(tokens, [column])),
+    matchExpression(
+      tokens,
+      plans.map(({ column }) => column),
+    ),
+  ];
   if (category) {
     filters.push(
       "EXISTS (SELECT 1 FROM catalog_item_categories membership JOIN categories category ON category.id = membership.category_id WHERE membership.catalog_item_id = item.id AND category.state = 'active' AND category.slug = ?)",
@@ -93,7 +106,7 @@ const searchRows = async (
     WITH field_matches AS (${fieldMatches}),
     best AS (
       SELECT *, row_number() OVER (
-        PARTITION BY item_id ORDER BY rank ASC, field_priority ASC
+        PARTITION BY item_id ORDER BY scope_priority ASC, rank ASC, field_priority ASC
       ) AS field_rank
       FROM field_matches
     )
