@@ -10,19 +10,31 @@ const SearchAutocompleteList = (props: Props) => {
   const [input, setInput] = createSignal<HTMLInputElement>();
   const [value, setValue] = createSignal(props.initialQuery);
   const [debounced, setDebounced] = createSignal("");
+  const [active, setActive] = createSignal(false);
   const [activeIndex, setActiveIndex] = createSignal(-1);
   let timer: number | undefined;
 
+  const close = () => {
+    setActive(false);
+    setDebounced("");
+    setActiveIndex(-1);
+  };
+
   createEffect(() => {
-    const next = value().trim();
     window.clearTimeout(timer);
+    if (!active()) {
+      setDebounced("");
+      return;
+    }
+    const next = value().trim();
     timer = window.setTimeout(() => setDebounced(next.length >= 2 ? next : ""), 180);
   });
   onCleanup(() => window.clearTimeout(timer));
 
+  const isOpen = () => active() && debounced().length >= 2;
   const query = createQuery(() => ({
     ...catalogSearchQueryOptions({ query: debounced(), page: 1, limit: 6 }),
-    enabled: debounced().length >= 2,
+    enabled: isOpen(),
   }));
   const choices = () => [
     ...(query.data?.results.items ?? []).map((item) => ({
@@ -52,8 +64,7 @@ const SearchAutocompleteList = (props: Props) => {
       event.preventDefault();
       setActiveIndex((index) => (index <= 0 ? count - 1 : index - 1));
     } else if (event.key === "Escape") {
-      setDebounced("");
-      setActiveIndex(-1);
+      close();
     } else if (event.key === "Enter" && activeIndex() >= 0) {
       const choice = choices()[activeIndex()];
       if (choice) {
@@ -70,22 +81,25 @@ const SearchAutocompleteList = (props: Props) => {
     }
     const onInput = () => {
       setValue(element.value);
+      setActive(true);
       setActiveIndex(-1);
     };
+    const onFocus = () => setActive(true);
     const onDocumentPointerDown = (event: PointerEvent) => {
       const target = event.target;
       const listbox = document.getElementById("catalog-search-suggestions");
       if (target instanceof Node && target !== element && !listbox?.contains(target)) {
-        setDebounced("");
-        setActiveIndex(-1);
+        close();
       }
     };
+    element.addEventListener("focus", onFocus);
     element.addEventListener("input", onInput);
     element.addEventListener("keydown", onKeyDown);
     document.addEventListener("pointerdown", onDocumentPointerDown);
     setInput(element);
     setValue(element.value);
     onCleanup(() => {
+      element.removeEventListener("focus", onFocus);
       element.removeEventListener("input", onInput);
       element.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onDocumentPointerDown);
@@ -102,8 +116,7 @@ const SearchAutocompleteList = (props: Props) => {
     if (!element) {
       return;
     }
-    const expanded = debounced().length >= 2;
-    element.setAttribute("aria-expanded", String(expanded));
+    element.setAttribute("aria-expanded", String(isOpen()));
     const index = activeIndex();
     if (index >= 0 && index < choices().length) {
       element.setAttribute("aria-activedescendant", `catalog-search-choice-${index}`);
@@ -113,7 +126,7 @@ const SearchAutocompleteList = (props: Props) => {
   });
 
   return (
-    <Show when={debounced().length >= 2}>
+    <Show when={isOpen()}>
       <div
         id="catalog-search-suggestions"
         role="listbox"
