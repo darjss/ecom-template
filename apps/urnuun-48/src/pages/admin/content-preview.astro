@@ -1,6 +1,5 @@
 ---
 import { CmsDocumentKindSchema, CmsDocumentSchema } from "@ecom/contracts";
-import type { CmsDocument } from "@ecom/contracts";
 import * as v from "valibot";
 import HomeContent from "../../components/HomeContent.astro";
 import StoreShell from "../../components/StoreShell.astro";
@@ -12,7 +11,7 @@ Astro.response.headers.set("Cache-Control", "private, no-store");
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
 const previewKind = v.safeParse(CmsDocumentKindSchema, Astro.url.searchParams.get("kind"));
-let localDocument: CmsDocument | undefined;
+let localDocument: v.InferOutput<typeof CmsDocumentSchema> | undefined;
 let validationMessage: string | undefined;
 if (Astro.request.method === "POST") {
   try {
