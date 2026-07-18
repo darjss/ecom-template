@@ -60,7 +60,7 @@ const classifyResponse = (request: Request, response: Response) => {
     : privateResponse(request, response);
 };
 
-const canonicalRedirect = (request: Request) => {
+const canonicalRedirect = (request: Request, origin: string) => {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return undefined;
   }
@@ -73,14 +73,13 @@ const canonicalRedirect = (request: Request) => {
   ) {
     return undefined;
   }
-  if (url.pathname === canonicalPath && url.search === "") {
+  const canonicalUrl = new URL(canonicalPath, origin);
+  if (url.toString() === canonicalUrl.toString()) {
     return undefined;
   }
-  url.pathname = canonicalPath;
-  url.search = "";
   return new Response(null, {
     status: 308,
-    headers: { location: url.toString(), "cache-control": "private, no-store" },
+    headers: { location: canonicalUrl.toString(), "cache-control": "private, no-store" },
   });
 };
 
@@ -218,7 +217,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     return rejectedHostResponse();
   }
 
-  const redirect = canonicalRedirect(request);
+  const redirect = canonicalRedirect(request, origin);
   if (redirect) {
     return redirect;
   }
