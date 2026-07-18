@@ -5,7 +5,7 @@ import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
 
 export const prerender = false;
-applyPublicHtmlCache(Astro.response.headers, ["store-shell", "cms", `location:${Astro.params.id}`]);
+applyPublicHtmlCache(Astro.response.headers, ["store-shell"]);
 const shell = await storefront.readShell();
 const location = shell.locations?.locations.find(({ id, active }) => active && id === Astro.params.id);
 const storeName = shell.identity?.displayName ?? "Өрнүүн 48";

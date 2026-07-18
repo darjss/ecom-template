@@ -16,7 +16,6 @@ if (!policy) {
 }
 applyPublicHtmlCache(Astro.response.headers, [
   "store-shell",
-  "cms",
   ...(policy ? [`policy:${policy.id}`] : []),
 ]);
 const content = policy ? renderPolicyMarkdown(policy.contentMarkdown) : "";

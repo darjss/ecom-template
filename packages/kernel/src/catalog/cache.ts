@@ -44,7 +44,7 @@ export const purgeCatalogListingCache = () => purgeCacheTags(["catalog"]);
 export const purgeCatalogItemCache = (catalogItemId: string) =>
   purgeCacheTags(["catalog", `product:${catalogItemId}`]);
 
-export const purgeCmsCache = () => purgeCacheTags(["store-shell", "homepage", "catalog", "cms"]);
+export const purgeCmsCache = () => purgeCacheTags(["store-shell", "homepage", "catalog"]);
 
 export const resolvePendingCatalogCachePurge = async (product: Product) => {
   const debt = await catalogQueries.findCachePurgeDebt(product.id);
