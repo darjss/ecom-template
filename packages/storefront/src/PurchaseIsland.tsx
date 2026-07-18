@@ -153,7 +153,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
             }}
           />
         </label>
-        <div>
+        <div role="status" aria-live="polite" aria-atomic="true">
           <strong class="block text-2xl tabular-nums">
             {money.format(price().unitPriceMnt)} ₮
           </strong>
