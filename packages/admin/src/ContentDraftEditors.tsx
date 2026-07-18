@@ -9,7 +9,7 @@ import { Button } from "@ecom/ui";
 import { makePersisted } from "@solid-primitives/storage";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
-import { createEffect, createSignal, For, Index, Show } from "solid-js";
+import { createEffect, createSignal, For, Index, on, Show } from "solid-js";
 import * as v from "valibot";
 
 const fieldClass =
@@ -230,28 +230,38 @@ export const HomepageEditor = (
       featuredCatalogItemIds: [...restored.content.featuredCatalogItemIds],
     },
   }));
-  const content = () => ({
-    version: 1,
-    headline: form.state.values.headline,
-    summary: form.state.values.summary,
-    hero:
-      form.state.values.heroMediaAssetId === ""
-        ? null
-        : {
-            mediaAssetId: form.state.values.heroMediaAssetId,
-            altText: form.state.values.heroAltText,
-          },
-    featuredCatalogItemIds: form.state.values.featuredCatalogItemIds,
-  });
+  const values = form.useSelector((state) => state.values);
+  const content = () => {
+    const current = values();
+    return {
+      version: 1,
+      headline: current.headline,
+      summary: current.summary,
+      hero:
+        current.heroMediaAssetId === ""
+          ? null
+          : {
+              mediaAssetId: current.heroMediaAssetId,
+              altText: current.heroAltText,
+            },
+      featuredCatalogItemIds: current.featuredCatalogItemIds,
+    };
+  };
   const document = (): Extract<ContentDocument, { kind: "homepage" }> => ({
     kind: "homepage",
     content: v.parse(HomepageDocumentSchema, content()),
   });
-  createEffect(() => {
-    if (!form.state.isDirty || local.issue()) return;
-    const parsed = v.safeParse(HomepageDocumentSchema, content());
-    if (parsed.success) local.setDraft({ kind: "homepage", content: parsed.output });
-  });
+  createEffect(
+    on(
+      values,
+      () => {
+        if (local.issue()) return;
+        const parsed = v.safeParse(HomepageDocumentSchema, content());
+        if (parsed.success) local.setDraft({ kind: "homepage", content: parsed.output });
+      },
+      { defer: true },
+    ),
+  );
   const items = () => [
     ...(catalog.data?.data ?? []).map((item) => ({
       id: item.id,
@@ -316,9 +326,15 @@ export const HomepageEditor = (
                   value={field().state.value}
                   onChange={(event) => field().handleChange(event.currentTarget.value)}
                 >
-                  <option value="">Repository-н үндсэн зураг</option>
+                  <option value="" selected={field().state.value === ""}>
+                    Repository-н үндсэн зураг
+                  </option>
                   <For each={media()}>
-                    {(image) => <option value={image.id}>{image.label}</option>}
+                    {(image) => (
+                      <option value={image.id} selected={field().state.value === image.id}>
+                        {image.label}
+                      </option>
+                    )}
                   </For>
                 </select>
               </label>
@@ -431,15 +447,22 @@ export const AnnouncementEditor = (
   const compatible = local.compatible();
   const restored = compatible.kind === "announcement" ? compatible : props.initial;
   const form = createForm(() => ({ defaultValues: { ...restored.content } }));
+  const values = form.useSelector((state) => state.values);
   const document = (): Extract<ContentDocument, { kind: "announcement" }> => ({
     kind: "announcement",
-    content: v.parse(AnnouncementDocumentSchema, form.state.values),
+    content: v.parse(AnnouncementDocumentSchema, values()),
   });
-  createEffect(() => {
-    if (!form.state.isDirty || local.issue()) return;
-    const parsed = v.safeParse(AnnouncementDocumentSchema, form.state.values);
-    if (parsed.success) local.setDraft({ kind: "announcement", content: parsed.output });
-  });
+  createEffect(
+    on(
+      values,
+      (current) => {
+        if (local.issue()) return;
+        const parsed = v.safeParse(AnnouncementDocumentSchema, current);
+        if (parsed.success) local.setDraft({ kind: "announcement", content: parsed.output });
+      },
+      { defer: true },
+    ),
+  );
   return (
     <div class="grid gap-4">
       <DraftRecovery issue={local.issue} discard={local.discard} />
@@ -491,15 +514,22 @@ export const OrderingNoticesEditor = (
   const form = createForm(() => ({
     defaultValues: { ...restored.content, notices: [...restored.content.notices] },
   }));
+  const values = form.useSelector((state) => state.values);
   const document = (): Extract<ContentDocument, { kind: "ordering_notices" }> => ({
     kind: "ordering_notices",
-    content: v.parse(OrderingNoticesDocumentSchema, form.state.values),
+    content: v.parse(OrderingNoticesDocumentSchema, values()),
   });
-  createEffect(() => {
-    if (!form.state.isDirty || local.issue()) return;
-    const parsed = v.safeParse(OrderingNoticesDocumentSchema, form.state.values);
-    if (parsed.success) local.setDraft({ kind: "ordering_notices", content: parsed.output });
-  });
+  createEffect(
+    on(
+      values,
+      (current) => {
+        if (local.issue()) return;
+        const parsed = v.safeParse(OrderingNoticesDocumentSchema, current);
+        if (parsed.success) local.setDraft({ kind: "ordering_notices", content: parsed.output });
+      },
+      { defer: true },
+    ),
+  );
   return (
     <div class="grid gap-4">
       <DraftRecovery issue={local.issue} discard={local.discard} />
