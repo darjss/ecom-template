@@ -33,6 +33,7 @@ import {
   catalogListingCachePurgeDebt,
   categories,
   collections,
+  discountRules,
   tags,
 } from "../db/schema";
 import { database } from "../db/database";
@@ -261,6 +262,27 @@ const findTag = tagQuerySet.find;
 const categorySlugExists = categoryQuerySet.identityExists;
 const collectionSlugExists = collectionQuerySet.identityExists;
 const tagLabelExists = tagQuerySet.identityExists;
+const discountDependencyPredicate = (
+  kind: "category" | "collection",
+  id: CategoryId | CollectionId,
+) =>
+  sql<boolean>`EXISTS (
+    SELECT 1 FROM json_each(${discountRules.targetsJson}) AS target
+    WHERE json_extract(target.value, '$.kind') = ${kind}
+      AND json_extract(target.value, '$.id') = ${id}
+  )`;
+const activeDiscountDependency = async (
+  kind: "category" | "collection",
+  id: CategoryId | CollectionId,
+) =>
+  (
+    await database()
+      .select({ id: discountRules.id })
+      .from(discountRules)
+      .where(and(eq(discountRules.state, "active"), discountDependencyPredicate(kind, id)))
+      .limit(1)
+  ).length > 0;
+
 const categoryHasActiveChild = async (id: CategoryId) =>
   (
     await database()
@@ -569,6 +591,9 @@ export const groupingQueries = {
     if (target === "archived" && (await categoryHasActiveChild(id))) {
       return { kind: "active_child" as const };
     }
+    if (target === "archived" && (await activeDiscountDependency("category", id))) {
+      return { kind: "active_discount_dependency" as const };
+    }
     const db = database();
     const activeChild = alias(categories, "category_active_child");
     const lineagePredicates: SQL[] = lineage.map((ancestor, index) => {
@@ -598,6 +623,16 @@ export const groupingQueries = {
               .select({ id: activeChild.id })
               .from(activeChild)
               .where(and(eq(activeChild.parentId, id), eq(activeChild.state, "active"))),
+          )
+        : undefined,
+      target === "archived"
+        ? notExists(
+            db
+              .select({ id: discountRules.id })
+              .from(discountRules)
+              .where(
+                and(eq(discountRules.state, "active"), discountDependencyPredicate("category", id)),
+              ),
           )
         : undefined,
       ...lineagePredicates,
@@ -636,6 +671,9 @@ export const groupingQueries = {
     if (target === "archived" && (await categoryHasActiveChild(id))) {
       return { kind: "active_child" as const };
     }
+    if (target === "archived" && (await activeDiscountDependency("category", id))) {
+      return { kind: "active_discount_dependency" as const };
+    }
     const resolvedParent = await groupingQueries.validateCategoryParent(
       resolved.id,
       resolved.parentId,
@@ -658,21 +696,53 @@ export const groupingQueries = {
   },
 
   async transitionCollection(id: CollectionId, target: GroupingState) {
-    return transitionFlatGrouping(
-      () => findCollection(id),
-      target,
-      async (current, now) => {
-        const [changed] = await database().batch([
-          database()
-            .update(collections)
-            .set(transitionDates(current, target, now))
-            .where(and(eq(collections.id, id), eq(collections.state, current.state)))
-            .returning({ id: collections.id }),
-          catalogDebtStatement(now),
-        ]);
-        return changed.length;
-      },
-    );
+    const current = await findCollection(id);
+    if (!current) {
+      return { kind: "not_found" as const };
+    }
+    if (current.state === target) {
+      return { kind: "changed" as const, value: current };
+    }
+    if (target === "draft" || (current.state === "draft" && target === "archived")) {
+      return { kind: "invalid_lifecycle" as const };
+    }
+    if (target === "archived" && (await activeDiscountDependency("collection", id))) {
+      return { kind: "active_discount_dependency" as const };
+    }
+    const db = database();
+    const now = new Date();
+    const [changed] = await db.batch([
+      db
+        .update(collections)
+        .set(transitionDates(current, target, now))
+        .where(
+          and(
+            eq(collections.id, id),
+            eq(collections.state, current.state),
+            target === "archived"
+              ? notExists(
+                  db
+                    .select({ id: discountRules.id })
+                    .from(discountRules)
+                    .where(
+                      and(
+                        eq(discountRules.state, "active"),
+                        discountDependencyPredicate("collection", id),
+                      ),
+                    ),
+                )
+              : undefined,
+          ),
+        )
+        .returning({ id: collections.id }),
+      catalogDebtStatement(now),
+    ]);
+    if (changed.length === 1) {
+      return { kind: "changed" as const, value: await findCollection(id) };
+    }
+    return target === "archived" && (await activeDiscountDependency("collection", id))
+      ? { kind: "active_discount_dependency" as const }
+      : { kind: "invalid_lifecycle" as const };
   },
 
   async transitionTag(id: TagId, target: GroupingState) {

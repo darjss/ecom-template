@@ -334,6 +334,106 @@ export const collections = sqliteTable(
   ],
 );
 
+export const discountRules = sqliteTable(
+  "discount_rules",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    mode: text("mode", { enum: ["automatic", "code"] }).notNull(),
+    code: text("code"),
+    calculation: text("calculation", { enum: ["percentage", "fixed_mnt"] }).notNull(),
+    value: integer("value").notNull(),
+    state: text("state", { enum: ["draft", "active", "inactive"] }).notNull(),
+    startsAt: integer("starts_at", { mode: "timestamp_ms" }),
+    endsAt: integer("ends_at", { mode: "timestamp_ms" }),
+    minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
+    globalLimit: integer("global_limit"),
+    targetsJson: text("targets_json").notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "discount_rules_id_check",
+      sql`length(${table.id}) = 35 AND substr(${table.id}, 1, 9) = 'discount_' AND substr(${table.id}, 10, 1) GLOB '[0-7]' AND substr(${table.id}, 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("discount_rules_name_check", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
+    check(
+      "discount_rules_mode_check",
+      sql`(${table.mode} = 'automatic' AND ${table.code} IS NULL) OR (${table.mode} = 'code' AND ${table.code} IS NOT NULL AND ${table.code} = upper(trim(${table.code})) AND length(${table.code}) BETWEEN 1 AND 32)`,
+    ),
+    check(
+      "discount_rules_calculation_check",
+      sql`(${table.calculation} = 'percentage' AND ${table.value} BETWEEN 1 AND 100) OR (${table.calculation} = 'fixed_mnt' AND ${table.value} BETWEEN 1 AND 1000000000)`,
+    ),
+    check("discount_rules_state_check", sql`${table.state} IN ('draft', 'active', 'inactive')`),
+    check(
+      "discount_rules_window_check",
+      sql`${table.startsAt} IS NULL OR ${table.endsAt} IS NULL OR ${table.startsAt} < ${table.endsAt}`,
+    ),
+    check(
+      "discount_rules_minimum_check",
+      sql`${table.minimumSubtotalMnt} BETWEEN 0 AND 1000000000`,
+    ),
+    check(
+      "discount_rules_limit_check",
+      sql`${table.globalLimit} IS NULL OR ${table.globalLimit} BETWEEN 1 AND 1000000`,
+    ),
+    check(
+      "discount_rules_targets_check",
+      sql`json_valid(${table.targetsJson}) AND json_type(${table.targetsJson}) = 'array' AND json_array_length(${table.targetsJson}) BETWEEN 1 AND 100`,
+    ),
+    check("discount_rules_revision_check", sql`${table.revision} >= 1`),
+    uniqueIndex("discount_rules_code_idx")
+      .on(table.code)
+      .where(sql`${table.code} IS NOT NULL`),
+    index("discount_rules_eligibility_idx").on(table.state, table.startsAt, table.endsAt, table.id),
+  ],
+);
+
+export const discountRedemptionEntries = sqliteTable(
+  "discount_redemption_entries",
+  {
+    id: text("id").primaryKey(),
+    discountRuleId: text("discount_rule_id")
+      .notNull()
+      .references(() => discountRules.id, { onDelete: "restrict" }),
+    orderId: text("order_id").notNull(),
+    kind: text("kind", { enum: ["claim", "release"] }).notNull(),
+    quantityDelta: integer("quantity_delta").notNull(),
+    commandCorrelationId: text("command_correlation_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "discount_redemption_entries_id_check",
+      sql`length(${table.id}) = 46 AND substr(${table.id}, 1, 20) = 'discount_redemption_' AND substr(${table.id}, 21, 1) GLOB '[0-7]' AND substr(${table.id}, 21) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check(
+      "discount_redemption_entries_kind_check",
+      sql`(${table.kind} = 'claim' AND ${table.quantityDelta} = 1) OR (${table.kind} = 'release' AND ${table.quantityDelta} = -1)`,
+    ),
+    check(
+      "discount_redemption_entries_order_check",
+      sql`length(${table.orderId}) BETWEEN 1 AND 128`,
+    ),
+    check(
+      "discount_redemption_entries_correlation_check",
+      sql`length(${table.commandCorrelationId}) BETWEEN 1 AND 64`,
+    ),
+    uniqueIndex("discount_redemption_entries_order_kind_idx").on(
+      table.discountRuleId,
+      table.orderId,
+      table.kind,
+    ),
+    index("discount_redemption_entries_rule_timeline_idx").on(
+      table.discountRuleId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const tags = sqliteTable(
   "tags",
   {

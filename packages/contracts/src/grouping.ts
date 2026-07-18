@@ -140,6 +140,7 @@ export const GroupingFailureReasonSchema = v.picklist([
   "parent_not_found",
   "category_cycle",
   "active_child",
+  "active_discount_dependency",
   "inactive_ancestor",
   "concurrent_parent_change",
   "duplicate_membership",
