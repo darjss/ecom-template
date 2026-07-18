@@ -12,6 +12,7 @@ import {
   type PoliciesDocument,
   type StorefrontIdentityDocument,
   type PublicBundleDetail,
+  type PublicCatalogItemSummary,
   type PublicGrouping,
   type PublicGroupingListing,
   type PublicProductDetail,
@@ -32,6 +33,7 @@ export type StorefrontReader = {
   readonly readLocations: () => Promise<LocationsDocument | undefined>;
   readonly readPolicies: () => Promise<PoliciesDocument | undefined>;
   readonly readCommerceSettings: () => Promise<CommerceSettings | undefined>;
+  readonly listPublishedCatalogItems: () => Promise<readonly PublicCatalogItemSummary[]>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
   readonly readPublishedBundle: (slug: string) => Promise<PublicBundleDetail | undefined>;
@@ -113,6 +115,7 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
     return document?.kind === "policies" ? document.content : undefined;
   },
   readCommerceSettings: () => cmsQueries.readSettings(),
+  listPublishedCatalogItems: () => catalogQueries.listPublishedCatalogItems(),
   listPublishedProducts,
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);

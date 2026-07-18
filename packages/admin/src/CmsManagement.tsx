@@ -24,10 +24,8 @@ const CmsActions = (props: { document: () => CmsDocument }) => {
   const mutation = useMutation(() => cmsMutationOptions(queryClient));
   const [message, setMessage] = createSignal("");
   const save = async () => {
-    const result = await mutation.mutateAsync({ kind: "save-draft", document: props.document() });
-    setMessage(
-      result.data.cache === "not_required" ? "Ноорог хадгалагдлаа." : "Ноорог хадгалагдлаа.",
-    );
+    await mutation.mutateAsync({ kind: "save-draft", document: props.document() });
+    setMessage("Ноорог хадгалагдлаа.");
   };
   const publish = async () => {
     const result = await mutation.mutateAsync({
@@ -160,29 +158,48 @@ const NavigationForm = (props: {
   initial: Extract<CmsDocument, { kind: "navigation" }> | undefined;
 }) => {
   const initialLabel = props.initial?.content.primary.at(0)?.label ?? "Дэлгүүр";
+  const newPrimaryId = crypto.randomUUID();
   const form = createForm(() => ({ defaultValues: { label: initialLabel } }));
   const document = () => ({
     kind: "navigation" as const,
-    content: {
-      version: 1 as const,
-      primary: [
-        {
-          id: crypto.randomUUID(),
-          label: form.state.values.label,
-          enabled: true,
-          destination: { kind: "home" as const },
-          children: [],
+    content: props.initial
+      ? {
+          ...props.initial.content,
+          primary:
+            props.initial.content.primary.length === 0
+              ? [
+                  {
+                    id: newPrimaryId,
+                    label: form.state.values.label,
+                    enabled: true,
+                    destination: { kind: "home" as const },
+                    children: [],
+                  },
+                ]
+              : props.initial.content.primary.map((item, index) =>
+                  index === 0 ? { ...item, label: form.state.values.label } : item,
+                ),
+        }
+      : {
+          version: 1 as const,
+          primary: [
+            {
+              id: newPrimaryId,
+              label: form.state.values.label,
+              enabled: true,
+              destination: { kind: "home" as const },
+              children: [],
+            },
+          ],
+          footer: [],
         },
-      ],
-      footer: [],
-    },
   });
   return (
     <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
       <form.Field name="label">
         {(field) => (
           <label class={labelClass}>
-            Нүүр хуудасны цэсийн нэр
+            Эхний цэсийн нэр
             <input
               class={fieldClass}
               maxlength="60"
@@ -217,7 +234,17 @@ const LocationsForm = (props: {
   }));
   const document = () => ({
     kind: "locations" as const,
-    content: { version: 1 as const, locations: [{ ...form.state.values, directionsUrl: null }] },
+    content: props.initial
+      ? {
+          ...props.initial.content,
+          locations: props.initial.content.locations.map((location, index) =>
+            index === 0 ? { ...location, ...form.state.values } : location,
+          ),
+        }
+      : {
+          version: 1 as const,
+          locations: [{ ...form.state.values, directionsUrl: null }],
+        },
   });
   return (
     <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
@@ -305,10 +332,28 @@ const PoliciesForm = (props: {
   }));
   const document = () => ({
     kind: "policies" as const,
-    content: {
-      version: 1 as const,
-      policies: [{ ...form.state.values, kind: "delivery" as const }],
-    },
+    content: props.initial
+      ? {
+          ...props.initial.content,
+          policies: existing
+            ? props.initial.content.policies.map((policy) =>
+                policy.kind === "delivery"
+                  ? {
+                      ...policy,
+                      title: form.state.values.title,
+                      contentMarkdown: form.state.values.contentMarkdown,
+                    }
+                  : policy,
+              )
+            : [
+                ...props.initial.content.policies,
+                { ...form.state.values, kind: "delivery" as const },
+              ],
+        }
+      : {
+          version: 1 as const,
+          policies: [{ ...form.state.values, kind: "delivery" as const }],
+        },
   });
   return (
     <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
@@ -505,7 +550,18 @@ export const CmsManagement = () => {
           )}
         </For>
       </div>
-      <Show when={!query.isPending} fallback={<p role="status">Агуулга ачаалж байна…</p>}>
+      <Show
+        when={query.isSuccess}
+        fallback={
+          query.isPending ? (
+            <p role="status">Агуулга ачаалж байна…</p>
+          ) : (
+            <p class="text-red-800" role="alert">
+              Агуулгыг ачаалж чадсангүй. Өгөгдөл сэргээгдэх хүртэл засварлах боломжгүй.
+            </p>
+          )
+        }
+      >
         <Show when={active() === "storefront_identity"}>
           <IdentityForm initial={identity()} />
         </Show>
