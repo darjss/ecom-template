@@ -250,7 +250,7 @@ const shortcutLists = async (query: string) => {
     const latinName = transliterateSearchText(name);
     return (
       nativeTokens.every((token) => nativeName.includes(token)) ||
-      latinTokens.every((token) => latinName.includes(token))
+      (latinTokens.length > 0 && latinTokens.every((token) => latinName.includes(token)))
     );
   };
   return {
@@ -345,29 +345,31 @@ export const catalogSearchQueries = {
       if (!nativeExists) {
         source = "krilleer_transliteration";
         const transliterationTokens = searchTokens(transliterateSearchText(input.query));
-        rows = await searchRows(
-          transliterationTokens,
-          transliterationPlans,
-          input.category,
-          input.collection,
-          input.limit + 1,
-          offset,
-        );
-        const ambiguityLimit = Math.max(2, input.limit);
-        const candidates =
-          input.page === 1
-            ? rows.slice(0, ambiguityLimit)
-            : await searchRows(
-                transliterationTokens,
-                transliterationPlans,
-                input.category,
-                input.collection,
-                ambiguityLimit,
-                0,
-              );
-        ambiguous = candidates.length > 1;
-        if (ambiguous) {
-          ambiguity = { confidence: "low", candidateIds: candidates.map(searchRowId) };
+        if (transliterationTokens.length > 0) {
+          rows = await searchRows(
+            transliterationTokens,
+            transliterationPlans,
+            input.category,
+            input.collection,
+            input.limit + 1,
+            offset,
+          );
+          const ambiguityLimit = Math.max(2, input.limit);
+          const candidates =
+            input.page === 1
+              ? rows.slice(0, ambiguityLimit)
+              : await searchRows(
+                  transliterationTokens,
+                  transliterationPlans,
+                  input.category,
+                  input.collection,
+                  ambiguityLimit,
+                  0,
+                );
+          ambiguous = candidates.length > 1;
+          if (ambiguous) {
+            ambiguity = { confidence: "low", candidateIds: candidates.map(searchRowId) };
+          }
         }
       }
       hasNext = rows.length > input.limit;
