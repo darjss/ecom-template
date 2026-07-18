@@ -3,6 +3,7 @@ import {
   BundleSchema,
   PersonalizationDefinitionsSchema,
   VariantIdSchema,
+  createAuditEventId,
   createBundleId,
   createPersonalizationId,
   createPersonalizationValueId,
@@ -16,9 +17,11 @@ import {
 import { and, asc, desc, eq, exists, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
+import type { StaffActor } from "../staff/operations";
 import { compactSku } from "../catalog/sku";
 import { database } from "../db/database";
 import {
+  auditEvents,
   bundleComponents,
   catalogCachePurgeDebts,
   catalogItems,
@@ -30,6 +33,51 @@ import {
 
 const skuFromBundleId = (id: BundleId) => `BUNDLE-${id.slice("bundle_".length).toUpperCase()}`;
 const distinct = (values: readonly string[]) => new Set(values).size === values.length;
+
+const acceptedBundleAuditSelection = (
+  actor: StaffActor,
+  action: string,
+  id: BundleId,
+  correlationId: string,
+  now: Date,
+) => ({
+  id: sql<string>`${createAuditEventId()}`.as("id"),
+  actorKind: sql<"staff">`'staff'`.as("actor_kind"),
+  actorId: sql<string>`${actor.staffId}`.as("actor_id"),
+  staffRole: sql<typeof actor.role>`${actor.role}`.as("staff_role"),
+  telegramOperatorLabel: sql<null>`NULL`.as("telegram_operator_label"),
+  telegramUserId: sql<null>`NULL`.as("telegram_user_id"),
+  sourceChannel: sql<"admin">`'admin'`.as("source_channel"),
+  action: sql<string>`${action}`.as("action"),
+  outcome: sql<"accepted">`'accepted'`.as("outcome"),
+  entityKind: sql<string>`'bundle'`.as("entity_kind"),
+  entityId: sql<string>`${id}`.as("entity_id"),
+  reason: sql<null>`NULL`.as("reason"),
+  commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
+  metadataJson: sql<null>`NULL`.as("metadata_json"),
+  createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+});
+
+const recordBundleRejectedAttempt = async (
+  actor: StaffActor,
+  action: string,
+  id: BundleId,
+  reason: string,
+) =>
+  database().insert(auditEvents).values({
+    id: createAuditEventId(),
+    actorKind: "staff",
+    actorId: actor.staffId,
+    staffRole: actor.role,
+    sourceChannel: "admin",
+    action,
+    outcome: "rejected",
+    entityKind: "bundle",
+    entityId: id,
+    reason,
+    commandCorrelationId: crypto.randomUUID(),
+    createdAt: new Date(),
+  });
 
 export const readPersonalizations = async (catalogItemIds: readonly CatalogItemId[]) => {
   if (catalogItemIds.length === 0) {
@@ -469,10 +517,12 @@ export const bundleQueries = {
       return { kind: "invalid_personalization" as const };
     }
   },
-  async transition(id: BundleId, action: "publish" | "archive" | "reactivate") {
+  async transition(actor: StaffActor, id: BundleId, action: "publish" | "archive" | "reactivate") {
     const db = database();
     const now = new Date();
     const revision = crypto.randomUUID();
+    const auditAction = `catalog.bundle.${action}`;
+    const correlationId = crypto.randomUUID();
     if (action === "publish" || action === "reactivate") {
       const invalidComponent = db
         .select({ id: bundleComponents.variantId })
@@ -510,6 +560,12 @@ export const bundleQueries = {
           ),
       );
       const results = await db.batch([
+        db.insert(auditEvents).select(
+          db
+            .select(acceptedBundleAuditSelection(actor, auditAction, id, correlationId, now))
+            .from(catalogItems)
+            .where(valid),
+        ),
         db
           .update(catalogItems)
           .set({
@@ -556,7 +612,7 @@ export const bundleQueries = {
             },
           }),
       ] as const);
-      if (results[0].length) {
+      if (results[1].length) {
         return { kind: "changed" as const };
       }
       const rows = await db
@@ -565,11 +621,15 @@ export const bundleQueries = {
         .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
         .limit(1);
       const current = rows.at(0);
-      return !current
-        ? { kind: "not_found" as const }
-        : current.state !== (action === "publish" ? "draft" : "archived")
-          ? { kind: "invalid_lifecycle" as const }
-          : { kind: "invalid_publication" as const };
+      if (!current) {
+        return { kind: "not_found" as const };
+      }
+      const kind =
+        current.state !== (action === "publish" ? "draft" : "archived")
+          ? ("invalid_lifecycle" as const)
+          : ("invalid_publication" as const);
+      await recordBundleRejectedAttempt(actor, auditAction, id, kind);
+      return { kind };
     }
     const from = "published";
     const to = "archived";
@@ -579,17 +639,22 @@ export const bundleQueries = {
       eq(catalogItems.state, to),
       eq(catalogItems.updatedAt, now),
     );
+    const archivePredicate = and(
+      eq(catalogItems.id, id),
+      eq(catalogItems.kind, "bundle"),
+      eq(catalogItems.state, from),
+    );
     const results = await db.batch([
+      db.insert(auditEvents).select(
+        db
+          .select(acceptedBundleAuditSelection(actor, auditAction, id, correlationId, now))
+          .from(catalogItems)
+          .where(archivePredicate),
+      ),
       db
         .update(catalogItems)
-        .set({ state: to, archivedAt: to === "archived" ? now : null, updatedAt: now })
-        .where(
-          and(
-            eq(catalogItems.id, id),
-            eq(catalogItems.kind, "bundle"),
-            eq(catalogItems.state, from),
-          ),
-        )
+        .set({ state: to, archivedAt: now, updatedAt: now })
+        .where(archivePredicate)
         .returning({ id: catalogItems.id }),
       db
         .insert(catalogCachePurgeDebts)
@@ -617,7 +682,7 @@ export const bundleQueries = {
           },
         }),
     ] as const);
-    if (results[0].length) {
+    if (results[1].length) {
       return { kind: "changed" as const };
     }
     const rows = await db
@@ -625,7 +690,11 @@ export const bundleQueries = {
       .from(catalogItems)
       .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
       .limit(1);
-    return rows.length ? { kind: "invalid_lifecycle" as const } : { kind: "not_found" as const };
+    if (!rows.length) {
+      return { kind: "not_found" as const };
+    }
+    await recordBundleRejectedAttempt(actor, auditAction, id, "invalid_lifecycle");
+    return { kind: "invalid_lifecycle" as const };
   },
   async findCachePurgeDebt(id: CatalogItemId) {
     const rows = await database()

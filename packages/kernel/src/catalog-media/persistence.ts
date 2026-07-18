@@ -159,15 +159,6 @@ export const catalogMediaQueries = {
     );
   },
 
-  async findCachePurgeDebt(id: CatalogItemId) {
-    const rows = await database()
-      .select({ revision: catalogCachePurgeDebts.revision })
-      .from(catalogCachePurgeDebts)
-      .where(eq(catalogCachePurgeDebts.productId, id))
-      .limit(1);
-    return rows.at(0);
-  },
-
   async findMediaAsset(id: MediaAssetId) {
     const rows = await database()
       .select({

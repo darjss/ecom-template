@@ -85,6 +85,8 @@ const resolveBundle = async (id: BundleId, purge: boolean) => {
   });
 };
 
+export const resolvePendingBundleCachePurge = async (id: BundleId) => resolveBundle(id, true);
+
 export const listBundles = async (actor: StaffActor) => {
   if (!authorized(actor)) {
     return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
@@ -176,7 +178,7 @@ export const transitionBundle = async (
     return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
   }
   try {
-    const result = await bundleQueries.transition(id, action);
+    const result = await bundleQueries.transition(actor, id, action);
     return result.kind === "changed"
       ? resolveBundle(id, true)
       : Result.err<never, BundleOperationFailure>({ code: result.kind });
