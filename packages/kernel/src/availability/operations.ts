@@ -33,7 +33,9 @@ export const readAvailability = async (
     for (const target of input.targets) {
       if (target.kind === "variant") {
         const row = variantById.get(target.id);
-        if (!row || row.productKind !== "product" || row.productState !== "published") continue;
+        if (!row || row.productKind !== "product" || row.productState !== "published") {
+          continue;
+        }
         facts.push({
           kind: "variant",
           id: target.id,

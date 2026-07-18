@@ -14,7 +14,8 @@ import type {
 } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { QueryClientProvider, createQuery } from "@tanstack/solid-query";
-import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, Match, onMount, Show, Switch, untrack } from "solid-js";
+import { isServer } from "solid-js/web";
 
 const money = new Intl.NumberFormat("mn-MN");
 
@@ -207,7 +208,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
   const cart = useCart();
   const [quantity, setQuantity] = createSignal(1);
   const [selectedVariantId, setSelectedVariantId] = createSignal(
-    props.kind === "product" ? (props.product.variants[0]?.id ?? "") : "",
+    untrack(() => (props.kind === "product" ? (props.product.variants[0]?.id ?? "") : "")),
   );
   const [announcement, setAnnouncement] = createSignal("");
   const selectedVariant = createMemo(() =>
@@ -220,7 +221,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
       ? { kind: "variant" as const, id: selectedVariantId(), quantity: quantity() }
       : { kind: "bundle" as const, id: props.bundle.id, quantity: quantity() },
   );
-  const availability = createQuery(() => availabilityQueryOptions([target()]));
+  const availability = createQuery(() => availabilityQueryOptions([target()], !isServer));
   const fact = createMemo<AvailabilityFact | undefined>(() => {
     const current = target();
     return availability.data?.data.facts.find(
@@ -258,20 +259,32 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           : best,
       undefined,
     );
-    if (next) setSelectedVariantId(next.id);
+    if (next) {
+      setSelectedVariantId(next.id);
+    }
   };
   const statusText = () => {
-    if (state() === "checking") return "Боломжийг шалгаж байна…";
-    if (state() === "stale") return "Шинэ мэдээлэл авч чадсангүй. Худалдан авалт түр хаалттай.";
-    if (state() === "unavailable") return "Одоогоор авах боломжгүй.";
+    if (state() === "checking") {
+      return "Боломжийг шалгаж байна…";
+    }
+    if (state() === "stale") {
+      return "Шинэ мэдээлэл авч чадсангүй. Худалдан авалт түр хаалттай.";
+    }
+    if (state() === "unavailable") {
+      return "Одоогоор авах боломжгүй.";
+    }
     const current = fact();
     return current ? `${money.format(current.unitPriceMnt)} ₮ · Авах боломжтой` : "";
   };
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    if (state() !== "ready") return;
+    if (state() !== "ready") {
+      return;
+    }
     const form = event.currentTarget;
-    if (!(form instanceof HTMLFormElement)) return;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
     const personalizations = answersFromForm(form, definitions());
     const current = target();
     const line: CartLine =
@@ -335,7 +348,9 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           value={quantity()}
           onInput={(event) => {
             const value = event.currentTarget.valueAsNumber;
-            if (Number.isInteger(value) && value >= 1 && value <= 999) setQuantity(value);
+            if (Number.isInteger(value) && value >= 1 && value <= 999) {
+              setQuantity(value);
+            }
           }}
         />
       </label>
@@ -355,11 +370,20 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
 
 export const PurchaseIsland = (props: PurchaseIslandProps) => {
   const queryClient = createStoreQueryClient();
+  let root: HTMLDivElement | undefined;
+  onMount(() => {
+    root
+      ?.closest("astro-island")
+      ?.parentElement?.querySelector(":scope > [data-purchase-fallback]")
+      ?.remove();
+  });
   return (
-    <QueryClientProvider client={queryClient}>
-      <CartProvider storageKey={props.storageKey}>
-        <PurchaseControls {...props} />
-      </CartProvider>
-    </QueryClientProvider>
+    <div ref={(element) => (root = element)}>
+      <QueryClientProvider client={queryClient}>
+        <CartProvider storageKey={props.storageKey}>
+          <PurchaseControls {...props} />
+        </CartProvider>
+      </QueryClientProvider>
+    </div>
   );
 };

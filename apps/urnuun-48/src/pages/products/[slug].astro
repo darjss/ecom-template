@@ -66,12 +66,16 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
+        <div data-purchase-fallback aria-live="polite">
+          <p>Боломжийг шалгаж байна…</p>
+          <button type="button" disabled>Шалгаж байна…</button>
+        </div>
         <PurchaseIsland
           kind="product"
           product={product}
           personalizations={personalizations}
           storageKey="cart:urnuun-48:v1"
-          client:load
+          client:only="solid-js"
         />
       </div>
     </article>

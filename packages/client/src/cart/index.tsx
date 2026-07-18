@@ -5,7 +5,7 @@ import {
   type Cart,
   type CartLine,
 } from "@ecom/contracts";
-import { makePersisted } from "@solid-primitives/storage";
+import { makeObjectStorage, makePersisted } from "@solid-primitives/storage";
 import {
   createContext,
   createMemo,
@@ -15,6 +15,7 @@ import {
   type ParentComponent,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { isServer } from "solid-js/web";
 import * as v from "valibot";
 
 const emptyCart = (): Cart => ({ version: 1, lines: [] });
@@ -75,6 +76,7 @@ export const CartProvider: ParentComponent<CartProviderProps> = (props) => {
     name: props.storageKey,
     serialize: JSON.stringify,
     deserialize: deserializeCart,
+    storage: isServer ? makeObjectStorage({}) : localStorage,
   });
   const lines = () => cart.lines;
   const itemCount = createMemo(() => cart.lines.reduce((total, line) => total + line.quantity, 0));

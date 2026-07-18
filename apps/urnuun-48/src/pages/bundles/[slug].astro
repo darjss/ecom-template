@@ -54,11 +54,15 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
             ))}
           </ul>
         </section>
+        <div data-purchase-fallback aria-live="polite">
+          <p>Боломжийг шалгаж байна…</p>
+          <button type="button" disabled>Шалгаж байна…</button>
+        </div>
         <PurchaseIsland
           kind="bundle"
           bundle={bundle}
           storageKey="cart:urnuun-48:v1"
-          client:load
+          client:only="solid-js"
         />
       </div>
     </article>

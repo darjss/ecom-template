@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { database } from "../db/database";
 import { bundleComponents, catalogItems, stockItems, variants } from "../db/schema";
 
-export type AvailableVariantRow = {
+type AvailableVariantRow = {
   readonly id: string;
   readonly variantState: "active" | "archived";
   readonly productState: "draft" | "published" | "archived";
@@ -15,14 +15,14 @@ export type AvailableVariantRow = {
   readonly reservedQuantity: number;
 };
 
-export type AvailableBundleRow = {
+type AvailableBundleRow = {
   readonly id: string;
   readonly state: "draft" | "published" | "archived";
   readonly kind: "product" | "bundle";
   readonly priceMnt: number;
 };
 
-export type AvailableBundleComponentRow = {
+type AvailableBundleComponentRow = {
   readonly bundleId: string;
   readonly variantId: string;
   readonly quantity: number;
@@ -35,7 +35,9 @@ export type AvailableBundleComponentRow = {
 
 export const availabilityQueries = {
   async readVariants(ids: readonly VariantId[]): Promise<AvailableVariantRow[]> {
-    if (ids.length === 0) return [];
+    if (ids.length === 0) {
+      return [];
+    }
     return database()
       .select({
         id: variants.id,
