@@ -124,7 +124,11 @@ const DraftRecovery = (props: { issue: () => DraftIssue | undefined; discard: ()
   </Show>
 );
 
-const ContentActions = (props: { document: () => ContentDocument; clearLocal: () => void }) => {
+const ContentActions = (props: {
+  document: () => ContentDocument;
+  documentKind: ContentDocument["kind"];
+  clearLocal: () => void;
+}) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => cmsMutationOptions(queryClient));
   const [message, setMessage] = createSignal("");
@@ -191,7 +195,7 @@ const ContentActions = (props: { document: () => ContentDocument; clearLocal: ()
         </form>
         <a
           class="rounded-lg px-3 py-2 font-bold underline"
-          href={`/admin/content-preview?kind=${props.document().kind}`}
+          href={`/admin/content-preview?kind=${props.documentKind}`}
           target="_blank"
         >
           Сервер ноорог preview
@@ -450,7 +454,7 @@ export const HomepageEditor = (
             </div>
           )}
         </form.Field>
-        <ContentActions document={document} clearLocal={local.discard} />
+        <ContentActions document={document} documentKind="homepage" clearLocal={local.discard} />
       </fieldset>
     </div>
   );
@@ -582,7 +586,11 @@ export const AnnouncementEditor = (
             </div>
           )}
         </form.Field>
-        <ContentActions document={document} clearLocal={local.discard} />
+        <ContentActions
+          document={document}
+          documentKind="announcement"
+          clearLocal={local.discard}
+        />
       </fieldset>
     </div>
   );
@@ -753,7 +761,11 @@ export const OrderingNoticesEditor = (
             </div>
           )}
         </form.Field>
-        <ContentActions document={document} clearLocal={local.discard} />
+        <ContentActions
+          document={document}
+          documentKind="ordering_notices"
+          clearLocal={local.discard}
+        />
       </fieldset>
     </div>
   );
