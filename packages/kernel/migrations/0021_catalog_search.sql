@@ -34,7 +34,7 @@ WHERE item.state = 'published';
 --> statement-breakpoint
 CREATE VIEW catalog_search_documents AS
 WITH
-  catalog_search_normalized AS (
+  catalog_search_normalization_1 AS (
     SELECT
       item_id, kind,
       replace(replace(replace(replace(slug, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS slug,
@@ -43,6 +43,150 @@ WITH
       replace(replace(replace(replace(facets, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS facets
     FROM catalog_search_source
   ),
+  catalog_search_normalization_2 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, '０', '0'), '１', '1'), '２', '2'), '３', '3') AS slug,
+      replace(replace(replace(replace(title, '０', '0'), '１', '1'), '２', '2'), '３', '3') AS title,
+      replace(replace(replace(replace(description, '０', '0'), '１', '1'), '２', '2'), '３', '3') AS description,
+      replace(replace(replace(replace(facets, '０', '0'), '１', '1'), '２', '2'), '３', '3') AS facets
+    FROM catalog_search_normalization_1
+  ),
+  catalog_search_normalization_3 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, '４', '4'), '５', '5'), '６', '6'), '７', '7') AS slug,
+      replace(replace(replace(replace(title, '４', '4'), '５', '5'), '６', '6'), '７', '7') AS title,
+      replace(replace(replace(replace(description, '４', '4'), '５', '5'), '６', '6'), '７', '7') AS description,
+      replace(replace(replace(replace(facets, '４', '4'), '５', '5'), '６', '6'), '７', '7') AS facets
+    FROM catalog_search_normalization_2
+  ),
+  catalog_search_normalization_4 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, '８', '8'), '９', '9'), 'Ａ', 'A'), 'Ｂ', 'B') AS slug,
+      replace(replace(replace(replace(title, '８', '8'), '９', '9'), 'Ａ', 'A'), 'Ｂ', 'B') AS title,
+      replace(replace(replace(replace(description, '８', '8'), '９', '9'), 'Ａ', 'A'), 'Ｂ', 'B') AS description,
+      replace(replace(replace(replace(facets, '８', '8'), '９', '9'), 'Ａ', 'A'), 'Ｂ', 'B') AS facets
+    FROM catalog_search_normalization_3
+  ),
+  catalog_search_normalization_5 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｃ', 'C'), 'Ｄ', 'D'), 'Ｅ', 'E'), 'Ｆ', 'F') AS slug,
+      replace(replace(replace(replace(title, 'Ｃ', 'C'), 'Ｄ', 'D'), 'Ｅ', 'E'), 'Ｆ', 'F') AS title,
+      replace(replace(replace(replace(description, 'Ｃ', 'C'), 'Ｄ', 'D'), 'Ｅ', 'E'), 'Ｆ', 'F') AS description,
+      replace(replace(replace(replace(facets, 'Ｃ', 'C'), 'Ｄ', 'D'), 'Ｅ', 'E'), 'Ｆ', 'F') AS facets
+    FROM catalog_search_normalization_4
+  ),
+  catalog_search_normalization_6 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｇ', 'G'), 'Ｈ', 'H'), 'Ｉ', 'I'), 'Ｊ', 'J') AS slug,
+      replace(replace(replace(replace(title, 'Ｇ', 'G'), 'Ｈ', 'H'), 'Ｉ', 'I'), 'Ｊ', 'J') AS title,
+      replace(replace(replace(replace(description, 'Ｇ', 'G'), 'Ｈ', 'H'), 'Ｉ', 'I'), 'Ｊ', 'J') AS description,
+      replace(replace(replace(replace(facets, 'Ｇ', 'G'), 'Ｈ', 'H'), 'Ｉ', 'I'), 'Ｊ', 'J') AS facets
+    FROM catalog_search_normalization_5
+  ),
+  catalog_search_normalization_7 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｋ', 'K'), 'Ｌ', 'L'), 'Ｍ', 'M'), 'Ｎ', 'N') AS slug,
+      replace(replace(replace(replace(title, 'Ｋ', 'K'), 'Ｌ', 'L'), 'Ｍ', 'M'), 'Ｎ', 'N') AS title,
+      replace(replace(replace(replace(description, 'Ｋ', 'K'), 'Ｌ', 'L'), 'Ｍ', 'M'), 'Ｎ', 'N') AS description,
+      replace(replace(replace(replace(facets, 'Ｋ', 'K'), 'Ｌ', 'L'), 'Ｍ', 'M'), 'Ｎ', 'N') AS facets
+    FROM catalog_search_normalization_6
+  ),
+  catalog_search_normalization_8 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｏ', 'O'), 'Ｐ', 'P'), 'Ｑ', 'Q'), 'Ｒ', 'R') AS slug,
+      replace(replace(replace(replace(title, 'Ｏ', 'O'), 'Ｐ', 'P'), 'Ｑ', 'Q'), 'Ｒ', 'R') AS title,
+      replace(replace(replace(replace(description, 'Ｏ', 'O'), 'Ｐ', 'P'), 'Ｑ', 'Q'), 'Ｒ', 'R') AS description,
+      replace(replace(replace(replace(facets, 'Ｏ', 'O'), 'Ｐ', 'P'), 'Ｑ', 'Q'), 'Ｒ', 'R') AS facets
+    FROM catalog_search_normalization_7
+  ),
+  catalog_search_normalization_9 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｓ', 'S'), 'Ｔ', 'T'), 'Ｕ', 'U'), 'Ｖ', 'V') AS slug,
+      replace(replace(replace(replace(title, 'Ｓ', 'S'), 'Ｔ', 'T'), 'Ｕ', 'U'), 'Ｖ', 'V') AS title,
+      replace(replace(replace(replace(description, 'Ｓ', 'S'), 'Ｔ', 'T'), 'Ｕ', 'U'), 'Ｖ', 'V') AS description,
+      replace(replace(replace(replace(facets, 'Ｓ', 'S'), 'Ｔ', 'T'), 'Ｕ', 'U'), 'Ｖ', 'V') AS facets
+    FROM catalog_search_normalization_8
+  ),
+  catalog_search_normalization_10 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'Ｗ', 'W'), 'Ｘ', 'X'), 'Ｙ', 'Y'), 'Ｚ', 'Z') AS slug,
+      replace(replace(replace(replace(title, 'Ｗ', 'W'), 'Ｘ', 'X'), 'Ｙ', 'Y'), 'Ｚ', 'Z') AS title,
+      replace(replace(replace(replace(description, 'Ｗ', 'W'), 'Ｘ', 'X'), 'Ｙ', 'Y'), 'Ｚ', 'Z') AS description,
+      replace(replace(replace(replace(facets, 'Ｗ', 'W'), 'Ｘ', 'X'), 'Ｙ', 'Y'), 'Ｚ', 'Z') AS facets
+    FROM catalog_search_normalization_9
+  ),
+  catalog_search_normalization_11 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ａ', 'a'), 'ｂ', 'b'), 'ｃ', 'c'), 'ｄ', 'd') AS slug,
+      replace(replace(replace(replace(title, 'ａ', 'a'), 'ｂ', 'b'), 'ｃ', 'c'), 'ｄ', 'd') AS title,
+      replace(replace(replace(replace(description, 'ａ', 'a'), 'ｂ', 'b'), 'ｃ', 'c'), 'ｄ', 'd') AS description,
+      replace(replace(replace(replace(facets, 'ａ', 'a'), 'ｂ', 'b'), 'ｃ', 'c'), 'ｄ', 'd') AS facets
+    FROM catalog_search_normalization_10
+  ),
+  catalog_search_normalization_12 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ｅ', 'e'), 'ｆ', 'f'), 'ｇ', 'g'), 'ｈ', 'h') AS slug,
+      replace(replace(replace(replace(title, 'ｅ', 'e'), 'ｆ', 'f'), 'ｇ', 'g'), 'ｈ', 'h') AS title,
+      replace(replace(replace(replace(description, 'ｅ', 'e'), 'ｆ', 'f'), 'ｇ', 'g'), 'ｈ', 'h') AS description,
+      replace(replace(replace(replace(facets, 'ｅ', 'e'), 'ｆ', 'f'), 'ｇ', 'g'), 'ｈ', 'h') AS facets
+    FROM catalog_search_normalization_11
+  ),
+  catalog_search_normalization_13 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ｉ', 'i'), 'ｊ', 'j'), 'ｋ', 'k'), 'ｌ', 'l') AS slug,
+      replace(replace(replace(replace(title, 'ｉ', 'i'), 'ｊ', 'j'), 'ｋ', 'k'), 'ｌ', 'l') AS title,
+      replace(replace(replace(replace(description, 'ｉ', 'i'), 'ｊ', 'j'), 'ｋ', 'k'), 'ｌ', 'l') AS description,
+      replace(replace(replace(replace(facets, 'ｉ', 'i'), 'ｊ', 'j'), 'ｋ', 'k'), 'ｌ', 'l') AS facets
+    FROM catalog_search_normalization_12
+  ),
+  catalog_search_normalization_14 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ｍ', 'm'), 'ｎ', 'n'), 'ｏ', 'o'), 'ｐ', 'p') AS slug,
+      replace(replace(replace(replace(title, 'ｍ', 'm'), 'ｎ', 'n'), 'ｏ', 'o'), 'ｐ', 'p') AS title,
+      replace(replace(replace(replace(description, 'ｍ', 'm'), 'ｎ', 'n'), 'ｏ', 'o'), 'ｐ', 'p') AS description,
+      replace(replace(replace(replace(facets, 'ｍ', 'm'), 'ｎ', 'n'), 'ｏ', 'o'), 'ｐ', 'p') AS facets
+    FROM catalog_search_normalization_13
+  ),
+  catalog_search_normalization_15 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ｑ', 'q'), 'ｒ', 'r'), 'ｓ', 's'), 'ｔ', 't') AS slug,
+      replace(replace(replace(replace(title, 'ｑ', 'q'), 'ｒ', 'r'), 'ｓ', 's'), 'ｔ', 't') AS title,
+      replace(replace(replace(replace(description, 'ｑ', 'q'), 'ｒ', 'r'), 'ｓ', 's'), 'ｔ', 't') AS description,
+      replace(replace(replace(replace(facets, 'ｑ', 'q'), 'ｒ', 'r'), 'ｓ', 's'), 'ｔ', 't') AS facets
+    FROM catalog_search_normalization_14
+  ),
+  catalog_search_normalization_16 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ｕ', 'u'), 'ｖ', 'v'), 'ｗ', 'w'), 'ｘ', 'x') AS slug,
+      replace(replace(replace(replace(title, 'ｕ', 'u'), 'ｖ', 'v'), 'ｗ', 'w'), 'ｘ', 'x') AS title,
+      replace(replace(replace(replace(description, 'ｕ', 'u'), 'ｖ', 'v'), 'ｗ', 'w'), 'ｘ', 'x') AS description,
+      replace(replace(replace(replace(facets, 'ｕ', 'u'), 'ｖ', 'v'), 'ｗ', 'w'), 'ｘ', 'x') AS facets
+    FROM catalog_search_normalization_15
+  ),
+  catalog_search_normalization_17 AS (
+    SELECT
+      item_id, kind,
+      replace(replace(slug, 'ｙ', 'y'), 'ｚ', 'z') AS slug,
+      replace(replace(title, 'ｙ', 'y'), 'ｚ', 'z') AS title,
+      replace(replace(description, 'ｙ', 'y'), 'ｚ', 'z') AS description,
+      replace(replace(facets, 'ｙ', 'y'), 'ｚ', 'z') AS facets
+    FROM catalog_search_normalization_16
+  ),
   catalog_search_transliteration_1 AS (
     SELECT
       item_id, kind, slug, title, description, facets,
@@ -50,7 +194,7 @@ WITH
       replace(replace(replace(replace(replace(replace(replace(replace(title, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_title,
       replace(replace(replace(replace(replace(replace(replace(replace(description, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_description,
       replace(replace(replace(replace(replace(replace(replace(replace(facets, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_facets
-    FROM catalog_search_normalized
+    FROM catalog_search_normalization_17
   ),
   catalog_search_transliteration_2 AS (
     SELECT

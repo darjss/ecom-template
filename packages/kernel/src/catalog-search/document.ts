@@ -40,7 +40,7 @@ export const krilleerCyrillicToLatin = [
 
 const transliteration = new Map<string, string>(krilleerCyrillicToLatin);
 
-export const normalizeSearchText = (value: string) => value.normalize("NFC");
+export const normalizeSearchText = (value: string) => value.normalize("NFKC");
 
 export const searchTokens = (value: string) =>
   normalizeSearchText(value)

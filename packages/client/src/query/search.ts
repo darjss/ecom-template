@@ -9,5 +9,5 @@ export const catalogSearchQueryOptions = (input: CatalogSearchRequest) =>
   queryOptions<InferOk<CatalogSearchResult>, InferErr<CatalogSearchResult>>({
     queryKey: ["catalog-search", input],
     queryFn: async ({ signal }) => unwrapRequestResult(await requestCatalogSearch(input, signal)),
-    staleTime: 30_000,
+    staleTime: 0,
   });
