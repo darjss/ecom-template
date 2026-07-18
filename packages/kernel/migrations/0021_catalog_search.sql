@@ -362,8 +362,9 @@ CREATE TRIGGER catalog_search_variants_insert AFTER INSERT ON variants BEGIN
   INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.product_id);
 END;
 --> statement-breakpoint
-CREATE TRIGGER catalog_search_variants_update AFTER UPDATE OF state ON variants BEGIN
-  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.product_id);
+CREATE TRIGGER catalog_search_variants_update AFTER UPDATE OF state, product_id ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.product_id);
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT NEW.product_id WHERE NEW.product_id <> OLD.product_id;
 END;
 --> statement-breakpoint
 CREATE TRIGGER catalog_search_variants_delete AFTER DELETE ON variants BEGIN
@@ -372,6 +373,10 @@ END;
 --> statement-breakpoint
 CREATE TRIGGER catalog_search_variant_option_values_insert AFTER INSERT ON variant_option_values BEGIN
   INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT product_id FROM variants WHERE id = NEW.variant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_update AFTER UPDATE OF variant_id, option_value_id ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT product_id FROM variants WHERE id IN (OLD.variant_id, NEW.variant_id);
 END;
 --> statement-breakpoint
 CREATE TRIGGER catalog_search_variant_option_values_delete AFTER DELETE ON variant_option_values BEGIN
