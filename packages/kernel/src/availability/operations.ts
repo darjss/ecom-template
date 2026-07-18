@@ -22,13 +22,13 @@ export const readAvailability = async (
       (target): target is Extract<(typeof input.targets)[number], { kind: "bundle" }> =>
         target.kind === "bundle",
     );
-    const [variantRows, bundleRows] = await Promise.all([
-      availabilityQueries.readVariants(variantTargets.map(({ id }) => id)),
-      availabilityQueries.readBundles(bundleTargets.map(({ id }) => id)),
-    ]);
-    const variantById = new Map(variantRows.map((row) => [row.id, row]));
-    const bundleById = new Map(bundleRows.bundles.map((row) => [row.id, row]));
-    const componentsByBundle = Map.groupBy(bundleRows.components, ({ bundleId }) => bundleId);
+    const snapshot = await availabilityQueries.readSnapshot(
+      variantTargets.map(({ id }) => id),
+      bundleTargets.map(({ id }) => id),
+    );
+    const variantById = new Map(snapshot.variantRows.map((row) => [row.id, row]));
+    const bundleById = new Map(snapshot.bundles.map((row) => [row.id, row]));
+    const componentsByBundle = Map.groupBy(snapshot.components, ({ bundleId }) => bundleId);
     const facts: AvailabilityFact[] = [];
     for (const target of input.targets) {
       if (target.kind === "variant") {
@@ -79,7 +79,7 @@ export const readAvailability = async (
     }
     return Result.ok(
       v.parse(AvailabilityResponseSchema, {
-        data: { checkedAt: new Date().toISOString(), facts },
+        data: { checkedAt: snapshot.checkedAt, facts },
       }),
     );
   } catch {

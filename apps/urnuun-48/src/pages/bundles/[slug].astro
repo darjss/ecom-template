@@ -20,6 +20,7 @@ applyPublicHtmlCache(Astro.response.headers, [
   "catalog",
   productCacheTag(bundle.id),
 ]);
+const money = new Intl.NumberFormat("mn-MN");
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
@@ -55,7 +56,8 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
           </ul>
         </section>
         <div data-purchase-fallback aria-live="polite">
-          <p>Боломжийг шалгаж байна…</p>
+          <p class="price"><strong>{money.format(bundle.priceMnt)} ₮</strong></p>
+          <p>Каталогийн үнэ · Боломжийг шалгаж байна…</p>
           <button type="button" disabled>Шалгаж байна…</button>
         </div>
         <PurchaseIsland

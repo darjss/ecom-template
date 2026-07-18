@@ -37,7 +37,12 @@ export type CartRecovery = {
   readonly message: string;
 };
 
-export type AddCartLineResult = "added" | "merged" | "cart_full" | "quantity_exceeded";
+export type AddCartLineResult =
+  | "added"
+  | "merged"
+  | "cart_full"
+  | "quantity_exceeded"
+  | "recovery_required";
 
 type CartContextValue = {
   readonly lines: Accessor<readonly CartLine[]>;
@@ -82,7 +87,7 @@ export const CartProvider: ParentComponent<CartProviderProps> = (props) => {
   const itemCount = createMemo(() => cart.lines.reduce((total, line) => total + line.quantity, 0));
   const addLine = (input: CartLine): AddCartLineResult => {
     if (recovery()) {
-      return "cart_full";
+      return "recovery_required";
     }
     const line = normalizedLine(input);
     const identity = lineIdentity(line);
