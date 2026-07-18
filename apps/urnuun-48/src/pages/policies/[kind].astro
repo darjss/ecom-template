@@ -1,5 +1,5 @@
 ---
-import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import { applyPublicHtmlCache, policyCacheTag } from "@ecom/storefront/cache";
 import { renderPolicyMarkdown } from "@ecom/storefront/policy";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
@@ -16,7 +16,7 @@ if (!policy) {
 }
 applyPublicHtmlCache(Astro.response.headers, [
   "store-shell",
-  ...(policy ? [`policy:${policy.id}`] : []),
+  ...(policy ? [policyCacheTag(policy.id)] : []),
 ]);
 const content = policy ? renderPolicyMarkdown(policy.contentMarkdown) : "";
 ---

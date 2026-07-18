@@ -1,5 +1,4 @@
 import { handle } from "@astrojs/cloudflare/handler";
-import { WorkerEntrypoint } from "cloudflare:workers";
 import {
   isPublicMediaPath,
   MediaUploadMultipartMaxBytes,
@@ -111,7 +110,7 @@ const acceptsMediaUploadSize = (request: Request) => {
   );
 };
 
-const dispatchStoreRequest = async (
+export const dispatchStoreRequest = async (
   request: Request,
   environment: Env,
   context: ExecutionContext,
@@ -190,12 +189,6 @@ const isAnonymousCacheCandidate = (request: Request) => {
     !request.headers.has("cookie")
   );
 };
-
-export class StorefrontCache extends WorkerEntrypoint<Env> {
-  override fetch(request: Request) {
-    return dispatchStoreRequest(request, this.env, this.ctx);
-  }
-}
 
 export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);

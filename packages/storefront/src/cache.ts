@@ -10,6 +10,9 @@ export type PublicCacheTag =
 const CatalogItemCacheTagSchema =
   /^product:(?:product|bundle)_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}$/;
 const PolicyCacheTagSchema = /^policy:policy_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}$/;
+export const productCacheTag = (id: CatalogItemId): PublicCacheTag => `product:${id}`;
+export const policyCacheTag = (id: PolicyId): PublicCacheTag => `policy:${id}`;
+
 const isPublicCacheTag = (tag: string): tag is PublicCacheTag =>
   tag === "store-shell" ||
   tag === "homepage" ||
