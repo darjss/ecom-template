@@ -289,6 +289,9 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       if (!origin || !new URL(origin).hostname.endsWith(".localhost")) {
         return new Response(null, { status: 404 });
       }
+      if (request.headers.get("origin") !== origin) {
+        return status(403, apiError("forbidden", "Request origin is not accepted"));
+      }
       const input = v.safeParse(LocalStaffLoginBodySchema, body);
       if (!input.success) {
         return status(422, apiError("validation", "A valid email is required"));

@@ -3,7 +3,7 @@ import { serializeSignedCookie } from "better-call";
 import { provisionOwner } from "../staff/operations";
 import { createStaffAuth } from "./runtime";
 
-export type LocalStaffLoginFailure = {
+type LocalStaffLoginFailure = {
   readonly code: "linked_identity" | "infrastructure_unavailable";
 };
 

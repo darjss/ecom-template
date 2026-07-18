@@ -46,6 +46,20 @@ const readHeaders = () => {
   return headers;
 };
 
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "API request failed";
+
+const signOutOwner = async (origin: string, cookie: string) => {
+  const response = await fetch(new URL("/api/auth/staff/sign-out", origin), {
+    method: "POST",
+    headers: { cookie, origin, "content-type": "application/json" },
+    body: "{}",
+  });
+  if (!response.ok) {
+    throw new Error(`Local Owner sign-out returned HTTP ${response.status}`);
+  }
+};
+
 const main = async () => {
   if (!values.store) {
     throw new Error("Missing --store <slug>");
@@ -66,50 +80,76 @@ const main = async () => {
     headers.set("content-type", "application/json");
   }
 
-  if (values.owner) {
-    if (headers.has("cookie")) {
-      throw new Error("--owner cannot be combined with a Cookie header");
+  let ownerCookie: string | undefined;
+  let primaryError: unknown;
+  let signOutError: Error | undefined;
+  try {
+    if (values.owner) {
+      if (headers.has("cookie")) {
+        throw new Error("--owner cannot be combined with a Cookie header");
+      }
+      const email = v.parse(EmailSchema, values.owner);
+      const login = await fetch(new URL("/api/auth/staff/dev-login", store.origin), {
+        method: "POST",
+        headers: {
+          origin: store.origin,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ email }),
+        redirect: "manual",
+      });
+      if (login.status !== 303) {
+        throw new Error(`Local Owner login returned HTTP ${login.status}`);
+      }
+      ownerCookie = login.headers.getSetCookie().at(0)?.split(";", 1).at(0);
+      if (!ownerCookie) {
+        throw new Error("Local Owner login did not return a session cookie");
+      }
+      headers.set("cookie", ownerCookie);
     }
-    const email = v.parse(EmailSchema, values.owner);
-    const login = await fetch(new URL("/api/auth/staff/dev-login", store.origin), {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ email }),
+
+    const response = await fetch(new URL(path, store.origin), {
+      method,
+      headers,
+      ...(body === undefined ? {} : { body }),
       redirect: "manual",
     });
-    if (login.status !== 303) {
-      throw new Error(`Local Owner login returned HTTP ${login.status}`);
+    process.stderr.write(`HTTP ${response.status}\n`);
+    const source = await response.text();
+    if (source.length > 0) {
+      process.stdout.write(`${source}\n`);
     }
-    const cookie = login.headers.getSetCookie().at(0)?.split(";", 1).at(0);
-    if (!cookie) {
-      throw new Error("Local Owner login did not return a session cookie");
-    }
-    headers.set("cookie", cookie);
-  }
 
-  const response = await fetch(new URL(path, store.origin), {
-    method,
-    headers,
-    ...(body === undefined ? {} : { body }),
-    redirect: "manual",
-  });
-  process.stderr.write(`HTTP ${response.status}\n`);
-  const source = await response.text();
-  if (source.length > 0) {
-    process.stdout.write(`${source}\n`);
-  }
-
-  if (values.expect) {
-    const expected = v.parse(StatusSchema, values.expect);
-    if (response.status !== expected) {
-      throw new Error(`Expected HTTP ${expected}, received ${response.status}`);
+    if (values.expect) {
+      const expected = v.parse(StatusSchema, values.expect);
+      if (response.status !== expected) {
+        throw new Error(`Expected HTTP ${expected}, received ${response.status}`);
+      }
+    } else if (!response.ok) {
+      process.exitCode = 1;
     }
-  } else if (!response.ok) {
-    process.exitCode = 1;
+  } catch (error) {
+    primaryError = error;
+    throw error;
+  } finally {
+    if (ownerCookie) {
+      try {
+        await signOutOwner(store.origin, ownerCookie);
+      } catch (error) {
+        if (primaryError !== undefined) {
+          process.stderr.write(`Owner sign-out also failed: ${errorMessage(error)}\n`);
+        } else {
+          signOutError = new Error(errorMessage(error));
+        }
+      }
+    }
+  }
+  if (signOutError !== undefined) {
+    throw new Error(signOutError.message, { cause: signOutError });
   }
 };
 
 await main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : "API request failed"}\n`);
+  process.stderr.write(`${errorMessage(error)}\n`);
   process.exitCode = 1;
 });
