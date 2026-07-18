@@ -74,6 +74,16 @@ Every handler is the same five steps: `safeParse` id → `safeParse` body → `v
 
 ---
 
+## Docs vs code: prescribed-but-unused functional tooling
+
+`docs/agents/coding-standards.md` prescribes a functional shape — "pipelines, readable fluent transformations, and exhaustive `dismatch` expressions", "`es-toolkit` for real generic operations" — that the runtime code does not deliver:
+
+- **`dismatch`** — prescribed twice in the standards, declared in `packages/kernel/package.json` (2.6.0), imported **nowhere**. Dead dependency. Its exact use case (exhaustive matching on failure-code unions) is where the ternary staircases in finding 2 live.
+- **`es-toolkit`** — declared in `packages/kernel/package.json` (1.49.0), imported **nowhere**. Dead dependency. Meanwhile the "are these ids unique" concept is hand-rolled eight times across five files: an identical `distinct` helper defined in both `packages/kernel/src/bundles/persistence.ts:36` and `packages/kernel/src/catalog-variants/persistence.ts:132`, plus six inline `new Set(ids).size !== ids.length` repetitions.
+- **Result combinators** — zero usage of `.andThen()`, `.mapErr()`, `.orElse()`, or `Result.try`. Result serves only as a tagged return type, assembled by ternaries and unpacked with 39 manual `.isErr()` checks. Contracts code is genuinely functional (`v.pipe` ×110); kernel and api code is imperative code returning functional types.
+
+Decision needed per tool: adopt it where the docs point (making finding 2's fix use `dismatch`, centralizing the distinctness check), or delete the dependency and amend the standards. Either closes the gap; the current middle state is the worst option.
+
 ## Suggested order of attack
 
 1. **Grouping persistence triplication** — biggest line-count and divergence risk win.
@@ -81,5 +91,6 @@ Every handler is the same five steps: `safeParse` id → `safeParse` body → `v
 3. **Tighten persistence failure unions** so operations stop re-whitelisting.
 4. **Compose the personalization contract schemas** — define once, derive the draft.
 5. Optionally, compress route handler frames.
+6. Resolve `dismatch`/`es-toolkit`: adopt or delete, and unify the eight hand-rolled distinctness checks.
 
 Each is a self-contained refactor with no behavior change.
