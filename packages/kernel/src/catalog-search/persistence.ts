@@ -61,7 +61,7 @@ const cyrillicToLatin = new Map([
   ["ъ", "'"],
 ]);
 
-export const normalizeSearchText = (value: string) =>
+const normalizeSearchText = (value: string) =>
   value
     .normalize("NFKC")
     .toLocaleLowerCase("mn")
