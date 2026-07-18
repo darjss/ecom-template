@@ -176,7 +176,7 @@ const exactSku = async (query: string, category?: string, collection?: string) =
 
 const imagesByItem = async (ids: readonly string[]) => {
   const parsedIds = ids.map((id) => v.parse(CatalogItemIdSchema, id));
-  const images = await catalogMediaQueries.listForCatalogItems(parsedIds);
+  const images = await catalogMediaQueries.listPublicForCatalogItems(parsedIds);
   return new Map(
     parsedIds.map((id) => [
       id,
