@@ -12,6 +12,7 @@ import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
 const publicStorefrontPaths = new Set(["/", "/story", "/locations"]);
+const previewSearchParameters = new Set(["preview", "draft"]);
 const publicCatalogPath =
   /^\/(?:products|bundles|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const publicCmsPath =
@@ -23,16 +24,19 @@ const isPublicStorefrontPath = (pathname: string) =>
   publicCatalogPath.test(pathname) ||
   publicCmsPath.test(pathname);
 
-const privateResponse = (response: Response) => {
-  const headers = new Headers(response.headers);
-  headers.set("cache-control", "private, no-store");
-  headers.delete("cloudflare-cdn-cache-control");
-  headers.delete("cache-tag");
-  return new Response(response.body, {
+const responseWithHeaders = (request: Request, response: Response, headers: Headers) =>
+  new Response(request.method === "HEAD" ? null : response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+
+const privateResponse = (request: Request, response: Response) => {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "private, no-store");
+  headers.delete("cloudflare-cdn-cache-control");
+  headers.delete("cache-tag");
+  return responseWithHeaders(request, response, headers);
 };
 
 const classifyResponse = (request: Request, response: Response) => {
@@ -51,7 +55,32 @@ const classifyResponse = (request: Request, response: Response) => {
     response.headers.get("cloudflare-cdn-cache-control") === "public, max-age=1209600" &&
     cacheTags !== null &&
     isPublicCacheTagHeader(cacheTags);
-  return retainsPublicPolicy ? response : privateResponse(response);
+  return retainsPublicPolicy
+    ? responseWithHeaders(request, response, new Headers(response.headers))
+    : privateResponse(request, response);
+};
+
+const canonicalRedirect = (request: Request, origin: string) => {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return undefined;
+  }
+  const url = new URL(request.url);
+  const withoutTrailingSlash = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") : "/";
+  const canonicalPath = isPublicStorefrontPath(withoutTrailingSlash) ? withoutTrailingSlash : null;
+  if (
+    canonicalPath === null ||
+    [...url.searchParams.keys()].some((key) => previewSearchParameters.has(key))
+  ) {
+    return undefined;
+  }
+  const canonicalUrl = new URL(canonicalPath, origin);
+  if (url.toString() === canonicalUrl.toString()) {
+    return undefined;
+  }
+  return new Response(null, {
+    status: 308,
+    headers: { location: canonicalUrl.toString(), "cache-control": "private, no-store" },
+  });
 };
 
 const rejectedHostResponse = () =>
@@ -80,7 +109,11 @@ const acceptsMediaUploadSize = (request: Request) => {
   );
 };
 
-export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
+const dispatchStoreRequest = async (
+  request: Request,
+  environment: Env,
+  context: ExecutionContext,
+) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
   if (!origin) {
     return rejectedHostResponse();
@@ -89,7 +122,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
   if (isPublicMediaPath(pathname)) {
-    return servePublicMedia(request);
+    return privateResponse(request, await servePublicMedia(request));
   }
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     if (
@@ -99,7 +132,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     ) {
       return rejectedMediaUploadSizeResponse();
     }
-    return privateResponse(await api.fetch(request));
+    return privateResponse(request, await api.fetch(request));
   }
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     try {
@@ -109,10 +142,11 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
       });
       if (staff.kind === "awaiting_approval") {
         const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
-        return privateResponse(await handle(awaitingRequest, environment, context));
+        return privateResponse(request, await handle(awaitingRequest, environment, context));
       }
       if (staff.kind === "unavailable") {
         return privateResponse(
+          request,
           Response.json(
             { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
             { status: 503 },
@@ -133,6 +167,7 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
       presentationRequest = new Request(request, { headers: presentationHeaders });
     } catch {
       return privateResponse(
+        request,
         Response.json(
           { error: { code: "unavailable", message: "Staff authorization is unavailable" } },
           { status: 503 },
@@ -141,4 +176,57 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     }
   }
   return classifyResponse(request, await handle(presentationRequest, environment, context));
+};
+
+const isAnonymousCacheCandidate = (request: Request) => {
+  const url = new URL(request.url);
+  return (
+    (request.method === "GET" || request.method === "HEAD") &&
+    (isPublicStorefrontPath(url.pathname) || isPublicMediaPath(url.pathname)) &&
+    url.search === "" &&
+    !request.headers.has("authorization") &&
+    !request.headers.has("cookie")
+  );
+};
+
+export const dispatchStoreEntrypointRequest = (
+  request: Request,
+  environment: Env,
+  context: ExecutionContext,
+  mode: "cache" | "mutation",
+) =>
+  mode === "cache" && isPublicMediaPath(new URL(request.url).pathname)
+    ? servePublicMedia(request)
+    : dispatchStoreRequest(request, environment, context);
+
+const isCacheMutationRequest = (request: Request) => {
+  const pathname = new URL(request.url).pathname;
+  return (
+    request.method !== "GET" &&
+    request.method !== "HEAD" &&
+    (pathname === "/api/catalog" ||
+      pathname.startsWith("/api/catalog/") ||
+      pathname === "/api/cms" ||
+      pathname.startsWith("/api/cms/") ||
+      pathname === "/api/commerce-settings")
+  );
+};
+
+export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
+  const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
+  if (!origin) {
+    return rejectedHostResponse();
+  }
+
+  const redirect = canonicalRedirect(request, origin);
+  if (redirect) {
+    return redirect;
+  }
+
+  if (isAnonymousCacheCandidate(request)) {
+    return context.exports.StorefrontCache.fetch(request);
+  }
+  return isCacheMutationRequest(request)
+    ? context.exports.StorefrontCache.fetch(request)
+    : dispatchStoreRequest(request, environment, context);
 };

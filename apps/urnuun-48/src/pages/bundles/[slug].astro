@@ -1,6 +1,6 @@
 ---
 import { PersonalizationControls } from "@ecom/storefront";
-import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -15,7 +15,11 @@ if (!bundle) {
 }
 const shell = await storefront.readShell();
 const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
-applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${bundle.id}`]);
+applyPublicHtmlCache(Astro.response.headers, [
+  "store-shell",
+  "catalog",
+  productCacheTag(bundle.id),
+]);
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");

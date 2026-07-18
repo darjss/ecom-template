@@ -693,7 +693,7 @@ export const resolveStaffRequest = async (request: Request, input: unknown) => {
   return origin ? readStaffAuthSession(request, origin) : { kind: "unauthorized" as const };
 };
 
-export { resolveStoreRequestOrigin } from "./request-origin";
+export { readCanonicalStoreOrigin, resolveStoreRequestOrigin } from "./request-origin";
 
 export type StoreBackendInput = {
   readonly profile: unknown;

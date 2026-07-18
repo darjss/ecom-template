@@ -1,6 +1,6 @@
 ---
 import { PersonalizationControls, ProductVariantSelector } from "@ecom/storefront";
-import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import OrderingNotices from "../../components/OrderingNotices.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
@@ -20,7 +20,11 @@ const [personalizations, shell, orderingNotices] = await Promise.all([
   storefront.readOrderingNotices(),
 ]);
 const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
-applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
+applyPublicHtmlCache(Astro.response.headers, [
+  "store-shell",
+  "catalog",
+  productCacheTag(product.id),
+]);
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");

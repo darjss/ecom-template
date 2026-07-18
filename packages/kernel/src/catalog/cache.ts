@@ -1,5 +1,5 @@
 import type { Product } from "@ecom/contracts";
-import { env } from "cloudflare:workers";
+import { cache, env } from "cloudflare:workers";
 import { createLogger } from "evlog";
 import ky from "ky";
 import {
@@ -9,7 +9,7 @@ import {
 } from "./cache-contract";
 import { catalogQueries } from "./persistence";
 
-export const purgeCacheTags = async (tags: readonly string[]) => {
+const purgeCacheTags = async (tags: readonly string[]) => {
   const configuration = parseCachePurgeEnvironment(env);
   if (!configuration.success) {
     return { kind: "failed" as const, requestId: null };
@@ -31,7 +31,11 @@ export const purgeCacheTags = async (tags: readonly string[]) => {
     const requestId = parseCachePurgeRequestId(
       response.headers.get("cf-ray") ?? response.headers.get("cf-request-id"),
     );
-    return response.ok && body.success && body.output.success
+    if (!response.ok || !body.success || !body.output.success) {
+      return { kind: "failed" as const, requestId };
+    }
+    const workerPurge = await cache.purge({ tags: [...tags] });
+    return workerPurge.success
       ? { kind: "purged" as const, requestId }
       : { kind: "failed" as const, requestId };
   } catch {
@@ -41,13 +45,18 @@ export const purgeCacheTags = async (tags: readonly string[]) => {
 
 export const purgeCatalogListingCache = () => purgeCacheTags(["catalog"]);
 
+export const purgeCatalogItemCache = (catalogItemId: string) =>
+  purgeCacheTags(["catalog", `product:${catalogItemId}`]);
+
+export const purgeCmsCache = () => purgeCacheTags(["store-shell", "homepage", "catalog"]);
+
 export const resolvePendingCatalogCachePurge = async (product: Product) => {
   const debt = await catalogQueries.findCachePurgeDebt(product.id);
   if (!debt) {
     return { product, cache: "not_required" as const, cachePurgeRequestId: null };
   }
 
-  const purge = await purgeCacheTags(["catalog", `product:${product.id}`]);
+  const purge = await purgeCatalogItemCache(product.id);
   const log = createLogger({ action: "catalog.cache_purge", productId: product.id });
   let outcomeRecorded = false;
   try {

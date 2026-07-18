@@ -1,5 +1,6 @@
 ---
 import { ClientRouter } from "astro:transitions";
+import { readCanonicalStoreOrigin } from "@ecom/api";
 import "@ecom/ui/styles.css";
 import "../styles/tailwind.css";
 import "../styles/global.css";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const { title, description, noindex = false } = Astro.props;
+const canonicalUrl = new URL(Astro.url.pathname, readCanonicalStoreOrigin());
 ---
 <!doctype html>
 <html lang="mn">
@@ -20,7 +22,7 @@ const { title, description, noindex = false } = Astro.props;
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <meta name="theme-color" content="#f6f0df" />
-    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.url.origin)} />
+    <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{title}</title>
     <ClientRouter />

@@ -6,7 +6,7 @@ import {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { purgeCacheTags } from "../catalog/cache";
+import { purgeCmsCache } from "../catalog/cache";
 import { cmsQueries } from "./persistence";
 
 export type CmsOperationFailure = {
@@ -198,7 +198,7 @@ const resolvePurge = async () => {
   if (!debt) {
     return { cache: "not_required" as const, cachePurgeRequestId: null };
   }
-  const purge = await purgeCacheTags(["store-shell", "homepage", "catalog", "policies"]);
+  const purge = await purgeCmsCache();
   const recorded = await cmsQueries.recordPurge(
     debt.revision,
     purge.requestId,
@@ -285,7 +285,7 @@ export const saveCommerceSettings = async (
     if (!debt) {
       return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
     }
-    const purge = await purgeCacheTags(["store-shell", "homepage", "catalog", "policies"]);
+    const purge = await purgeCmsCache();
     const recorded = await cmsQueries.recordPurge(
       debt.revision,
       purge.requestId,

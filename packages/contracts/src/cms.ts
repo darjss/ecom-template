@@ -34,6 +34,7 @@ export const CmsDocumentKindSchema = v.picklist([
 export const CmsDocumentStatusSchema = v.picklist(["draft", "published"]);
 export const LocationIdSchema = typeId("location", "Location ID");
 export const PolicyIdSchema = typeId("policy", "Policy ID");
+export type PolicyId = v.InferOutput<typeof PolicyIdSchema>;
 export const PolicyKindSchema = v.picklist([
   "terms",
   "privacy",

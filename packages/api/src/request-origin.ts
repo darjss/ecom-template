@@ -10,6 +10,8 @@ const OriginSchema = v.pipe(
   }),
 );
 
+export const readCanonicalStoreOrigin = () => v.parse(OriginSchema, env.PUBLIC_STORE_ORIGIN);
+
 export const resolveStoreRequestOrigin = (request: Request, storeSlug: string) => {
   const canonicalOrigin = v.safeParse(OriginSchema, env.PUBLIC_STORE_ORIGIN);
   if (!canonicalOrigin.success) {
