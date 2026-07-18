@@ -110,7 +110,7 @@ const acceptsMediaUploadSize = (request: Request) => {
   );
 };
 
-export const dispatchStoreRequest = async (
+const dispatchStoreRequest = async (
   request: Request,
   environment: Env,
   context: ExecutionContext,
@@ -123,7 +123,7 @@ export const dispatchStoreRequest = async (
   const pathname = new URL(request.url).pathname;
   let presentationRequest: Request = request;
   if (isPublicMediaPath(pathname)) {
-    return servePublicMedia(request);
+    return privateResponse(request, await servePublicMedia(request));
   }
   if (pathname === "/api" || pathname.startsWith("/api/")) {
     if (
@@ -183,12 +183,21 @@ const isAnonymousCacheCandidate = (request: Request) => {
   const url = new URL(request.url);
   return (
     (request.method === "GET" || request.method === "HEAD") &&
-    isPublicStorefrontPath(url.pathname) &&
+    (isPublicStorefrontPath(url.pathname) || isPublicMediaPath(url.pathname)) &&
     url.search === "" &&
     !request.headers.has("authorization") &&
     !request.headers.has("cookie")
   );
 };
+
+export const dispatchCachedStoreRequest = (
+  request: Request,
+  environment: Env,
+  context: ExecutionContext,
+) =>
+  isPublicMediaPath(new URL(request.url).pathname)
+    ? servePublicMedia(request)
+    : dispatchStoreRequest(request, environment, context);
 
 export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
