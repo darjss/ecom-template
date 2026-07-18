@@ -34,7 +34,7 @@ const selectValues = (input: string, definition: PersonalizationDefinition) => {
       key: key.output,
       label: label.output,
       position,
-      state: "active" as const,
+      state: existing?.state ?? ("active" as const),
     };
   });
   return values.some((value) => value === null) ? null : values;
@@ -221,7 +221,7 @@ export const PersonalizationDefinitionEditor = (props: {
         </div>
         <Show when={inputError()}>
           <p role="alert" tabindex="-1" class="md:col-span-4">
-            Хоосон бус сонголтын мөр бүр хүчинтэй key|Нэр байх ёстой.
+            Key, харагдах нэр, бичвэрийн урт болон сонголтын мөрүүдийг шалгана уу.
           </p>
         </Show>
       </form>

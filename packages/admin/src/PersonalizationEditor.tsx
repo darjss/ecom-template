@@ -310,7 +310,7 @@ export const PersonalizationEditor = (props: { catalogItemId: CatalogItemId }) =
                     </Button>
                     <Show when={inputError()}>
                       <p role="alert" tabindex="-1">
-                        Хоосон бус сонголтын мөр бүр хүчинтэй key|Нэр байх ёстой.
+                        Key, харагдах нэр, бичвэрийн урт болон сонголтын мөрүүдийг шалгана уу.
                       </p>
                     </Show>
                     <Show when={mutation.error}>
