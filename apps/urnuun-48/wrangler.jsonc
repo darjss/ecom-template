@@ -22,14 +22,14 @@
     {
       "binding": "DB",
       "database_name": "urnuun-48-db",
-      "database_id": "00000000-0000-0000-0000-000000000048",
+      "database_id": "e1fb3ed5-5096-412e-92c9-1ac28fa49f90",
       "migrations_dir": "../../packages/kernel/migrations",
     },
   ],
   "kv_namespaces": [
     {
       "binding": "EPHEMERAL_KV",
-      "id": "00000000000000000000000000000048",
+      "id": "8d3beb443666471c8f3f8f06ba0c2cbc",
     },
   ],
   "r2_buckets": [
@@ -48,7 +48,7 @@
     },
   ],
   "vars": {
-    "PUBLIC_STORE_ORIGIN": "https://urnuun-48.shop.localhost",
-    "CLOUDFLARE_ZONE_ID": "",
+    "PUBLIC_STORE_ORIGIN": "https://urnuun-48-proof.amerikvitamin.mn",
+    "CLOUDFLARE_ZONE_ID": "dea7a51f4cd9dc30b093952261ecc99c",
   },
 }
