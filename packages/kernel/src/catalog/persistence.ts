@@ -27,7 +27,7 @@ import {
 import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
 import { catalogReaderQueries, findCatalogProductById } from "../catalog-reader/persistence";
-import { compactSku, skuFromVariantId } from "./sku";
+import { catalogSku, compactSku } from "./sku";
 
 const existsById = async (id: ProductId) => {
   const rows = await database()
@@ -113,7 +113,7 @@ export const catalogQueries = {
   async create(actor: StaffActor, input: CreateProductInput) {
     const id = createProductId();
     const variantId = createVariantId();
-    const sku = skuFromVariantId(variantId);
+    const sku = catalogSku(input.slug, "variant", variantId);
     const stockItemId = createStockItemId();
     const correlationId = crypto.randomUUID();
     const now = new Date();

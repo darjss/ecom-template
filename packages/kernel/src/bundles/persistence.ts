@@ -19,7 +19,7 @@ import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import type { StaffActor } from "../staff/operations";
-import { compactSku } from "../catalog/sku";
+import { catalogSku, compactSku } from "../catalog/sku";
 import { database } from "../db/database";
 import {
   auditEvents,
@@ -32,8 +32,6 @@ import {
   skus,
   variants,
 } from "../db/schema";
-
-const skuFromBundleId = (id: BundleId) => `BUNDLE-${id.slice("bundle_".length).toUpperCase()}`;
 
 const acceptedBundleAuditSelection = (
   actor: StaffActor,
@@ -262,7 +260,7 @@ export const bundleQueries = {
   async create(input: CreateBundleInput) {
     const db = database();
     const id = createBundleId();
-    const sku = skuFromBundleId(id);
+    const sku = catalogSku(input.slug, "bundle", id);
     const now = new Date();
     try {
       await db.batch([

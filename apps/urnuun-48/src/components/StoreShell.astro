@@ -20,7 +20,17 @@ const linkAttributes = (openInNewTab: boolean) =>
       ? <><a aria-current={currentPath === "/" ? "page" : undefined} href="/">Дэлгүүр</a><a aria-current={currentPath.startsWith("/locations") ? "page" : undefined} href="/locations">Байршил</a></>
       : shell.primary.map((item) => <span class="relative"><a aria-current={item.href === currentPath ? "page" : undefined} href={item.href} {...linkAttributes(item.openInNewTab)}>{item.label}</a>{item.children.length > 0 && <ul class="m-0 flex list-none gap-3 p-0 pt-2">{item.children.map((child) => <li><a aria-current={child.href === currentPath ? "page" : undefined} href={child.href} {...linkAttributes(child.openInNewTab)}>{child.label}</a></li>)}</ul>}</span>) }
   </nav>
-  <a class="admin-link" href="/admin">Удирдлага</a>
+  <span class="relative flex items-center gap-4 justify-self-end">
+    <details class="group static sm:relative">
+      <summary class="cursor-pointer list-none font-bold underline decoration-transparent underline-offset-4 hover:decoration-current focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-blue-600">Хайлт</summary>
+      <form action="/search" method="get" class="absolute right-0 top-[calc(100%+1rem)] z-20 flex w-[min(22rem,calc(100vw-2rem))] gap-2 rounded-lg border border-[var(--line)] bg-white p-3 shadow-xl">
+        <label class="sr-only" for="header-search-input">Каталогоос хайх</label>
+        <input id="header-search-input" name="q" type="search" required placeholder="Нэр эсвэл SKU" class="h-11 min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-white px-3 text-base focus-visible:outline-3 focus-visible:outline-blue-600" />
+        <button type="submit" class="h-11 rounded-lg border-0 bg-[var(--accent)] px-4 font-bold text-[var(--accent-ink)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Хайх</button>
+      </form>
+    </details>
+    <a class="admin-link" href="/admin">Удирдлага</a>
+  </span>
 </header>
 <slot />
 <footer>

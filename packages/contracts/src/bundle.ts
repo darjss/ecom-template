@@ -5,6 +5,7 @@ import {
   BundleIdSchema,
   CachePurgeDebtSchema,
   CachePurgeRequestIdSchema,
+  CatalogDescriptionSchema,
   CatalogImageSchema,
   CatalogNameSchema,
   CatalogSlugSchema,
@@ -154,7 +155,7 @@ export const BundleSchema = v.strictObject({
   slug: CatalogSlugSchema,
   state: v.picklist(["draft", "published", "archived"]),
   name: CatalogNameSchema,
-  description: v.pipe(v.string(), v.maxLength(5_000)),
+  description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
   cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
@@ -175,13 +176,13 @@ export const BundleMutationResponseSchema = v.strictObject({
 export const CreateBundleInputSchema = v.strictObject({
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
-  description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
+  description: v.optional(CatalogDescriptionSchema, ""),
   priceMnt: PriceMntSchema,
 });
 export const UpdateBundleInputSchema = v.strictObject({
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
-  description: v.pipe(v.string(), v.maxLength(5_000)),
+  description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
 });
 export const SaveBundleComponentsInputSchema = v.strictObject({
@@ -232,7 +233,7 @@ export const PublicBundleDetailSchema = v.strictObject({
   id: BundleIdSchema,
   slug: CatalogSlugSchema,
   name: CatalogNameSchema,
-  description: v.pipe(v.string(), v.maxLength(5_000)),
+  description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
   images: v.array(PublicCatalogImageSchema),

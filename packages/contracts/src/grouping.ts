@@ -10,6 +10,7 @@ import {
   ProductStateSchema,
   PublicCatalogItemSummarySchema,
 } from "./catalog";
+import { NormalizedTextSchema } from "./text";
 
 const groupingIdSchema = (prefix: string, label: string) =>
   v.pipe(
@@ -34,8 +35,13 @@ export const GroupingPositionSchema = v.pipe(
   v.minValue(0),
   v.maxValue(10_000),
 );
-export const TagLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
-export const GroupingDescriptionSchema = v.pipe(v.string(), v.maxLength(5_000));
+export const TagLabelSchema = v.pipe(
+  NormalizedTextSchema,
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(80),
+);
+export const GroupingDescriptionSchema = v.pipe(NormalizedTextSchema, v.maxLength(5_000));
 const GroupingTimestampSchema = v.pipe(v.string(), v.isoTimestamp());
 
 export const GroupingCatalogItemSchema = v.strictObject({

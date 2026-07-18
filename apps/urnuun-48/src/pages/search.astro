@@ -1,0 +1,156 @@
+---
+import { parseCatalogSearchParameters } from "@ecom/api";
+import { SearchAutocomplete } from "@ecom/storefront";
+import StoreShell from "../components/StoreShell.astro";
+import StoreLayout from "../layouts/StoreLayout.astro";
+import { storefront } from "../api";
+
+export const prerender = false;
+Astro.response.headers.set("cache-control", "private, no-store");
+const parameters = parseCatalogSearchParameters(Astro.url.searchParams, {
+  allowEmptyQuery: true,
+  allowLimit: false,
+});
+const canonical = new URL("/search", Astro.url.origin);
+if (parameters.value.query) {
+  canonical.searchParams.set("q", parameters.value.query);
+}
+if (parameters.value.category) {
+  canonical.searchParams.set("category", parameters.value.category);
+}
+if (parameters.value.collection) {
+  canonical.searchParams.set("collection", parameters.value.collection);
+}
+if (parameters.value.page > 1) {
+  canonical.searchParams.set("page", String(parameters.value.page));
+}
+if (!parameters.success || Astro.url.search !== canonical.search) {
+  return Astro.redirect(canonical.pathname + canonical.search, 307);
+}
+const { query, category, collection, page } = parameters.value;
+const [summary, shell, groupings] = await Promise.all([
+  storefront.readSummary(),
+  storefront.readShell(),
+  storefront.listPublishedGroupings(),
+]);
+let search: Awaited<ReturnType<typeof storefront.searchCatalog>> | undefined;
+let searchFailed = false;
+if (query) {
+  try {
+    search = await storefront.searchCatalog({
+      query,
+      ...(category ? { category } : {}),
+      ...(collection ? { collection } : {}),
+      page,
+      limit: 24,
+    });
+  } catch {
+    searchFailed = true;
+  }
+}
+const storeName = shell.identity?.displayName ?? summary.storeName;
+const pageHref = (nextPage: number) => {
+  const url = new URL("/search", Astro.url.origin);
+  url.searchParams.set("q", query);
+  if (category) {
+    url.searchParams.set("category", category);
+  }
+  if (collection) {
+    url.searchParams.set("collection", collection);
+  }
+  if (nextPage > 1) {
+    url.searchParams.set("page", String(nextPage));
+  }
+  return url.pathname + url.search;
+};
+const sourceLabels = {
+  sku_exact: "SKU яг таарсан",
+  native: "Монгол нэрээр таарсан",
+  krilleer_transliteration: "Латин галиг таарсан",
+};
+const fieldLabels = {
+  sku: "SKU талбар",
+  slug: "Хаяг талбар",
+  title: "Нэр талбар",
+  category_tags: "Ангилал, шошго талбар",
+  description: "Тайлбар талбар",
+  mixed: "Олон талбарт таарсан",
+};
+---
+<StoreLayout title={`Хайлт · ${storeName}`} description={`${storeName} каталогийн хайлт`} noindex>
+  <StoreShell shell={shell} currentPath="/search" fallbackName={summary.storeName}>
+    <main id="content" class="mx-auto min-h-[60vh] w-full max-w-6xl px-5 py-10 sm:px-8 lg:py-16">
+      <header class="mb-8 max-w-3xl">
+        <p class="m-0 mb-2 font-bold text-[var(--accent)]">Каталогийн хайлт</p>
+        <h1 class="m-0 text-balance text-4xl font-extrabold tracking-[-0.035em] text-[var(--ink)] sm:text-6xl">Хэрэгтэй зүйлээ хурдан олоорой</h1>
+      </header>
+      <form action="/search" method="get" class="relative z-10 mb-10 flex flex-col gap-3 rounded-xl bg-[var(--wood)] p-4 sm:flex-row sm:items-end">
+        <div class="relative flex-1">
+          <label class="sr-only" for="catalog-search-input">Каталогоос хайх</label>
+          <input
+            id="catalog-search-input"
+            name="q"
+            type="search"
+            role="combobox"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="catalog-search-suggestions"
+            aria-expanded="false"
+            value={query}
+            placeholder="Нэр эсвэл SKU"
+            class="h-12 w-full rounded-lg border border-[var(--line)] bg-white px-4 text-base text-[var(--ink)] outline-none placeholder:text-stone-600 focus-visible:ring-3 focus-visible:ring-blue-600"
+          />
+          <SearchAutocomplete client:only="solid-js" inputId="catalog-search-input" initialQuery={query} />
+        </div>
+        <label class="grid gap-1 text-sm font-bold text-[var(--ink)]">
+          Ангилал
+          <select name="category" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3">
+            <option value="">Бүгд</option>
+            {groupings.categories.map((group) => <option value={group.slug} selected={category === group.slug}>{group.name}</option>)}
+          </select>
+        </label>
+        <label class="grid gap-1 text-sm font-bold text-[var(--ink)]">
+          Цуглуулга
+          <select name="collection" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3">
+            <option value="">Бүгд</option>
+            {groupings.collections.map((group) => <option value={group.slug} selected={collection === group.slug}>{group.name}</option>)}
+          </select>
+        </label>
+        <button type="submit" class="h-12 rounded-lg border-0 bg-[var(--accent)] px-6 font-bold text-[var(--accent-ink)] hover:brightness-90 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-blue-600 active:scale-[0.97]">Хайх</button>
+      </form>
+
+      {!query && <section class="border-y border-[var(--line)] py-12"><h2 class="m-0 text-2xl font-bold text-[var(--ink)]">Нэр эсвэл SKU оруулна уу</h2><p class="mb-0 max-w-prose text-stone-700">Монгол кирилл болон латин галиг ашиглан бүтээгдэхүүн, багц хайж болно.</p></section>}
+      {searchFailed && <section role="alert" class="rounded-lg border border-red-300 bg-red-50 p-5 text-red-900"><h2 class="m-0 text-xl font-bold">Хайлт түр ажиллахгүй байна</h2><p class="mb-0">Дахин оролдоно уу.</p></section>}
+      {search && (
+        <>
+          <div class="mb-5 flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--line)] pb-4">
+            <h2 class="m-0 text-2xl font-extrabold text-[var(--ink)]">“{search.query}” үр дүн</h2>
+            <span class="text-sm font-bold text-stone-700">{search.results.page}-р хуудас</span>
+          </div>
+          {search.ambiguity && <aside class="mb-5 rounded-lg bg-amber-100 p-4 text-amber-950" aria-label="Галигийн тайлбар"><strong>Олон боломжит үр дүн байна.</strong> Латин галиг {search.ambiguity.candidateIds.length} бараанд таарсан бөгөөд итгэлцэл бага тул сонголтыг автоматаар нарийсгаагүй.</aside>}
+          {search.results.items.length === 0
+            ? <section class="py-12 text-center"><h3 class="m-0 text-2xl font-bold text-[var(--ink)]">Илэрц олдсонгүй</h3><p class="mb-0 text-stone-700">Үг үсгээ шалгах эсвэл шүүлтүүрээ цэвэрлээд дахин хайна уу.</p></section>
+            : <ol class="m-0 grid list-none gap-0 border-t border-[var(--line)] p-0">
+                {search.results.items.map((item) => <li class="grid gap-4 border-b border-[var(--line)] py-5 sm:grid-cols-[7rem_1fr_auto] sm:items-center">
+                  {item.images[0]
+                    ? <img src={`/media/${item.images[0].mediaAssetId}/320.webp`} alt={item.images[0].altText} width="112" height="112" loading="lazy" class="aspect-square w-28 rounded-lg object-cover" />
+                    : <div class="grid aspect-square w-28 place-items-center rounded-lg bg-stone-100 text-sm font-bold text-stone-700" aria-hidden="true">48</div>}
+                  <div>
+                    <p class="m-0 mb-1 text-sm font-bold text-stone-700">{item.kind === "product" ? "Бүтээгдэхүүн" : "Багц"}</p>
+                    <h3 class="m-0 text-xl font-extrabold text-[var(--ink)]"><a class="underline decoration-transparent underline-offset-4 hover:decoration-current" href={`/${item.kind === "product" ? "products" : "bundles"}/${item.slug}`}>{item.name}</a></h3>
+                    <p class="my-2 line-clamp-2 max-w-prose text-stone-700">{item.description}</p>
+                    <p class="m-0 text-sm text-stone-700">{sourceLabels[item.matchedSource]} · {fieldLabels[item.matchedField]} · Итгэлцэл: {item.confidence}</p>
+                  </div>
+                  <strong class="whitespace-nowrap text-lg tabular-nums text-[var(--ink)]">{new Intl.NumberFormat("mn-MN").format(item.priceMnt)} ₮</strong>
+                </li>)}
+              </ol>}
+          {(search.shortcuts.categories.length > 0 || search.shortcuts.collections.length > 0) && <nav class="mt-8 border-t border-[var(--line)] pt-5" aria-label="Ангилал ба цуглуулгын товчлол"><h3 class="mt-0 text-lg font-bold">Холбогдох хэсгүүд</h3><div class="flex flex-wrap gap-2">{[...search.shortcuts.categories, ...search.shortcuts.collections].map((shortcut) => <a href={shortcut.url} class="rounded-full border border-[var(--line)] bg-white px-4 py-2 font-bold text-[var(--ink)] no-underline hover:bg-amber-50 focus-visible:outline-3 focus-visible:outline-blue-600">{shortcut.label}</a>)}</div></nav>}
+          <nav class="mt-10 flex items-center justify-between" aria-label="Хайлтын хуудсууд">
+            {page > 1 ? <a class="rounded-lg border border-[var(--line)] px-4 py-3 font-bold text-[var(--ink)]" href={pageHref(page - 1)}>← Өмнөх</a> : <span />}
+            {search.results.hasNext && <a class="rounded-lg bg-[var(--accent)] px-4 py-3 font-bold text-[var(--accent-ink)] no-underline" href={pageHref(page + 1)}>Дараах →</a>}
+          </nav>
+        </>
+      )}
+    </main>
+  </StoreShell>
+</StoreLayout>
