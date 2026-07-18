@@ -426,9 +426,14 @@ export const HomepageEditor = (
                 <select
                   class={fieldClass}
                   value=""
+                  disabled={field().state.value.length >= 12}
                   onChange={(event) => {
                     const id = event.currentTarget.value;
-                    if (id && !field().state.value.includes(id)) {
+                    if (
+                      id &&
+                      field().state.value.length < 12 &&
+                      !field().state.value.includes(id)
+                    ) {
                       field().handleChange([...field().state.value, id]);
                     }
                     event.currentTarget.value = "";

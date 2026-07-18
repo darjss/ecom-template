@@ -508,8 +508,7 @@ footer {
     display: flex;
     justify-content: flex-end;
   }
-  .featured,
-  .ordering-notices {
+  .featured {
     grid-template-columns: 1fr;
   }
   .product-visual {
@@ -535,6 +534,11 @@ footer {
   padding: clamp(3rem, 8vw, 7rem) clamp(1.2rem, 7vw, 7rem);
   background: var(--yellow);
   color: var(--ink);
+}
+@media (max-width: 40rem) {
+  .ordering-notices {
+    grid-template-columns: 1fr;
+  }
 }
 .ordering-notices h2 {
   max-width: 12ch;

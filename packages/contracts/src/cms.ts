@@ -213,6 +213,10 @@ export const OrderingNoticesDocumentSchema = v.strictObject({
       }),
     ),
     v.maxLength(12),
+    v.check(
+      (notices) => new Set(notices.map(({ id }) => id)).size === notices.length,
+      "Notice IDs must be unique",
+    ),
   ),
 });
 
