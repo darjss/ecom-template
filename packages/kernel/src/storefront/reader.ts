@@ -5,7 +5,12 @@ import {
   PublicGroupingSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type CommerceSettings,
+  type LocationsDocument,
+  type NavigationDocument,
   type PersonalizationDefinition,
+  type PoliciesDocument,
+  type StorefrontIdentityDocument,
   type PublicBundleDetail,
   type PublicGrouping,
   type PublicGroupingListing,
@@ -18,9 +23,15 @@ import { bundleQueries, readPersonalizations } from "../bundles/persistence";
 import { catalogQueries } from "../catalog/persistence";
 import { readDatabaseHealth } from "../db/health";
 import { groupingQueries } from "../grouping/persistence";
+import { cmsQueries } from "../cms/persistence";
 
 export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
+  readonly readIdentity: () => Promise<StorefrontIdentityDocument | undefined>;
+  readonly readNavigation: () => Promise<NavigationDocument | undefined>;
+  readonly readLocations: () => Promise<LocationsDocument | undefined>;
+  readonly readPolicies: () => Promise<PoliciesDocument | undefined>;
+  readonly readCommerceSettings: () => Promise<CommerceSettings | undefined>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
   readonly readPublishedBundle: (slug: string) => Promise<PublicBundleDetail | undefined>;
@@ -85,6 +96,23 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
     }
     return summary;
   },
+  readIdentity: async () => {
+    const document = await cmsQueries.read("storefront_identity", "published");
+    return document?.kind === "storefront_identity" ? document.content : undefined;
+  },
+  readNavigation: async () => {
+    const document = await cmsQueries.read("navigation", "published");
+    return document?.kind === "navigation" ? document.content : undefined;
+  },
+  readLocations: async () => {
+    const document = await cmsQueries.read("locations", "published");
+    return document?.kind === "locations" ? document.content : undefined;
+  },
+  readPolicies: async () => {
+    const document = await cmsQueries.read("policies", "published");
+    return document?.kind === "policies" ? document.content : undefined;
+  },
+  readCommerceSettings: () => cmsQueries.readSettings(),
   listPublishedProducts,
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);

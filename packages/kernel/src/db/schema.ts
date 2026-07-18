@@ -156,6 +156,86 @@ export const auditEvents = sqliteTable(
   ],
 );
 
+export const cmsDocuments = sqliteTable(
+  "cms_documents",
+  {
+    kind: text("kind", {
+      enum: [
+        "storefront_identity",
+        "homepage",
+        "navigation",
+        "locations",
+        "policies",
+        "announcement",
+        "ordering_notices",
+      ],
+    }).notNull(),
+    status: text("status", { enum: ["draft", "published"] }).notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    contentJson: text("content_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    publishedAt: integer("published_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.kind, table.status] }),
+    check(
+      "cms_documents_kind_check",
+      sql`${table.kind} IN ('storefront_identity', 'homepage', 'navigation', 'locations', 'policies', 'announcement', 'ordering_notices')`,
+    ),
+    check("cms_documents_status_check", sql`${table.status} IN ('draft', 'published')`),
+    check("cms_documents_version_check", sql`${table.schemaVersion} = 1`),
+    check(
+      "cms_documents_lifecycle_check",
+      sql`(${table.status} = 'draft' AND ${table.publishedAt} IS NULL) OR (${table.status} = 'published' AND ${table.publishedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const cmsCachePurgeDebt = sqliteTable(
+  "cms_cache_purge_debt",
+  {
+    key: text("key").primaryKey(),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("cms_cache_purge_debt_key_check", sql`${table.key} = 'storefront'`),
+    check("cms_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
+    check("cms_cache_purge_debt_attempt_check", sql`${table.attemptCount} BETWEEN 0 AND 1000000`),
+  ],
+);
+
+export const commerceSettings = sqliteTable(
+  "commerce_settings",
+  {
+    key: text("key").primaryKey(),
+    bankTransferEnabled: integer("bank_transfer_enabled", { mode: "boolean" }).notNull(),
+    cashOnDeliveryEnabled: integer("cash_on_delivery_enabled", { mode: "boolean" }).notNull(),
+    customerAccountsEnabled: integer("customer_accounts_enabled", { mode: "boolean" }).notNull(),
+    telegramEnabled: integer("telegram_enabled", { mode: "boolean" }).notNull(),
+    pickupEnabled: integer("pickup_enabled", { mode: "boolean" }).notNull(),
+    deliveryEnabled: integer("delivery_enabled", { mode: "boolean" }).notNull(),
+    deliveryFeeMnt: integer("delivery_fee_mnt").notNull(),
+    freeDeliveryThresholdMnt: integer("free_delivery_threshold_mnt"),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("commerce_settings_key_check", sql`${table.key} = 'commerce'`),
+    check(
+      "commerce_settings_delivery_fee_check",
+      sql`${table.deliveryFeeMnt} BETWEEN 0 AND 10000000`,
+    ),
+    check(
+      "commerce_settings_free_threshold_check",
+      sql`${table.freeDeliveryThresholdMnt} IS NULL OR ${table.freeDeliveryThresholdMnt} BETWEEN 0 AND 1000000000`,
+    ),
+  ],
+);
+
 export const catalogItems = sqliteTable(
   "catalog_items",
   {

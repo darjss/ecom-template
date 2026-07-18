@@ -7,14 +7,38 @@ import { storefront } from "../api";
 export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
 const summary = await storefront.readSummary();
-const products = await storefront.listPublishedProducts();
-const groupings = await storefront.listPublishedGroupings();
+const [identity, navigation, locations, policies, commerceSettings, products, groupings] = await Promise.all([
+  storefront.readIdentity(),
+  storefront.readNavigation(),
+  storefront.readLocations(),
+  storefront.readPolicies(),
+  storefront.readCommerceSettings(),
+  storefront.listPublishedProducts(),
+  storefront.listPublishedGroupings(),
+]);
+const storeName = identity?.displayName ?? summary.storeName;
+const locationById = new Map(locations?.locations.map((location) => [location.id, location]));
+const policyById = new Map(policies?.policies.map((policy) => [policy.id, policy]));
+const categoryById = new Map(groupings.categories.map((category) => [category.id, category]));
+const collectionById = new Map(groupings.collections.map((collection) => [collection.id, collection]));
+const productById = new Map(products.map((product) => [product.id, product]));
+const destinationHref = (destination: typeof navigation extends undefined ? never : NonNullable<typeof navigation>["primary"][number]["destination"]) => {
+  switch (destination.kind) {
+    case "home": return "/";
+    case "category": return categoryById.get(destination.id) ? `/categories/${categoryById.get(destination.id)?.slug}` : undefined;
+    case "collection": return collectionById.get(destination.id) ? `/collections/${collectionById.get(destination.id)?.slug}` : undefined;
+    case "catalog_item": return productById.get(destination.id) ? `/products/${productById.get(destination.id)?.slug}` : undefined;
+    case "location": return locationById.has(destination.id) ? `/locations/${destination.id}` : undefined;
+    case "policy": return policyById.get(destination.id) ? `/policies/${policyById.get(destination.id)?.kind}` : undefined;
+    case "external": return destination.url;
+  }
+};
 ---
-<StoreLayout title={`${summary.storeName} · Өдөр бүрийн хэрэгцээ`} description="Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт">
+<StoreLayout title={`${storeName} · Өдөр бүрийн хэрэгцээ`} description={identity?.summary ?? "Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт"}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
   <header class="site-header">
-    <a class="wordmark" href="/" aria-current="page" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
-    <nav aria-label="Үндсэн цэс"><a aria-current="page" href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
+    <a class="wordmark" href="/" aria-current="page" transition:name="wordmark"><b>48</b><span>{storeName}</span></a>
+    <nav aria-label="Үндсэн цэс">{navigation?.primary.filter((item) => item.enabled).map((item) => { const href = destinationHref(item.destination); return href ? <a aria-current={item.destination.kind === "home" ? "page" : undefined} href={href}>{item.label}</a> : null; }) ?? <><a aria-current="page" href="/">Дэлгүүр</a><a href="/locations">Байршил</a></>}</nav>
     <a class="admin-link" href="/admin">Удирдлага</a>
   </header>
   <main id="content">
@@ -34,7 +58,7 @@ const groupings = await storefront.listPublishedGroupings();
         <div class="pantry-copy">
           <p class="kicker">Өдөр бүрийн хэрэгцээг цэгцтэй</p>
           <h1 id="pantry-title">Гэрийн<br /><span>тавиур.</span></h1>
-          <p>Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.</p>
+          <p>{identity?.tagline ?? "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой."}</p>
           <a href="#featured">Тавиур үзэх</a>
         </div>
         <div class="pantry-image">
@@ -45,7 +69,7 @@ const groupings = await storefront.listPublishedGroupings();
           <img src="/media/b01-cleaning-bundle.webp" alt="Угаалгын нунтаг болон аяга таваг угаагчийн цэвэрлэгээний хослол" width="1000" height="1000" loading="lazy" />
           <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>Каталогоос сонгоорой</span>
         </article>
-        <div class="delivery-bay"><span>120,000 ₮</span><strong>дээш хүргэлт үнэгүй</strong><small>Улаанбаатар хотод</small></div>
+        <div class="delivery-bay"><span>{new Intl.NumberFormat("mn-MN").format(commerceSettings?.freeDeliveryThresholdMnt ?? 120000)} ₮</span><strong>дээш хүргэлт үнэгүй</strong><small>{commerceSettings?.deliveryEnabled === false ? "Хүргэлт түр хаалттай" : "Улаанбаатар хотод"}</small></div>
       </div>
       <div class="pantry-plinth"><span>01 Хүнс</span><span>02 Гэр ахуй</span><span>03 Жижиг бэлэг</span><b>ӨРНҮҮН / 48</b></div>
     </section>
@@ -68,5 +92,5 @@ const groupings = await storefront.listPublishedGroupings();
       <CustomerAuthIsland client:only="solid-js" />
     </section>
   </main>
-  <footer><span>Өрнүүн 48</span><span>{summary.location}</span></footer>
+  <footer><span>{storeName}</span><span>{locations?.locations.find((location) => location.active)?.address ?? summary.location}</span></footer>
 </StoreLayout>

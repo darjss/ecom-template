@@ -5,6 +5,14 @@ export const storeDefinition = {
     location: "Улаанбаатар, 48-р дэлгүүр",
     currency: "MNT",
     locale: "mn-MN",
+    capabilities: {
+      bankTransfer: true,
+      cashOnDelivery: true,
+      customerAccounts: true,
+      telegram: true,
+      pickup: true,
+      delivery: true,
+    },
   },
   providers: {
     payment: "byl",

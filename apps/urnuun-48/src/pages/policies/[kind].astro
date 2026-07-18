@@ -1,0 +1,22 @@
+---
+import { applyPublicHtmlCache, renderPolicyMarkdown } from "@ecom/storefront";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+const allowedKinds = new Set(["terms", "privacy", "delivery", "returns_refunds", "payment"]);
+const kind = Astro.params.kind ?? "";
+const [identity, document] = await Promise.all([storefront.readIdentity(), storefront.readPolicies()]);
+const policy = allowedKinds.has(kind) ? document?.policies.find((entry) => entry.kind === kind) : undefined;
+if (!policy) {
+  Astro.response.status = 404;
+}
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", ...(policy ? [`policy:${policy.id}`] : [])]);
+const content = policy ? renderPolicyMarkdown(policy.contentMarkdown) : "";
+---
+<StoreLayout title={`${policy?.title ?? "Бодлого олдсонгүй"} · ${identity?.displayName ?? "Өрнүүн 48"}`} description={policy?.title ?? "Бодлого олдсонгүй"}>
+  <header class="site-header"><a class="wordmark" href="/"><b>48</b><span>{identity?.displayName ?? "Өрнүүн"}</span></a><nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/locations">Байршил</a></nav></header>
+  <main id="content" class="mx-auto max-w-3xl px-5 py-16 sm:px-10">
+    {policy ? <article><h1 class="text-4xl font-extrabold tracking-tight sm:text-6xl">{policy.title}</h1><div class="prose mt-10 max-w-none" set:html={content} /></article> : <><h1>Бодлого олдсонгүй</h1><a href="/">Нүүр хуудас руу буцах</a></>}
+  </main>
+</StoreLayout>

@@ -63,6 +63,7 @@ import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createBundleRoutes } from "./bundle-routes";
 import { createCustomerAuthRoutes } from "./customer-routes";
+import { createCmsRoutes } from "./cms-routes";
 import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 
@@ -273,6 +274,9 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       return responseValue;
     })
     .use(createCustomerAuthRoutes(definition, smsGateway))
+    .use(
+      createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
+    )
     .all("/auth/staff/*", async ({ body, request }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
       if (!origin) {

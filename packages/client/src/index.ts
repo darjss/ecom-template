@@ -8,6 +8,13 @@ export {
 } from "./bundle/request";
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
+export {
+  requestCmsDocuments,
+  requestCmsMutation,
+  requestCommerceSettings,
+  requestCommerceSettingsMutation,
+  type CmsMutation,
+} from "./cms/request";
 export { createApiClient } from "./eden";
 export {
   requestCreateCategory,
@@ -34,6 +41,12 @@ export {
 } from "./query/bundle";
 export { catalogImageMutationOptions } from "./query/catalog-media";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
+export {
+  cmsMutationOptions,
+  cmsQueryOptions,
+  commerceSettingsMutationOptions,
+  commerceSettingsQueryOptions,
+} from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";

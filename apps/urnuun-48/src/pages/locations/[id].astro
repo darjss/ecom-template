@@ -1,0 +1,19 @@
+---
+import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+applyPublicHtmlCache(Astro.response.headers, ["store-shell"]);
+const [identity, document] = await Promise.all([storefront.readIdentity(), storefront.readLocations()]);
+const location = document?.locations.find(({ id, active }) => active && id === Astro.params.id);
+if (!location) {
+  Astro.response.status = 404;
+}
+---
+<StoreLayout title={`${location?.name ?? "Байршил олдсонгүй"} · ${identity?.displayName ?? "Өрнүүн 48"}`} description={location?.address ?? "Байршил олдсонгүй"}>
+  <header class="site-header"><a class="wordmark" href="/"><b>48</b><span>{identity?.displayName ?? "Өрнүүн"}</span></a><nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/locations">Байршил</a></nav></header>
+  <main id="content" class="mx-auto max-w-3xl px-5 py-16 sm:px-10">
+    {location ? <><a href="/locations">← Бүх байршил</a><h1 class="mt-8 text-4xl font-extrabold tracking-tight sm:text-6xl">{location.name}</h1><dl class="mt-10 grid gap-6"><div><dt class="font-bold">Хаяг</dt><dd class="m-0 mt-1">{location.address}</dd></div><div><dt class="font-bold">Ажиллах цаг</dt><dd class="m-0 mt-1">{location.openingHours}</dd></div>{location.phone && <div><dt class="font-bold">Утас</dt><dd class="m-0 mt-1"><a href={`tel:${location.phone}`}>{location.phone}</a></dd></div>}</dl>{location.pickupEnabled && <p class="mt-10 rounded-lg bg-(--butter) p-4 font-bold">Энэ байршлаас захиалгаа очиж авах боломжтой.</p>}</> : <><h1>Байршил олдсонгүй</h1><a href="/locations">Байршлын жагсаалт руу буцах</a></>}
+  </main>
+</StoreLayout>
