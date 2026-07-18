@@ -15,6 +15,7 @@ import {
   bundleComponents,
   catalogCachePurgeDebts,
   catalogItems,
+  cmsDocuments,
   inventoryEntries,
   optionGroups,
   optionValues,
@@ -439,6 +440,16 @@ export const catalogQueries = {
           eq(dependencyBundle.state, "published"),
         ),
       );
+    const publishedHomepageDependency = db
+      .select({ kind: cmsDocuments.kind })
+      .from(cmsDocuments)
+      .where(
+        and(
+          eq(cmsDocuments.kind, "homepage"),
+          eq(cmsDocuments.status, "published"),
+          sql`EXISTS (SELECT 1 FROM json_each(${cmsDocuments.contentJson}, '$.featuredCatalogItemIds') WHERE value = ${id})`,
+        ),
+      );
     const publicationIsValid = and(
       sql`${catalogItems.priceMnt} > 0`,
       notExists(invalidActiveVariant),
@@ -454,6 +465,7 @@ export const catalogQueries = {
             eq(catalogItems.id, id),
             eq(catalogItems.state, expected),
             notExists(publishedBundleDependency),
+            notExists(publishedHomepageDependency),
           )
         : and(eq(catalogItems.id, id), eq(catalogItems.state, expected), publicationIsValid);
     const now = new Date();
@@ -559,12 +571,28 @@ export const catalogQueries = {
             )
             .limit(1)
         : [];
+    const homepageDependency =
+      transition === "archive"
+        ? await db
+            .select({ kind: cmsDocuments.kind })
+            .from(cmsDocuments)
+            .where(
+              and(
+                eq(cmsDocuments.kind, "homepage"),
+                eq(cmsDocuments.status, "published"),
+                sql`EXISTS (SELECT 1 FROM json_each(${cmsDocuments.contentJson}, '$.featuredCatalogItemIds') WHERE value = ${id})`,
+              ),
+            )
+            .limit(1)
+        : [];
     const kind =
       dependency.length > 0
         ? "published_bundle_dependency"
-        : resolved && resolved.state !== expected
-          ? "invalid_lifecycle"
-          : "invalid_publication";
+        : homepageDependency.length > 0
+          ? "published_cms_dependency"
+          : resolved && resolved.state !== expected
+            ? "invalid_lifecycle"
+            : "invalid_publication";
     await recordRejectedAttempt(actor, action, "product", id, kind);
     return { kind };
   },

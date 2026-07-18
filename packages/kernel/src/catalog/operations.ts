@@ -19,6 +19,7 @@ export type CatalogOperationFailure = {
     | "invalid_lifecycle"
     | "invalid_publication"
     | "published_bundle_dependency"
+    | "published_cms_dependency"
     | "reservation_blocked"
     | "inventory_inconsistent"
     | "inventory_limit"
@@ -116,7 +117,8 @@ export const transitionProduct = async (
         result.kind === "not_found" ||
         result.kind === "invalid_lifecycle" ||
         result.kind === "invalid_publication" ||
-        result.kind === "published_bundle_dependency"
+        result.kind === "published_bundle_dependency" ||
+        result.kind === "published_cms_dependency"
           ? result.kind
           : "infrastructure_unavailable",
     });
