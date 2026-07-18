@@ -108,6 +108,8 @@ type CatalogFailureCode = (
   | CatalogVariantFailure
 )["code"];
 
+const catalogConflict = (message: string) =>
+  ({ status: 409, envelopeCode: "conflict", message }) as const;
 const catalogFailures = {
   forbidden: { status: 403, envelopeCode: "forbidden", message: "Catalog authority is required" },
   not_found: {
@@ -115,67 +117,23 @@ const catalogFailures = {
     envelopeCode: "not_found",
     message: "Requested catalog resource was not found",
   },
-  duplicate_slug: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Product slug is already in use",
-  },
-  duplicate_combination: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Each Variant combination must be unique",
-  },
-  invalid_combination: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Variant choices must belong to this Product",
-  },
-  immutable_configuration: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Published option and combination facts are immutable",
-  },
-  media_not_owned: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Variant images must be attached to this Product",
-  },
-  published_bundle_dependency: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "A Published Bundle depends on this Product or Variant",
-  },
-  published_cms_dependency: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Published Homepage content depends on this Catalog Item",
-  },
-  invalid_publication: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Product publication invariants are not satisfied",
-  },
-  invalid_lifecycle: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Product lifecycle transition is not valid",
-  },
-  reservation_blocked: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Active reservations block this inventory adjustment",
-  },
-  inventory_inconsistent: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Reserved inventory truth requires reconciliation",
-  },
-  inventory_limit: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Inventory on-hand cannot exceed 1,000,000",
-  },
-  conflict: { status: 409, envelopeCode: "conflict", message: "Inventory changed concurrently" },
+  duplicate_slug: catalogConflict("Product slug is already in use"),
+  duplicate_combination: catalogConflict("Each Variant combination must be unique"),
+  invalid_combination: catalogConflict("Variant choices must belong to this Product"),
+  immutable_configuration: catalogConflict("Published option and combination facts are immutable"),
+  media_not_owned: catalogConflict("Variant images must be attached to this Product"),
+  published_bundle_dependency: catalogConflict(
+    "A Published Bundle depends on this Product or Variant",
+  ),
+  published_cms_dependency: catalogConflict(
+    "Published Homepage content depends on this Catalog Item",
+  ),
+  invalid_publication: catalogConflict("Product publication invariants are not satisfied"),
+  invalid_lifecycle: catalogConflict("Product lifecycle transition is not valid"),
+  reservation_blocked: catalogConflict("Active reservations block this inventory adjustment"),
+  inventory_inconsistent: catalogConflict("Reserved inventory truth requires reconciliation"),
+  inventory_limit: catalogConflict("Inventory on-hand cannot exceed 1,000,000"),
+  conflict: catalogConflict("Inventory changed concurrently"),
   unsupported_media_type: {
     status: 422,
     envelopeCode: "validation",

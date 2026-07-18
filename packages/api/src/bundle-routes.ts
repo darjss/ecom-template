@@ -43,6 +43,8 @@ const validationError = (status: Status, message: string) =>
     }),
   );
 
+const bundleConflict = (message: string) =>
+  ({ status: 409, envelopeCode: "conflict", message }) as const;
 const bundleFailures = {
   forbidden: { status: 403, envelopeCode: "forbidden", message: "Catalog authority is required" },
   not_found: {
@@ -50,51 +52,19 @@ const bundleFailures = {
     envelopeCode: "not_found",
     message: "Bundle or Catalog Item was not found",
   },
-  duplicate_slug: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Catalog slug is already in use",
-  },
-  invalid_lifecycle: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Bundle lifecycle transition is not valid",
-  },
-  invalid_publication: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Bundle components must be active Variants of Published Products",
-  },
-  invalid_component: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Every Bundle component must be a valid Variant",
-  },
-  duplicate_component: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "A Variant may occur only once in a Bundle",
-  },
-  immutable_components: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Published Bundle component identities and quantities are locked",
-  },
-  slug_locked: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "A Published Bundle slug cannot change",
-  },
-  published_cms_dependency: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Published Homepage content depends on this Bundle",
-  },
-  invalid_personalization: {
-    status: 409,
-    envelopeCode: "conflict",
-    message: "Personalization definitions are invalid",
-  },
+  duplicate_slug: bundleConflict("Catalog slug is already in use"),
+  invalid_lifecycle: bundleConflict("Bundle lifecycle transition is not valid"),
+  invalid_publication: bundleConflict(
+    "Bundle components must be active Variants of Published Products",
+  ),
+  invalid_component: bundleConflict("Every Bundle component must be a valid Variant"),
+  duplicate_component: bundleConflict("A Variant may occur only once in a Bundle"),
+  immutable_components: bundleConflict(
+    "Published Bundle component identities and quantities are locked",
+  ),
+  slug_locked: bundleConflict("A Published Bundle slug cannot change"),
+  published_cms_dependency: bundleConflict("Published Homepage content depends on this Bundle"),
+  invalid_personalization: bundleConflict("Personalization definitions are invalid"),
   infrastructure_unavailable: {
     status: 503,
     envelopeCode: "unavailable",
