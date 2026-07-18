@@ -71,10 +71,7 @@ const personalizationDefinitionSchemas = (
           key: typeof PersonalizationKeySchema;
           label: typeof PersonalizationLabelSchema;
           position: typeof PersonalizationPositionSchema;
-          state: v.OptionalSchema<
-            v.PicklistSchema<["active", "archived"], undefined>,
-            "active"
-          >;
+          state: v.OptionalSchema<v.PicklistSchema<["active", "archived"], undefined>, "active">;
         },
         undefined
       >,
