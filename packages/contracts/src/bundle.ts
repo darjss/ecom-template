@@ -58,23 +58,14 @@ export const PersonalizationSelectValueSchema = v.strictObject({
   position: PersonalizationPositionSchema,
   state: v.picklist(["active", "archived"]),
 });
-const personalizationDefinitionSchemas = (
-  id: typeof PersonalizationIdSchema | v.OptionalSchema<typeof PersonalizationIdSchema, undefined>,
-  state:
-    | v.PicklistSchema<["active", "archived"], undefined>
-    | v.OptionalSchema<v.PicklistSchema<["active", "archived"], undefined>, "active">,
-  selectValue:
-    | typeof PersonalizationSelectValueSchema
-    | v.StrictObjectSchema<
-        {
-          id: v.OptionalSchema<typeof PersonalizationValueIdSchema, undefined>;
-          key: typeof PersonalizationKeySchema;
-          label: typeof PersonalizationLabelSchema;
-          position: typeof PersonalizationPositionSchema;
-          state: v.OptionalSchema<v.PicklistSchema<["active", "archived"], undefined>, "active">;
-        },
-        undefined
-      >,
+const personalizationDefinitionSchemas = <
+  Id extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  State extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+  SelectValue extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+>(
+  id: Id,
+  state: State,
+  selectValue: SelectValue,
 ) => {
   const fields = {
     id,
