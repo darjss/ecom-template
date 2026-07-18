@@ -1,13 +1,29 @@
 import {
+  createCategoryId,
+  createCollectionId,
+  createTagId,
   type CategoryId,
   type CategoryInput,
   type CollectionId,
   type CollectionInput,
+  type CatalogItemId,
   type GroupingState,
   type TagId,
   type TagInput,
 } from "@ecom/contracts";
-import { and, asc, eq, exists, isNull, notExists, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   catalogItemCategories,
@@ -20,17 +36,224 @@ import {
   tags,
 } from "../db/schema";
 import { database } from "../db/database";
-import {
-  catalogDebtStatement,
-  categoryDto,
-  categoryQuerySet,
-  collectionDto,
-  collectionQuerySet,
-  normalizedTagLabel,
-  tagDto,
-  tagQuerySet,
-  timestamp,
-} from "./query-set";
+import { groupingQuerySet } from "./query-set";
+
+const timestamp = (value: Date | null) => value?.toISOString() ?? null;
+const catalogDebtStatement = (now: Date) => {
+  const revision = crypto.randomUUID();
+  return database()
+    .insert(catalogListingCachePurgeDebt)
+    .values({
+      key: "catalog",
+      revision,
+      attemptCount: 0,
+      requestId: null,
+      commandCommittedAt: now,
+      lastAttemptedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: catalogListingCachePurgeDebt.key,
+      set: {
+        revision,
+        attemptCount: 0,
+        requestId: null,
+        commandCommittedAt: now,
+        lastAttemptedAt: null,
+      },
+    });
+};
+type GroupingRow = {
+  id: string;
+  state: GroupingState;
+  createdAt: Date;
+  updatedAt: Date;
+  activatedAt: Date | null;
+  archivedAt: Date | null;
+};
+const groupingDto = (row: GroupingRow, catalogItemIds: string[]) => ({
+  id: row.id,
+  state: row.state,
+  catalogItemIds,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+  activatedAt: timestamp(row.activatedAt),
+  archivedAt: timestamp(row.archivedAt),
+});
+const categoryDto = (row: typeof categories.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
+  kind: "category" as const,
+  slug: row.slug,
+  name: row.name,
+  parentId: row.parentId,
+  position: row.position,
+});
+const collectionDto = (row: typeof collections.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
+  kind: "collection" as const,
+  slug: row.slug,
+  name: row.name,
+  description: row.description,
+});
+const tagDto = (row: typeof tags.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
+  kind: "tag" as const,
+  label: row.label,
+});
+
+const validateCatalogItemIds = async (catalogItemIds: readonly CatalogItemId[]) => {
+  if (catalogItemIds.length === 0) {
+    return true;
+  }
+  const rows = await database()
+    .select({ id: catalogItems.id })
+    .from(catalogItems)
+    .where(inArray(catalogItems.id, catalogItemIds));
+  return rows.length === catalogItemIds.length;
+};
+
+type BatchStatement = Parameters<ReturnType<typeof database>["batch"]>[0][number];
+const replaceRows = (remove: BatchStatement, insert?: BatchStatement) => {
+  const debt = catalogDebtStatement(new Date());
+  return insert ? database().batch([remove, insert, debt]) : database().batch([remove, debt]);
+};
+
+const categoryQuerySet = groupingQuerySet<CategoryId, CategoryInput>(validateCatalogItemIds)({
+  rows: (id: CategoryId) =>
+    database().select().from(categories).where(eq(categories.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemCategories.catalogItemId })
+      .from(catalogItemCategories)
+      .where(eq(catalogItemCategories.categoryId, id))
+      .orderBy(asc(catalogItemCategories.catalogItemId)),
+  identityRows: (slug, excludedId) =>
+    database()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        excludedId
+          ? and(eq(categories.slug, slug), ne(categories.id, excludedId))
+          : eq(categories.slug, slug),
+      )
+      .limit(1),
+  identity: (input: CategoryInput) => input.slug,
+  duplicateKind: "duplicate_slug",
+  createId: createCategoryId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(categories)
+        .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
+    ]),
+  dto: categoryDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemCategories).where(eq(catalogItemCategories.categoryId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemCategories)
+            .values(
+              input.catalogItemIds.map((catalogItemId) => ({ categoryId: id, catalogItemId })),
+            ),
+    ),
+});
+
+const collectionQuerySet = groupingQuerySet<CollectionId, CollectionInput>(validateCatalogItemIds)({
+  rows: (id: CollectionId) =>
+    database().select().from(collections).where(eq(collections.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemCollections.catalogItemId })
+      .from(catalogItemCollections)
+      .where(eq(catalogItemCollections.collectionId, id))
+      .orderBy(asc(catalogItemCollections.position)),
+  identityRows: (slug, excludedId) =>
+    database()
+      .select({ id: collections.id })
+      .from(collections)
+      .where(
+        excludedId
+          ? and(eq(collections.slug, slug), ne(collections.id, excludedId))
+          : eq(collections.slug, slug),
+      )
+      .limit(1),
+  identity: (input: CollectionInput) => input.slug,
+  duplicateKind: "duplicate_slug",
+  createId: createCollectionId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(collections)
+        .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
+    ]),
+  dto: collectionDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemCollections).where(eq(catalogItemCollections.collectionId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemCollections)
+            .values(
+              input.catalogItemIds.map((catalogItemId, position) => ({
+                collectionId: id,
+                catalogItemId,
+                position,
+              })),
+            ),
+    ),
+});
+
+const normalizedTagLabel = (label: string) => label.trim().toLocaleLowerCase("mn");
+const tagQuerySet = groupingQuerySet<TagId, TagInput>(validateCatalogItemIds)({
+  rows: (id: TagId) => database().select().from(tags).where(eq(tags.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemTags.catalogItemId })
+      .from(catalogItemTags)
+      .where(eq(catalogItemTags.tagId, id))
+      .orderBy(asc(catalogItemTags.catalogItemId)),
+  identityRows: (normalizedLabel, excludedId) =>
+    database()
+      .select({ id: tags.id })
+      .from(tags)
+      .where(
+        excludedId
+          ? and(eq(tags.normalizedLabel, normalizedLabel), ne(tags.id, excludedId))
+          : eq(tags.normalizedLabel, normalizedLabel),
+      )
+      .limit(1),
+  identity: (input: TagInput) => normalizedTagLabel(input.label),
+  duplicateKind: "duplicate_label",
+  createId: createTagId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(tags)
+        .values({
+          id,
+          label: input.label,
+          normalizedLabel: normalizedTagLabel(input.label),
+          state: "draft",
+          createdAt: now,
+          updatedAt: now,
+        }),
+      catalogDebtStatement(now),
+    ]),
+  dto: tagDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemTags)
+            .values(input.catalogItemIds.map((catalogItemId) => ({ tagId: id, catalogItemId }))),
+    ),
+});
 
 const findCategory = categoryQuerySet.find;
 const findCollection = collectionQuerySet.find;
