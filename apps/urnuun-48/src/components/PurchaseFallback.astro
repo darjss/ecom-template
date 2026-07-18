@@ -3,17 +3,19 @@ import type { PersonalizationDefinition, PublicProductDetail } from "@ecom/store
 
 type Props = {
   priceMnt: number;
+  sku?: string;
   optionGroups?: PublicProductDetail["optionGroups"];
   personalizations?: readonly PersonalizationDefinition[];
 };
 
-const { priceMnt, optionGroups = [], personalizations = [] } = Astro.props;
+const { priceMnt, sku, optionGroups = [], personalizations = [] } = Astro.props;
 const activePersonalizations = personalizations.filter(({ state }) => state === "active");
 const money = new Intl.NumberFormat("mn-MN");
 ---
 <div data-purchase-fallback aria-live="polite">
   <p class="price"><strong>{money.format(priceMnt)} ₮</strong></p>
   <p>Каталогийн мэдээлэл · Боломжийг шалгаж байна…</p>
+  {sku && <p class="m-0 text-sm">Барааны код: <strong>{sku}</strong></p>}
   {optionGroups.map((group) => (
     <fieldset class="m-0 grid gap-2 border-0 p-0" disabled>
       <legend class="mb-1 text-sm font-bold">{group.label}</legend>

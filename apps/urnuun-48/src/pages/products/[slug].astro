@@ -78,6 +78,7 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         {selectedCatalogVariant && (
           <PurchaseFallback
             priceMnt={selectedCatalogVariant.priceMnt}
+            sku={selectedCatalogVariant.sku}
             optionGroups={fallbackOptionGroups}
             personalizations={personalizations}
           />

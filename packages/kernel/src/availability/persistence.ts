@@ -49,7 +49,7 @@ export const availabilityQueries = {
       })
       .from(bundleComponents)
       .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
-      .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
+      .leftJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(bundleComponents.bundleId, bundleIds));
     const componentProductQuery = db
       .select({

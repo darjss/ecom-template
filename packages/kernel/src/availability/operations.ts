@@ -72,6 +72,8 @@ export const readAvailability = async (
             component.variantState === "active" &&
             component.productKind === "product" &&
             component.productState === "published" &&
+            component.onHandQuantity !== null &&
+            component.reservedQuantity !== null &&
             component.onHandQuantity - component.reservedQuantity >=
               (demandByVariant.get(component.variantId) ?? 0),
         ),
