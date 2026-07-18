@@ -119,7 +119,7 @@ const sourceLabels = {
             <h2 class="m-0 text-2xl font-extrabold text-[var(--ink)]">“{search.query}” үр дүн</h2>
             <span class="text-sm font-bold text-stone-700">{search.results.page}-р хуудас</span>
           </div>
-          {search.ambiguity && <aside class="mb-5 rounded-lg bg-amber-100 p-4 text-amber-950" aria-label="Галигийн тайлбар"><strong>Олон боломжит үр дүн байна.</strong> Латин галиг хэд хэдэн бараанд таарсан тул сонголтыг автоматаар нарийсгаагүй.</aside>}
+          {search.ambiguity && <aside class="mb-5 rounded-lg bg-amber-100 p-4 text-amber-950" aria-label="Галигийн тайлбар"><strong>Олон боломжит үр дүн байна.</strong> Латин галиг {search.ambiguity.candidateIds.length} бараанд таарсан бөгөөд итгэлцэл бага тул сонголтыг автоматаар нарийсгаагүй.</aside>}
           {search.results.items.length === 0
             ? <section class="py-12 text-center"><h3 class="m-0 text-2xl font-bold text-[var(--ink)]">Илэрц олдсонгүй</h3><p class="mb-0 text-stone-700">Үг үсгээ шалгах эсвэл шүүлтүүрээ цэвэрлээд дахин хайна уу.</p></section>
             : <ol class="m-0 grid list-none gap-0 border-t border-[var(--line)] p-0">

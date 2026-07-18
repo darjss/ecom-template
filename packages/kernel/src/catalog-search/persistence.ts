@@ -185,18 +185,21 @@ const imagesByItem = async (ids: readonly string[]) => {
   );
 };
 
+const searchRowId = (row: SearchRow) =>
+  row.kind === "product"
+    ? v.parse(ProductIdSchema, row.item_id)
+    : v.parse(BundleIdSchema, row.item_id);
+
 const projectRows = async (
   rows: readonly SearchRow[],
   source: "native" | "krilleer_transliteration",
+  ambiguous: boolean,
 ) => {
   const images = await imagesByItem(rows.map(({ item_id }) => item_id));
   return rows.map((row) =>
     v.parse(CatalogItemSearchResultSchema, {
       kind: row.kind,
-      id:
-        row.kind === "product"
-          ? v.parse(ProductIdSchema, row.item_id)
-          : v.parse(BundleIdSchema, row.item_id),
+      id: searchRowId(row),
       slug: row.slug,
       name: row.title,
       description: row.description,
@@ -204,7 +207,7 @@ const projectRows = async (
       images: images.get(v.parse(CatalogItemIdSchema, row.item_id)) ?? [],
       matchedSource: source,
       matchedField: row.matched_field,
-      confidence: source === "native" ? "high" : "medium",
+      confidence: source === "native" ? "high" : ambiguous ? "low" : "medium",
     }),
   );
 };
@@ -288,6 +291,7 @@ export const catalogSearchQueries = {
     const sku = await exactSku(input.query, input.category, input.collection);
     let items: CatalogItemSearchResult[] = [];
     let hasNext = false;
+    let ambiguity: CatalogSearchResponse["ambiguity"] = null;
     if (sku && input.page === 1) {
       const images = await imagesByItem([sku.itemId]);
       items = [
@@ -319,25 +323,43 @@ export const catalogSearchQueries = {
           (await searchRows(nativeTokens, nativePlans, input.category, input.collection, 1, 0))
             .length > 0);
       let source: "native" | "krilleer_transliteration" = "native";
+      let ambiguous = false;
       if (!nativeExists) {
         source = "krilleer_transliteration";
+        const transliterationTokens = searchTokens(transliterateSearchText(input.query));
         rows = await searchRows(
-          searchTokens(transliterateSearchText(input.query)),
+          transliterationTokens,
           transliterationPlans,
           input.category,
           input.collection,
           input.limit + 1,
           offset,
         );
+        const ambiguityLimit = Math.max(2, input.limit);
+        const candidates =
+          input.page === 1
+            ? rows.slice(0, ambiguityLimit)
+            : await searchRows(
+                transliterationTokens,
+                transliterationPlans,
+                input.category,
+                input.collection,
+                ambiguityLimit,
+                0,
+              );
+        ambiguous = candidates.length > 1;
+        if (ambiguous) {
+          ambiguity = { confidence: "low", candidateIds: candidates.map(searchRowId) };
+        }
       }
       hasNext = rows.length > input.limit;
-      items = await projectRows(rows.slice(0, input.limit), source);
+      items = await projectRows(rows.slice(0, input.limit), source, ambiguous);
     }
     return {
       query: input.query,
       normalizationVersion: catalogSearchDocumentVersion,
       results: { items, page: input.page, pageSize: input.limit, hasNext },
-      ambiguity: null,
+      ambiguity,
       shortcuts: await shortcutLists(input.query),
     };
   },

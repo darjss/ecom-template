@@ -71,7 +71,11 @@ export const CatalogSearchResponseSchema = v.strictObject({
   ambiguity: v.nullable(
     v.strictObject({
       confidence: v.literal("low"),
-      candidateIds: v.pipe(v.array(v.union([ProductIdSchema, BundleIdSchema])), v.minLength(2)),
+      candidateIds: v.pipe(
+        v.array(v.union([ProductIdSchema, BundleIdSchema])),
+        v.minLength(2),
+        v.maxLength(48),
+      ),
     }),
   ),
   shortcuts: v.strictObject({
