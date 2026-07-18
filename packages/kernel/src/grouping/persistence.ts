@@ -245,6 +245,13 @@ const transitionDates = (current: FlatGrouping, target: GroupingState, now: Date
     target === "active" ? (current.activatedAt ? new Date(current.activatedAt) : now) : undefined,
   archivedAt: target === "archived" ? now : null,
 });
+const membershipIds = (
+  groupingId: string,
+  memberships: readonly { groupingId: string; catalogItemId: string }[],
+) =>
+  memberships
+    .filter((membership) => membership.groupingId === groupingId)
+    .map((membership) => membership.catalogItemId);
 
 export const groupingQueries = {
   findCategory,
@@ -299,29 +306,12 @@ export const groupingQueries = {
     ]);
     return {
       categories: categoryRows.map((row) =>
-        categoryDto(
-          row,
-          categoryMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
+        categoryDto(row, membershipIds(row.id, categoryMemberships)),
       ),
       collections: collectionRows.map((row) =>
-        collectionDto(
-          row,
-          collectionMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
+        collectionDto(row, membershipIds(row.id, collectionMemberships)),
       ),
-      tags: tagRows.map((row) =>
-        tagDto(
-          row,
-          tagMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
-      ),
+      tags: tagRows.map((row) => tagDto(row, membershipIds(row.id, tagMemberships))),
       catalogItems: catalogItemRows,
       cachePurgeDebt: cacheDebtRows[0]
         ? {
@@ -868,18 +858,14 @@ export const groupingQueries = {
         slug: row.slug,
         name: row.name,
         description: "",
-        catalogItemIds: categoryMemberships
-          .filter((membership) => membership.groupingId === row.id)
-          .map((membership) => membership.catalogItemId),
+        catalogItemIds: membershipIds(row.id, categoryMemberships),
       })),
       collections: collectionRows.map((row) => ({
         id: row.id,
         slug: row.slug,
         name: row.name,
         description: row.description,
-        catalogItemIds: collectionMemberships
-          .filter((membership) => membership.groupingId === row.id)
-          .map((membership) => membership.catalogItemId),
+        catalogItemIds: membershipIds(row.id, collectionMemberships),
       })),
     };
   },
