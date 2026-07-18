@@ -1,10 +1,74 @@
-import { useCart } from "@ecom/client";
+import { availabilityFreshnessMs, availabilityQueryOptions, useCart } from "@ecom/client";
+import type { CartLine } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
+import { useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
+import { resolveCartEditDemand } from "./purchase-demand";
 
 export const CartPresentation = () => {
   const cart = useCart();
+  const queryClient = useQueryClient();
   const [announcement, setAnnouncement] = createSignal("");
+  const [checking, setChecking] = createSignal(false);
+  const updateQuantity = async (line: CartLine, input: HTMLInputElement) => {
+    if (checking()) {
+      return;
+    }
+    const quantity = input.valueAsNumber;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      input.value = String(line.quantity);
+      setAnnouncement("Тоо ширхэгийг шинэчлэх боломжгүй");
+      return;
+    }
+    const before = JSON.stringify(cart.lines());
+    const demand = resolveCartEditDemand(cart.lines(), line, quantity);
+    if (!demand.withinBounds) {
+      input.value = String(line.quantity);
+      setAnnouncement("Нийт тоо 999-өөс их тул шинэчлэх боломжгүй");
+      return;
+    }
+    setChecking(true);
+    setAnnouncement("Боломжийг шалгаж байна");
+    try {
+      const target = { ...demand.identity, quantity: demand.quantity };
+      const response = await queryClient.fetchQuery(availabilityQueryOptions([target]));
+      const currentDemand = resolveCartEditDemand(cart.lines(), line, quantity);
+      const unchanged =
+        before === JSON.stringify(cart.lines()) &&
+        currentDemand.withinBounds &&
+        currentDemand.quantity === target.quantity;
+      if (!unchanged) {
+        input.value = String(line.quantity);
+        setAnnouncement("Сагс өөрчлөгдсөн тул тоог шинэчилсэнгүй");
+        return;
+      }
+      const fresh = Date.now() - Date.parse(response.data.checkedAt) < availabilityFreshnessMs;
+      const fact = response.data.facts.find(
+        (candidate) => candidate.kind === target.kind && candidate.id === target.id,
+      );
+      if (!fresh) {
+        input.value = String(line.quantity);
+        setAnnouncement("Шинэ мэдээлэл авч чадсангүй. Тоог шинэчилсэнгүй");
+        return;
+      }
+      if (!fact?.sellable) {
+        input.value = String(line.quantity);
+        setAnnouncement("Энэ тоогоор авах боломжгүй. Хуучин тоог хадгаллаа");
+        return;
+      }
+      if (!cart.updateQuantity(line, quantity)) {
+        input.value = String(line.quantity);
+        setAnnouncement("Сагс өөрчлөгдсөн тул тоог шинэчилсэнгүй");
+        return;
+      }
+      setAnnouncement("Сагсны тоо шинэчлэгдлээ");
+    } catch {
+      input.value = String(line.quantity);
+      setAnnouncement("Боломжийг шалгаж чадсангүй. Хуучин тоог хадгаллаа");
+    } finally {
+      setChecking(false);
+    }
+  };
   return (
     <section class="mt-6 border-t border-black/15 pt-5" aria-labelledby="cart-summary-title">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -50,11 +114,8 @@ export const CartPresentation = () => {
                   min="1"
                   max="999"
                   value={line.quantity}
-                  onChange={(event) => {
-                    if (cart.updateQuantity(line, event.currentTarget.valueAsNumber)) {
-                      setAnnouncement("Сагсны тоо шинэчлэгдлээ");
-                    }
-                  }}
+                  disabled={checking()}
+                  onChange={(event) => void updateQuantity(line, event.currentTarget)}
                 />
               </label>
               <Button
