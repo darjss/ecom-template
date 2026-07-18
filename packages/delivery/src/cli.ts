@@ -1,8 +1,9 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import { parse as parseYaml } from "yaml";
@@ -37,6 +38,8 @@ Commands:
   preview --store <slug>
   build --store <slug>
   owner-add --store <slug> --email <email> [--local | --manifest <path> --target <name>]
+  proof-auth --store <slug> --email <email> --vars <absolute-mode-0600-path> [--persist-to <absolute-path>] [--origin <https-origin>]
+  proof-auth --cleanup --store <slug> --vars <absolute-mode-0600-path> [--persist-to <absolute-path>] [--origin <https-origin>]
   create --slug <slug> --name <name>
   apply --manifest <path> --target <name>
   proof --manifest <path> --target <name>
@@ -61,12 +64,12 @@ const run = (
   commandArgs: readonly string[],
   environment: NodeJS.ProcessEnv = process.env,
 ) =>
-  new Promise<void>((resolve, reject) => {
+  new Promise<void>((resolveRun, reject) => {
     const child = spawn(executable, commandArgs, { env: environment, stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code) => {
       if (code === 0) {
-        resolve();
+        resolveRun();
       } else {
         reject(new Error(`${executable} exited with ${code ?? "no status"}`));
       }
@@ -115,9 +118,15 @@ const WranglerConfigSchema = v.object({
       database_id: D1DatabaseIdSchema,
     }),
   ),
+  kv_namespaces: v.array(
+    v.object({
+      binding: v.string(),
+      id: v.pipe(v.string(), v.minLength(1)),
+    }),
+  ),
 });
 
-const readAppD1Resource = async (slug: string) => {
+const readAppResources = async (slug: string) => {
   const source = await readFile(join("apps", slug, "wrangler.jsonc"), "utf8");
   const errors: ParseError[] = [];
   const parsed: unknown = parseJsonc(source, errors, { allowTrailingComma: true });
@@ -125,16 +134,23 @@ const readAppD1Resource = async (slug: string) => {
     throw new Error(`Store ${slug} has invalid Wrangler JSONC`);
   }
   const config = v.parse(WranglerConfigSchema, parsed);
-  const resources = config.d1_databases.filter(({ binding }) => binding === "DB");
-  if (resources.length !== 1) {
+  const databases = config.d1_databases.filter(({ binding }) => binding === "DB");
+  const namespaces = config.kv_namespaces.filter(({ binding }) => binding === "EPHEMERAL_KV");
+  const database = databases.at(0);
+  const namespace = namespaces.at(0);
+  if (databases.length !== 1 || !database) {
     throw new Error(`Store ${slug} must declare exactly one DB binding`);
   }
-  const resource = resources.at(0);
-  if (!resource) {
-    throw new Error(`Store ${slug} has no DB binding`);
+  if (namespaces.length !== 1 || !namespace) {
+    throw new Error(`Store ${slug} must declare exactly one EPHEMERAL_KV binding`);
   }
-  return { name: resource.database_name, databaseId: resource.database_id };
+  return {
+    d1: { name: database.database_name, databaseId: database.database_id },
+    ephemeralKvId: namespace.id,
+  };
 };
+
+const readAppD1Resource = async (slug: string) => (await readAppResources(slug)).d1;
 
 const readDeliveryJournal = async (targetName: string) => {
   const source = await readFile(journalPath(targetName), "utf8");
@@ -230,78 +246,61 @@ export default {
 };
 `;
 
-const provisionOwner = async (
-  email: string,
-  configPath: string,
-  mode: "local" | "remote",
-  persistPath?: string,
+const selectAvailablePort = () =>
+  new Promise<number>((resolvePort, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Could not select a local Worker port"));
+        return;
+      }
+      server.close((error) => (error ? reject(error) : resolvePort(address.port)));
+    });
+  });
+
+const withWranglerWorker = async <T>(
+  commandArgs: string[],
+  redactedValues: readonly string[],
+  operation: (endpoint: string) => Promise<T>,
 ) => {
-  await mkdir(".delivery", { recursive: true });
-  const directory = await mkdtemp(join(process.cwd(), ".delivery", "owner-provisioning-"));
-  const entryPath = join(directory, "worker.ts");
-  const token = randomUUID();
-  const port = 18_000 + (process.pid % 1_000);
-  await writeFile(entryPath, ownerProvisioningWorker(token), { flag: "wx", mode: 0o600 });
-  const commandArgs = [
-    "exec",
-    "wrangler",
-    "dev",
-    entryPath,
-    "--config",
-    configPath,
-    "--ip",
-    "127.0.0.1",
-    "--port",
-    String(port),
-  ];
-  if (mode === "remote") {
-    commandArgs.push("--remote");
-  } else if (persistPath) {
-    commandArgs.push("--persist-to", persistPath);
-  }
+  const port = await selectAvailablePort();
+  commandArgs.push("--ip", "127.0.0.1", "--port", String(port));
   const child = spawn("pnpm", commandArgs, {
     detached: true,
     stdio: ["ignore", "ignore", "pipe"],
   });
-  const closed = new Promise<void>((resolve) => {
-    child.once("close", () => resolve());
+  const closed = new Promise<void>((resolveClosed) => {
+    child.once("close", () => resolveClosed());
   });
   let stderr = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-4_000);
   });
+  const sanitizedError = () =>
+    redactedValues.reduce(
+      (message, value) => message.replaceAll(value, "[redacted]"),
+      stderr.trim(),
+    );
   try {
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) {
-        throw new Error(
-          stderr.trim().replaceAll(token, "[redacted]") ||
-            "Owner provisioning Worker failed to start",
-        );
+        throw new Error(sanitizedError() || "Local Worker failed to start");
       }
       try {
-        const response = await fetch(`http://127.0.0.1:${port}`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}` },
-          body: email,
-          signal: AbortSignal.timeout(2_000),
-        });
-        if (!response.ok) {
-          throw new Error(`Owner provisioning failed with HTTP ${response.status}`);
-        }
-        return;
+        return await operation(`http://127.0.0.1:${port}`);
       } catch (error) {
-        if (error instanceof Error && error.message.startsWith("Owner provisioning failed")) {
+        if (error instanceof Error && error.message.startsWith("Worker request failed")) {
           throw error;
         }
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
       }
     }
-    throw new Error(
-      stderr.trim().replaceAll(token, "[redacted]") ||
-        "Owner provisioning Worker did not become ready",
-    );
+    throw new Error(sanitizedError() || "Local Worker did not become ready");
   } finally {
     if (child.pid) {
       try {
@@ -315,8 +314,8 @@ const provisionOwner = async (
     let shutdownTimeout: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       closed,
-      new Promise<void>((resolve) => {
-        shutdownTimeout = setTimeout(resolve, 5_000);
+      new Promise<void>((resolveTimeout) => {
+        shutdownTimeout = setTimeout(resolveTimeout, 5_000);
       }),
     ]);
     if (shutdownTimeout) {
@@ -332,6 +331,41 @@ const provisionOwner = async (
       }
       await closed;
     }
+  }
+};
+
+const provisionOwner = async (
+  email: string,
+  configPath: string,
+  mode: "local" | "remote",
+  persistPath?: string,
+) => {
+  await mkdir(".delivery", { recursive: true });
+  const directory = await mkdtemp(join(process.cwd(), ".delivery", "owner-provisioning-"));
+  const entryPath = join(directory, "worker.ts");
+  const token = randomUUID();
+  await writeFile(entryPath, ownerProvisioningWorker(token), { flag: "wx", mode: 0o600 });
+  const commandArgs = ["exec", "wrangler", "dev", entryPath, "--config", configPath];
+  if (mode === "remote") {
+    commandArgs.push("--remote");
+  } else if (persistPath) {
+    commandArgs.push("--persist-to", persistPath);
+  }
+  try {
+    await withWranglerWorker(commandArgs, [token], async (endpoint) => {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+        body: email,
+        signal: AbortSignal.timeout(2_000),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Worker request failed: Owner provisioning returned HTTP ${response.status}`,
+        );
+      }
+    });
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 };
@@ -410,6 +444,406 @@ const addOwner = async () => {
     await rm(directory, { recursive: true, force: true });
   }
   write(`Provisioned active Owner ${email} for deployed target ${targetName}`);
+};
+
+const ProofOriginSchema = v.pipe(
+  v.string(),
+  v.url(),
+  v.check((value) => {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  }),
+);
+const ProofSessionResponseSchema = v.object({
+  email: SqlEmailSchema,
+  expiresAt: v.pipe(v.string(), v.isoTimestamp()),
+  role: v.literal("owner"),
+  staffId: v.string(),
+});
+const ProofHandoffSchema = v.object({
+  origin: ProofOriginSchema,
+  statePath: v.string(),
+  email: SqlEmailSchema,
+  cookieJarPath: v.string(),
+  browserStatePath: v.string(),
+  sessionExpiresAt: v.pipe(v.string(), v.isoTimestamp()),
+});
+const BrowserStateSchema = v.object({
+  cookies: v.tuple([
+    v.object({
+      name: v.pipe(v.string(), v.regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/)),
+      value: v.pipe(
+        v.string(),
+        v.check((value) =>
+          [...value].every((character) => {
+            const code = character.charCodeAt(0);
+            return character !== ";" && code > 31 && code !== 127;
+          }),
+        ),
+      ),
+      domain: v.string(),
+      path: v.literal("/"),
+      expires: v.number(),
+      httpOnly: v.literal(true),
+      secure: v.literal(true),
+      sameSite: v.literal("Lax"),
+    }),
+  ]),
+  origins: v.tuple([]),
+});
+
+type ProofAuthInput = {
+  readonly slug: string;
+  readonly origin: string;
+  readonly persistPath: string;
+  readonly varsPath: string;
+};
+
+const requireAbsolutePath = (name: string, value: string) => {
+  if (!isAbsolute(value)) {
+    throw new Error(`${name} must be an absolute path`);
+  }
+  return resolve(value);
+};
+
+const requireRegularMode600File = async (path: string, label: string) => {
+  const metadata = await lstat(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o777) !== 0o600) {
+    throw new Error(`${label} must be a regular mode-0600 file`);
+  }
+};
+
+const requireSafeDirectory = async (path: string, label: string) => {
+  try {
+    const metadata = await lstat(path);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      throw new Error(`${label} must be a regular directory`);
+    }
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+};
+
+const readRedactedValues = async (path: string) => {
+  const source = await readFile(path, "utf8");
+  return source
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#") && line.includes("="))
+    .map((line) =>
+      line
+        .slice(line.indexOf("=") + 1)
+        .trim()
+        .replace(/^(['"])(.*)\1$/, "$2"),
+    )
+    .filter((value) => value !== "");
+};
+
+const writeAtomic = async (path: string, content: string) => {
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, content, { flag: "wx", mode: 0o600 });
+    await rename(temporaryPath, path);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+};
+
+const readProofAuthInput = async (): Promise<ProofAuthInput> => {
+  const slug = v.parse(StoreSlugSchema, requireOption("--store"));
+  const localStore = await resolveLocalStore(slug);
+  const origin = v.parse(ProofOriginSchema, option("--origin") ?? localStore.origin);
+  const varsPath = requireAbsolutePath("--vars", requireOption("--vars"));
+  await requireRegularMode600File(varsPath, "Proof vars");
+  const persistPath = option("--persist-to")
+    ? requireAbsolutePath("--persist-to", requireOption("--persist-to"))
+    : resolve("apps", slug, ".wrangler", "state");
+  await requireSafeDirectory(persistPath, "Wrangler state");
+  return { slug, origin, persistPath, varsPath };
+};
+
+const proofArtifactDirectory = (slug: string) => resolve(".delivery", "proof", slug);
+
+const requireProofArtifactsAbsent = async (slug: string) => {
+  const directory = proofArtifactDirectory(slug);
+  try {
+    await lstat(directory);
+    throw new Error(`Proof artifacts already exist; clean ${directory} before creating a session`);
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+};
+
+const prepareProofArtifactDirectory = async (slug: string) => {
+  const directory = proofArtifactDirectory(slug);
+  await requireSafeDirectory(resolve(".delivery", "proof"), "Proof artifact root");
+  await requireProofArtifactsAbsent(slug);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await chmod(resolve(".delivery", "proof"), 0o700);
+  await chmod(directory, 0o700);
+  return directory;
+};
+
+const writeProofWorkerConfig = async (directory: string, slug: string, token: string) => {
+  const resources = await readAppResources(slug);
+  const path = join(directory, "wrangler.json");
+  await writeFile(
+    path,
+    JSON.stringify({
+      name: `proof-auth-${slug}`,
+      compatibility_date: "2026-07-08",
+      compatibility_flags: ["nodejs_compat"],
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: resources.d1.name,
+          database_id: resources.d1.databaseId,
+        },
+      ],
+      kv_namespaces: [{ binding: "EPHEMERAL_KV", id: resources.ephemeralKvId }],
+      vars: { PROOF_CONTROL_TOKEN: token },
+    }),
+    { flag: "wx", mode: 0o600 },
+  );
+  return path;
+};
+
+const requestProofWorker = async (
+  input: ProofAuthInput,
+  body:
+    | { readonly action: "create"; readonly email: string; readonly origin: string }
+    | {
+        readonly action: "revoke";
+        readonly cookie: string;
+        readonly origin: string;
+      },
+) => {
+  const directory = await mkdtemp(join(tmpdir(), "ecom-proof-auth-"));
+  await chmod(directory, 0o700);
+  const token = randomUUID();
+  try {
+    const configPath = await writeProofWorkerConfig(directory, input.slug, token);
+    return await withWranglerWorker(
+      [
+        "exec",
+        "wrangler",
+        "dev",
+        resolve("packages", "kernel", "src", "auth", "proof-auth-worker.ts"),
+        "--config",
+        configPath,
+        "--env-file",
+        input.varsPath,
+        "--persist-to",
+        input.persistPath,
+      ],
+      [token, input.varsPath, ...(await readRedactedValues(input.varsPath))],
+      async (endpoint) => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!response.ok) {
+          throw new Error(`Worker request failed: proof auth returned HTTP ${response.status}`);
+        }
+        return response;
+      },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+
+const readSessionCookie = (setCookie: string) => {
+  const pair = setCookie.slice(0, setCookie.indexOf(";"));
+  const separator = pair.indexOf("=");
+  if (separator <= 0) {
+    throw new Error("Proof Worker returned an invalid session cookie");
+  }
+  return { name: pair.slice(0, separator), value: pair.slice(separator + 1), pair };
+};
+
+const curlStatus = async (url: string, cookieJarPath: string) => {
+  const { stdout } = await execFileOutput("curl", [
+    "--silent",
+    "--show-error",
+    "--output",
+    "/dev/null",
+    "--write-out",
+    "%{http_code}",
+    "--cookie",
+    cookieJarPath,
+    url,
+  ]);
+  return Number(stdout);
+};
+
+const verifyAdminSession = async (origin: string, cookieJarSource: string) => {
+  const directory = await mkdtemp(join(tmpdir(), "ecom-proof-cookie-"));
+  await chmod(directory, 0o700);
+  const cookieJarPath = join(directory, "cookies.txt");
+  try {
+    await writeFile(cookieJarPath, cookieJarSource, { flag: "wx", mode: 0o600 });
+    const [adminStatus, staffStatus] = await Promise.all([
+      curlStatus(`${origin}/admin`, cookieJarPath),
+      curlStatus(`${origin}/api/staff`, cookieJarPath),
+    ]);
+    if (adminStatus !== 200 || staffStatus !== 200) {
+      throw new Error(`Admin session verification failed with HTTP ${adminStatus}/${staffStatus}`);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+
+const issueProofAuth = async () => {
+  const input = await readProofAuthInput();
+  await requireProofArtifactsAbsent(input.slug);
+  const email = v.parse(SqlEmailSchema, requireOption("--email"));
+  const response = await requestProofWorker(input, {
+    action: "create",
+    email,
+    origin: input.origin,
+  });
+  const setCookie = response.headers.get("set-cookie");
+  if (!setCookie) {
+    throw new Error("Proof Worker did not return a session cookie");
+  }
+  const session = v.parse(ProofSessionResponseSchema, await response.json());
+  const cookie = readSessionCookie(setCookie);
+  const url = new URL(input.origin);
+  const expires = Math.floor(new Date(session.expiresAt).getTime() / 1_000);
+  const cookieJarSource = `# Netscape HTTP Cookie File\n${url.hostname}\tFALSE\t/\tTRUE\t${expires}\t${cookie.name}\t${cookie.value}\n`;
+  try {
+    await verifyAdminSession(input.origin, cookieJarSource);
+  } catch (error) {
+    await requestProofWorker(input, {
+      action: "revoke",
+      cookie: cookie.pair,
+      origin: input.origin,
+    });
+    throw error;
+  }
+
+  const directory = await (async () => {
+    try {
+      return await prepareProofArtifactDirectory(input.slug);
+    } catch (error) {
+      await requestProofWorker(input, {
+        action: "revoke",
+        cookie: cookie.pair,
+        origin: input.origin,
+      });
+      throw error;
+    }
+  })();
+  const cookieJarPath = join(directory, "cookies.txt");
+  const browserStatePath = join(directory, "browser-state.json");
+  const handoffPath = join(directory, "handoff.json");
+  const browserState = v.parse(BrowserStateSchema, {
+    cookies: [
+      {
+        name: cookie.name,
+        value: cookie.value,
+        domain: url.hostname,
+        path: "/",
+        expires,
+        httpOnly: true,
+        secure: true,
+        sameSite: "Lax",
+      },
+    ],
+    origins: [],
+  });
+  const handoff = v.parse(ProofHandoffSchema, {
+    origin: input.origin,
+    statePath: input.persistPath,
+    email: session.email,
+    cookieJarPath,
+    browserStatePath,
+    sessionExpiresAt: session.expiresAt,
+  });
+  try {
+    await writeAtomic(cookieJarPath, cookieJarSource);
+    await writeAtomic(browserStatePath, `${JSON.stringify(browserState, null, 2)}\n`);
+    await writeAtomic(handoffPath, `${JSON.stringify(handoff, null, 2)}\n`);
+  } catch (error) {
+    await requestProofWorker(input, {
+      action: "revoke",
+      cookie: cookie.pair,
+      origin: input.origin,
+    });
+    await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+  write(`Prepared Staff Owner proof session for ${session.email} at ${input.origin}`);
+  write(`Cookie jar: ${cookieJarPath}`);
+  write(`Browser state: ${browserStatePath}`);
+  write(`Handoff: ${handoffPath}`);
+};
+
+const cleanupProofAuth = async () => {
+  const input = await readProofAuthInput();
+  const directory = proofArtifactDirectory(input.slug);
+  await requireSafeDirectory(directory, "Store proof artifact directory");
+  const handoffPath = join(directory, "handoff.json");
+  await requireRegularMode600File(handoffPath, "Proof handoff");
+  const handoff = v.parse(ProofHandoffSchema, JSON.parse(await readFile(handoffPath, "utf8")));
+  if (
+    handoff.origin !== input.origin ||
+    handoff.statePath !== input.persistPath ||
+    handoff.cookieJarPath !== join(directory, "cookies.txt") ||
+    handoff.browserStatePath !== join(directory, "browser-state.json")
+  ) {
+    throw new Error("Proof cleanup paths, origin, or Wrangler state do not match the handoff");
+  }
+  await requireRegularMode600File(handoff.browserStatePath, "Browser cookie state");
+  const browserState = v.parse(
+    BrowserStateSchema,
+    JSON.parse(await readFile(handoff.browserStatePath, "utf8")),
+  );
+  const cookie = browserState.cookies[0];
+  const cookiePair = `${cookie.name}=${cookie.value}`;
+  await requestProofWorker(input, {
+    action: "revoke",
+    cookie: cookiePair,
+    origin: input.origin,
+  });
+  try {
+    const status = await curlStatus(`${input.origin}/api/staff`, handoff.cookieJarPath);
+    if (status !== 401) {
+      throw new Error(`Revoked Admin session remained usable with HTTP ${status}`);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+  write(`Revoked proof session for ${handoff.email} and erased ${directory}`);
+};
+
+const runProofAuth = async () => {
+  if (args.includes("--cleanup")) {
+    if (args.includes("--email")) {
+      throw new Error("Proof auth cleanup reads the email from its handoff");
+    }
+    await cleanupProofAuth();
+    return;
+  }
+  await issueProofAuth();
 };
 
 const rejectStoreCreation = () => {
@@ -583,6 +1017,8 @@ try {
     await run("pnpm", ["--filter", `@shops/${slug}`, "build"]);
   } else if (command === "owner-add") {
     await addOwner();
+  } else if (command === "proof-auth") {
+    await runProofAuth();
   } else if (command === "create") {
     rejectStoreCreation();
   } else if (command === "apply") {

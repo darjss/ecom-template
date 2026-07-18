@@ -13,7 +13,7 @@
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/kernel": {
-      "entry": ["scripts/*.ts"]
+      "entry": ["scripts/*.ts", "src/auth/proof-auth-worker.ts"]
     }
   },
   "ignoreDependencies": ["@astrojs/check", "@date-fns/tz", "cloudflare", "culori", "date-fns"]

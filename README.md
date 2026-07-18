@@ -27,6 +27,16 @@ Portless renders `https://urnuun-48.shop.localhost` in the main checkout and pre
 
 Run one Store explicitly with `pnpm dev:store --store urnuun-48`. Build it with `pnpm build:store --store urnuun-48`.
 
+Create a real local Staff Owner session against the Store process and its Wrangler D1/KV state with a centralized mode-0600 vars file:
+
+```sh
+pnpm store:proof:auth --store urnuun-48 --email owner@example.com --vars /absolute/path/to/.dev.vars
+curl --cookie .delivery/proof/urnuun-48/cookies.txt https://urnuun-48.shop.localhost/api/staff
+pnpm store:proof:auth --cleanup --store urnuun-48 --vars /absolute/path/to/.dev.vars
+```
+
+Pass `--persist-to <absolute-path>` and `--origin <https-origin>` together when another worktree must use the Store process owner's exact Wrangler state and origin. The ignored mode-0700 `.delivery/proof/<store>/` directory contains a mode-0600 curl jar, browser state, and non-secret handoff. Commands print paths and identity only.
+
 ## Delivery shells
 
 ```sh
