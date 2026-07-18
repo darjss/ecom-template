@@ -8,6 +8,7 @@
     "enabled": true,
     "head_sampling_rate": 1,
   },
+  "routes": [{ "pattern": "urnuun-48-proof.amerikvitamin.mn", "custom_domain": true }],
   "cache": {
     "enabled": false,
   },
