@@ -4,6 +4,8 @@ import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 
 type Props = { readonly initialQuery: string };
 
+const navigate = (href: string) => window.location.assign(href);
+
 const SearchAutocompleteField = (props: Props) => {
   const [value, setValue] = createSignal(props.initialQuery);
   const [debounced, setDebounced] = createSignal("");
@@ -39,7 +41,6 @@ const SearchAutocompleteField = (props: Props) => {
           }))
       : []),
   ];
-  const navigate = (href: string) => window.location.assign(href);
   const onKeyDown = (event: KeyboardEvent) => {
     const count = choices().length;
     if (event.key === "ArrowDown" && count) {

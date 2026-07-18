@@ -152,7 +152,9 @@ const exactSku = async (query: string, category?: string, collection?: string) =
     .where(and(eq(skus.skuCompact, compactSku(query)), eq(catalogItems.state, "published")))
     .limit(1);
   const row = rows.at(0);
-  if (!row) return undefined;
+  if (!row) {
+    return undefined;
+  }
   if (category) {
     const membership = await db
       .select({ id: catalogItemCategories.catalogItemId })
@@ -166,7 +168,9 @@ const exactSku = async (query: string, category?: string, collection?: string) =
         ),
       )
       .limit(1);
-    if (membership.length === 0) return undefined;
+    if (membership.length === 0) {
+      return undefined;
+    }
   }
   if (collection) {
     const membership = await db
@@ -181,7 +185,9 @@ const exactSku = async (query: string, category?: string, collection?: string) =
         ),
       )
       .limit(1);
-    if (membership.length === 0) return undefined;
+    if (membership.length === 0) {
+      return undefined;
+    }
   }
   return row;
 };
@@ -205,9 +211,15 @@ const fieldFor = (
   const first = normalized.split(" ")[0] ?? normalized;
   const comparable = (value: string) =>
     source === "native" ? normalizeSearchText(value) : transliterate(value);
-  if (comparable(row.slug).includes(first)) return "slug" as const;
-  if (comparable(row.title).includes(first)) return "title" as const;
-  if (comparable(row.facets).includes(first)) return "category_tags" as const;
+  if (comparable(row.slug).includes(first)) {
+    return "slug" as const;
+  }
+  if (comparable(row.title).includes(first)) {
+    return "title" as const;
+  }
+  if (comparable(row.facets).includes(first)) {
+    return "category_tags" as const;
+  }
   return "description" as const;
 };
 

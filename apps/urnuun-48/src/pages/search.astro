@@ -13,10 +13,18 @@ const parameters = parseCatalogSearchParameters(Astro.url.searchParams, {
 });
 if (!parameters.success) {
   const canonical = new URL("/search", Astro.url.origin);
-  if (parameters.value.query) canonical.searchParams.set("q", parameters.value.query);
-  if (parameters.value.category) canonical.searchParams.set("category", parameters.value.category);
-  if (parameters.value.collection) canonical.searchParams.set("collection", parameters.value.collection);
-  if (parameters.value.page > 1) canonical.searchParams.set("page", String(parameters.value.page));
+  if (parameters.value.query) {
+    canonical.searchParams.set("q", parameters.value.query);
+  }
+  if (parameters.value.category) {
+    canonical.searchParams.set("category", parameters.value.category);
+  }
+  if (parameters.value.collection) {
+    canonical.searchParams.set("collection", parameters.value.collection);
+  }
+  if (parameters.value.page > 1) {
+    canonical.searchParams.set("page", String(parameters.value.page));
+  }
   return Astro.redirect(canonical.pathname + canonical.search, 308);
 }
 const { query, category, collection, page } = parameters.value;
@@ -44,9 +52,15 @@ const storeName = shell.identity?.displayName ?? summary.storeName;
 const pageHref = (nextPage: number) => {
   const url = new URL("/search", Astro.url.origin);
   url.searchParams.set("q", query);
-  if (category) url.searchParams.set("category", category);
-  if (collection) url.searchParams.set("collection", collection);
-  if (nextPage > 1) url.searchParams.set("page", String(nextPage));
+  if (category) {
+    url.searchParams.set("category", category);
+  }
+  if (collection) {
+    url.searchParams.set("collection", collection);
+  }
+  if (nextPage > 1) {
+    url.searchParams.set("page", String(nextPage));
+  }
   return url.pathname + url.search;
 };
 const sourceLabels = {
