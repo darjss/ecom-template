@@ -59,6 +59,7 @@ import {
   type StaffOperationFailure,
   type StorefrontReader,
 } from "@ecom/kernel";
+import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createBundleRoutes } from "./bundle-routes";
@@ -102,80 +103,71 @@ const MediaUploadBodySchema = v.strictObject({
   altText: v.string(),
 });
 
+type CatalogFailure = CatalogOperationFailure | CatalogMediaFailure | CatalogVariantFailure;
+type CatalogFailureMapping = {
+  status: number;
+  envelopeCode: "forbidden" | "not_found" | "validation" | "conflict" | "unavailable";
+  message: string;
+};
+const catalogMapping = (
+  status: number,
+  envelopeCode: CatalogFailureMapping["envelopeCode"],
+  message: string,
+): CatalogFailureMapping => ({ status, envelopeCode, message });
+const catalogConflict = (message: string) => () => catalogMapping(409, "conflict", message);
+const catalogFailureMapping = createPipeHandlers<CatalogFailure>(
+  "code",
+).match<CatalogFailureMapping>({
+  forbidden: () => catalogMapping(403, "forbidden", "Catalog authority is required"),
+  not_found: () => catalogMapping(404, "not_found", "Requested catalog resource was not found"),
+  duplicate_slug: catalogConflict("Product slug is already in use"),
+  duplicate_combination: catalogConflict("Each Variant combination must be unique"),
+  invalid_combination: catalogConflict("Variant choices must belong to this Product"),
+  immutable_configuration: catalogConflict("Published option and combination facts are immutable"),
+  media_not_owned: catalogConflict("Variant images must be attached to this Product"),
+  published_bundle_dependency: catalogConflict(
+    "A Published Bundle depends on this Product or Variant",
+  ),
+  published_cms_dependency: catalogConflict(
+    "Published Homepage content depends on this Catalog Item",
+  ),
+  invalid_publication: catalogConflict("Product publication invariants are not satisfied"),
+  invalid_lifecycle: catalogConflict("Product lifecycle transition is not valid"),
+  reservation_blocked: catalogConflict("Active reservations block this inventory adjustment"),
+  inventory_inconsistent: catalogConflict("Reserved inventory truth requires reconciliation"),
+  inventory_limit: catalogConflict("Inventory on-hand cannot exceed 1,000,000"),
+  conflict: catalogConflict("Inventory changed concurrently"),
+  unsupported_media_type: () =>
+    catalogMapping(
+      422,
+      "validation",
+      "The declared image type must match JPEG, PNG, or WebP bytes",
+    ),
+  invalid_media_bytes: () =>
+    catalogMapping(422, "validation", "The upload is not a valid JPEG, PNG, or WebP image"),
+  media_too_large: () =>
+    catalogMapping(422, "validation", "The image must be no larger than 8 MiB"),
+  infrastructure_unavailable: () =>
+    catalogMapping(503, "unavailable", "Catalog infrastructure is unavailable"),
+});
+
 const catalogError = (
   failure: CatalogOperationFailure | CatalogMediaFailure | CatalogVariantFailure,
   status: (code: number, body: unknown) => unknown,
 ) => {
-  const code = failure.code;
-  const message =
-    code === "duplicate_slug"
-      ? "Product slug is already in use"
-      : code === "duplicate_combination"
-        ? "Each Variant combination must be unique"
-        : code === "invalid_combination"
-          ? "Variant choices must belong to this Product"
-          : code === "immutable_configuration"
-            ? "Published option and combination facts are immutable"
-            : code === "media_not_owned"
-              ? "Variant images must be attached to this Product"
-              : code === "published_bundle_dependency"
-                ? "A Published Bundle depends on this Product or Variant"
-                : code === "published_cms_dependency"
-                  ? "Published Homepage content depends on this Catalog Item"
-                  : code === "invalid_publication"
-                    ? "Product publication invariants are not satisfied"
-                    : code === "invalid_lifecycle"
-                      ? "Product lifecycle transition is not valid"
-                      : code === "reservation_blocked"
-                        ? "Active reservations block this inventory adjustment"
-                        : code === "inventory_inconsistent"
-                          ? "Reserved inventory truth requires reconciliation"
-                          : code === "inventory_limit"
-                            ? "Inventory on-hand cannot exceed 1,000,000"
-                            : code === "unsupported_media_type"
-                              ? "The declared image type must match JPEG, PNG, or WebP bytes"
-                              : code === "invalid_media_bytes"
-                                ? "The upload is not a valid JPEG, PNG, or WebP image"
-                                : code === "media_too_large"
-                                  ? "The image must be no larger than 8 MiB"
-                                  : code === "not_found"
-                                    ? "Requested catalog resource was not found"
-                                    : code === "forbidden"
-                                      ? "Catalog authority is required"
-                                      : code === "conflict"
-                                        ? "Inventory changed concurrently"
-                                        : "Catalog infrastructure is unavailable";
-  const httpStatus =
-    code === "forbidden"
-      ? 403
-      : code === "not_found"
-        ? 404
-        : code === "infrastructure_unavailable"
-          ? 503
-          : code === "unsupported_media_type" ||
-              code === "invalid_media_bytes" ||
-              code === "media_too_large"
-            ? 422
-            : 409;
+  const mapped = catalogFailureMapping(failure);
   return status(
-    httpStatus,
+    mapped.status,
     v.parse(CatalogApiErrorSchema, {
       error: {
-        code:
-          httpStatus === 403
-            ? "forbidden"
-            : httpStatus === 404
-              ? "not_found"
-              : httpStatus === 503
-                ? "unavailable"
-                : httpStatus === 422
-                  ? "validation"
-                  : "conflict",
-        message,
+        code: mapped.envelopeCode,
+        message: mapped.message,
         reason:
-          code === "conflict" || code === "infrastructure_unavailable" || code === "forbidden"
+          failure.code === "conflict" ||
+          failure.code === "infrastructure_unavailable" ||
+          failure.code === "forbidden"
             ? undefined
-            : code,
+            : failure.code,
         blockers: "blockers" in failure ? failure.blockers : undefined,
       },
     }),

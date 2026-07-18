@@ -23,6 +23,7 @@ import {
   type BundleOperationFailure,
   type StaffActor,
 } from "@ecom/kernel";
+import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 
@@ -43,42 +44,47 @@ const validationError = (status: Status, message: string) =>
     }),
   );
 
+type BundleFailureMapping = {
+  status: number;
+  envelopeCode: "forbidden" | "not_found" | "conflict" | "unavailable";
+  message: string;
+};
+const bundleMapping = (
+  status: number,
+  envelopeCode: BundleFailureMapping["envelopeCode"],
+  message: string,
+): BundleFailureMapping => ({ status, envelopeCode, message });
+const bundleConflict = (message: string) => () => bundleMapping(409, "conflict", message);
+const bundleFailureMapping = createPipeHandlers<BundleOperationFailure>(
+  "code",
+).match<BundleFailureMapping>({
+  forbidden: () => bundleMapping(403, "forbidden", "Catalog authority is required"),
+  not_found: () => bundleMapping(404, "not_found", "Bundle or Catalog Item was not found"),
+  duplicate_slug: bundleConflict("Catalog slug is already in use"),
+  invalid_lifecycle: bundleConflict("Bundle lifecycle transition is not valid"),
+  invalid_publication: bundleConflict(
+    "Bundle components must be active Variants of Published Products",
+  ),
+  invalid_component: bundleConflict("Every Bundle component must be a valid Variant"),
+  duplicate_component: bundleConflict("A Variant may occur only once in a Bundle"),
+  immutable_components: bundleConflict(
+    "Published Bundle component identities and quantities are locked",
+  ),
+  slug_locked: bundleConflict("A Published Bundle slug cannot change"),
+  published_cms_dependency: bundleConflict("Published Homepage content depends on this Bundle"),
+  invalid_personalization: bundleConflict("Personalization definitions are invalid"),
+  infrastructure_unavailable: () =>
+    bundleMapping(503, "unavailable", "Bundle infrastructure is unavailable"),
+});
+
 const bundleError = (failure: BundleOperationFailure, status: Status) => {
-  const httpStatus =
-    failure.code === "forbidden"
-      ? 403
-      : failure.code === "not_found"
-        ? 404
-        : failure.code === "infrastructure_unavailable"
-          ? 503
-          : 409;
-  const messages: Record<BundleOperationFailure["code"], string> = {
-    forbidden: "Catalog authority is required",
-    not_found: "Bundle or Catalog Item was not found",
-    duplicate_slug: "Catalog slug is already in use",
-    invalid_lifecycle: "Bundle lifecycle transition is not valid",
-    invalid_publication: "Bundle components must be active Variants of Published Products",
-    invalid_component: "Every Bundle component must be a valid Variant",
-    duplicate_component: "A Variant may occur only once in a Bundle",
-    immutable_components: "Published Bundle component identities and quantities are locked",
-    slug_locked: "A Published Bundle slug cannot change",
-    published_cms_dependency: "Published Homepage content depends on this Bundle",
-    invalid_personalization: "Personalization definitions are invalid",
-    infrastructure_unavailable: "Bundle infrastructure is unavailable",
-  };
+  const mapped = bundleFailureMapping(failure);
   return status(
-    httpStatus,
+    mapped.status,
     v.parse(BundleApiErrorSchema, {
       error: {
-        code:
-          httpStatus === 403
-            ? "forbidden"
-            : httpStatus === 404
-              ? "not_found"
-              : httpStatus === 503
-                ? "unavailable"
-                : "conflict",
-        message: messages[failure.code],
+        code: mapped.envelopeCode,
+        message: mapped.message,
         reason:
           failure.code === "forbidden" || failure.code === "infrastructure_unavailable"
             ? undefined

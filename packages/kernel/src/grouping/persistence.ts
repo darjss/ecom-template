@@ -7,7 +7,6 @@ import {
   type CollectionId,
   type CollectionInput,
   type CatalogItemId,
-  type GroupingMembershipInput,
   type GroupingState,
   type TagId,
   type TagInput,
@@ -37,6 +36,7 @@ import {
   tags,
 } from "../db/schema";
 import { database } from "../db/database";
+import { groupingQuerySet } from "./query-set";
 
 const timestamp = (value: Date | null) => value?.toISOString() ?? null;
 const catalogDebtStatement = (now: Date) => {
@@ -62,113 +62,43 @@ const catalogDebtStatement = (now: Date) => {
       },
     });
 };
-const categoryDto = (row: typeof categories.$inferSelect, catalogItemIds: string[]) => ({
-  kind: "category" as const,
+type GroupingRow = {
+  id: string;
+  state: GroupingState;
+  createdAt: Date;
+  updatedAt: Date;
+  activatedAt: Date | null;
+  archivedAt: Date | null;
+};
+const groupingDto = (row: GroupingRow, catalogItemIds: string[]) => ({
   id: row.id,
+  state: row.state,
+  catalogItemIds,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+  activatedAt: timestamp(row.activatedAt),
+  archivedAt: timestamp(row.archivedAt),
+});
+const categoryDto = (row: typeof categories.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
+  kind: "category" as const,
   slug: row.slug,
   name: row.name,
   parentId: row.parentId,
   position: row.position,
-  state: row.state,
-  catalogItemIds,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-  activatedAt: timestamp(row.activatedAt),
-  archivedAt: timestamp(row.archivedAt),
 });
 const collectionDto = (row: typeof collections.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
   kind: "collection" as const,
-  id: row.id,
   slug: row.slug,
   name: row.name,
   description: row.description,
-  state: row.state,
-  catalogItemIds,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-  activatedAt: timestamp(row.activatedAt),
-  archivedAt: timestamp(row.archivedAt),
 });
 const tagDto = (row: typeof tags.$inferSelect, catalogItemIds: string[]) => ({
+  ...groupingDto(row, catalogItemIds),
   kind: "tag" as const,
-  id: row.id,
   label: row.label,
-  state: row.state,
-  catalogItemIds,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-  activatedAt: timestamp(row.activatedAt),
-  archivedAt: timestamp(row.archivedAt),
 });
-
-const categoryCatalogItemIds = async (id: string) =>
-  database()
-    .select({ id: catalogItemCategories.catalogItemId })
-    .from(catalogItemCategories)
-    .where(eq(catalogItemCategories.categoryId, id))
-    .orderBy(asc(catalogItemCategories.catalogItemId))
-    .then((rows) => rows.map((row) => row.id));
-const collectionCatalogItemIds = async (id: string) =>
-  database()
-    .select({ id: catalogItemCollections.catalogItemId })
-    .from(catalogItemCollections)
-    .where(eq(catalogItemCollections.collectionId, id))
-    .orderBy(asc(catalogItemCollections.position))
-    .then((rows) => rows.map((row) => row.id));
-const tagCatalogItemIds = async (id: string) =>
-  database()
-    .select({ id: catalogItemTags.catalogItemId })
-    .from(catalogItemTags)
-    .where(eq(catalogItemTags.tagId, id))
-    .orderBy(asc(catalogItemTags.catalogItemId))
-    .then((rows) => rows.map((row) => row.id));
-
-const findCategory = async (id: CategoryId) => {
-  const [row] = await database().select().from(categories).where(eq(categories.id, id)).limit(1);
-  return row ? categoryDto(row, await categoryCatalogItemIds(row.id)) : undefined;
-};
-const findCollection = async (id: CollectionId) => {
-  const [row] = await database().select().from(collections).where(eq(collections.id, id)).limit(1);
-  return row ? collectionDto(row, await collectionCatalogItemIds(row.id)) : undefined;
-};
-const findTag = async (id: TagId) => {
-  const [row] = await database().select().from(tags).where(eq(tags.id, id)).limit(1);
-  return row ? tagDto(row, await tagCatalogItemIds(row.id)) : undefined;
-};
-const categoryHasActiveChild = async (id: CategoryId) =>
-  (
-    await database()
-      .select({ id: categories.id })
-      .from(categories)
-      .where(and(eq(categories.parentId, id), eq(categories.state, "active")))
-      .limit(1)
-  ).length > 0;
-
-const categorySlugExists = async (slug: string, excludedId?: CategoryId) => {
-  const where = excludedId
-    ? and(eq(categories.slug, slug), ne(categories.id, excludedId))
-    : eq(categories.slug, slug);
-  return (
-    (await database().select({ id: categories.id }).from(categories).where(where).limit(1)).length >
-    0
-  );
-};
-const collectionSlugExists = async (slug: string, excludedId?: CollectionId) => {
-  const where = excludedId
-    ? and(eq(collections.slug, slug), ne(collections.id, excludedId))
-    : eq(collections.slug, slug);
-  return (
-    (await database().select({ id: collections.id }).from(collections).where(where).limit(1))
-      .length > 0
-  );
-};
-const normalizedTagLabel = (label: string) => label.trim().toLocaleLowerCase("mn");
-const tagLabelExists = async (normalizedLabel: string, excludedId?: TagId) => {
-  const where = excludedId
-    ? and(eq(tags.normalizedLabel, normalizedLabel), ne(tags.id, excludedId))
-    : eq(tags.normalizedLabel, normalizedLabel);
-  return (await database().select({ id: tags.id }).from(tags).where(where).limit(1)).length > 0;
-};
 
 const validateCatalogItemIds = async (catalogItemIds: readonly CatalogItemId[]) => {
   if (catalogItemIds.length === 0) {
@@ -180,6 +110,204 @@ const validateCatalogItemIds = async (catalogItemIds: readonly CatalogItemId[]) 
     .where(inArray(catalogItems.id, catalogItemIds));
   return rows.length === catalogItemIds.length;
 };
+
+type BatchStatement = Parameters<ReturnType<typeof database>["batch"]>[0][number];
+const replaceRows = (remove: BatchStatement, insert?: BatchStatement) => {
+  const debt = catalogDebtStatement(new Date());
+  return insert ? database().batch([remove, insert, debt]) : database().batch([remove, debt]);
+};
+
+const categoryQuerySet = groupingQuerySet<CategoryId, CategoryInput>(validateCatalogItemIds)({
+  rows: (id: CategoryId) =>
+    database().select().from(categories).where(eq(categories.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemCategories.catalogItemId })
+      .from(catalogItemCategories)
+      .where(eq(catalogItemCategories.categoryId, id))
+      .orderBy(asc(catalogItemCategories.catalogItemId)),
+  identityRows: (slug, excludedId) =>
+    database()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        excludedId
+          ? and(eq(categories.slug, slug), ne(categories.id, excludedId))
+          : eq(categories.slug, slug),
+      )
+      .limit(1),
+  identity: (input: CategoryInput) => input.slug,
+  duplicateKind: "duplicate_slug",
+  createId: createCategoryId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(categories)
+        .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
+    ]),
+  dto: categoryDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemCategories).where(eq(catalogItemCategories.categoryId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemCategories)
+            .values(
+              input.catalogItemIds.map((catalogItemId) => ({ categoryId: id, catalogItemId })),
+            ),
+    ),
+});
+
+const collectionQuerySet = groupingQuerySet<CollectionId, CollectionInput>(validateCatalogItemIds)({
+  rows: (id: CollectionId) =>
+    database().select().from(collections).where(eq(collections.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemCollections.catalogItemId })
+      .from(catalogItemCollections)
+      .where(eq(catalogItemCollections.collectionId, id))
+      .orderBy(asc(catalogItemCollections.position)),
+  identityRows: (slug, excludedId) =>
+    database()
+      .select({ id: collections.id })
+      .from(collections)
+      .where(
+        excludedId
+          ? and(eq(collections.slug, slug), ne(collections.id, excludedId))
+          : eq(collections.slug, slug),
+      )
+      .limit(1),
+  identity: (input: CollectionInput) => input.slug,
+  duplicateKind: "duplicate_slug",
+  createId: createCollectionId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(collections)
+        .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
+    ]),
+  dto: collectionDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemCollections).where(eq(catalogItemCollections.collectionId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemCollections)
+            .values(
+              input.catalogItemIds.map((catalogItemId, position) => ({
+                collectionId: id,
+                catalogItemId,
+                position,
+              })),
+            ),
+    ),
+});
+
+const normalizedTagLabel = (label: string) => label.trim().toLocaleLowerCase("mn");
+const tagQuerySet = groupingQuerySet<TagId, TagInput>(validateCatalogItemIds)({
+  rows: (id: TagId) => database().select().from(tags).where(eq(tags.id, id)).limit(1),
+  membershipRows: (id) =>
+    database()
+      .select({ id: catalogItemTags.catalogItemId })
+      .from(catalogItemTags)
+      .where(eq(catalogItemTags.tagId, id))
+      .orderBy(asc(catalogItemTags.catalogItemId)),
+  identityRows: (normalizedLabel, excludedId) =>
+    database()
+      .select({ id: tags.id })
+      .from(tags)
+      .where(
+        excludedId
+          ? and(eq(tags.normalizedLabel, normalizedLabel), ne(tags.id, excludedId))
+          : eq(tags.normalizedLabel, normalizedLabel),
+      )
+      .limit(1),
+  identity: (input: TagInput) => normalizedTagLabel(input.label),
+  duplicateKind: "duplicate_label",
+  createId: createTagId,
+  insert: (id, input, now) =>
+    database().batch([
+      database()
+        .insert(tags)
+        .values({
+          id,
+          label: input.label,
+          normalizedLabel: normalizedTagLabel(input.label),
+          state: "draft",
+          createdAt: now,
+          updatedAt: now,
+        }),
+      catalogDebtStatement(now),
+    ]),
+  dto: tagDto,
+  replace: (id, input) =>
+    replaceRows(
+      database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id)),
+      input.catalogItemIds.length === 0
+        ? undefined
+        : database()
+            .insert(catalogItemTags)
+            .values(input.catalogItemIds.map((catalogItemId) => ({ tagId: id, catalogItemId }))),
+    ),
+});
+
+const findCategory = categoryQuerySet.find;
+const findCollection = collectionQuerySet.find;
+const findTag = tagQuerySet.find;
+const categorySlugExists = categoryQuerySet.identityExists;
+const collectionSlugExists = collectionQuerySet.identityExists;
+const tagLabelExists = tagQuerySet.identityExists;
+const categoryHasActiveChild = async (id: CategoryId) =>
+  (
+    await database()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.parentId, id), eq(categories.state, "active")))
+      .limit(1)
+  ).length > 0;
+
+type FlatGrouping = { state: GroupingState; activatedAt: string | null };
+const transitionFlatGrouping = async <Dto extends FlatGrouping>(
+  find: () => Promise<Dto | undefined>,
+  target: GroupingState,
+  commit: (current: Dto, now: Date) => Promise<number>,
+) => {
+  const current = await find();
+  if (!current) {
+    return { kind: "not_found" as const };
+  }
+  if (current.state === target) {
+    return { kind: "changed" as const, value: current };
+  }
+  if (target === "draft" || (current.state === "draft" && target === "archived")) {
+    return { kind: "invalid_lifecycle" as const };
+  }
+  if ((await commit(current, new Date())) === 1) {
+    return { kind: "changed" as const, value: await find() };
+  }
+  const resolved = await find();
+  return resolved?.state === target
+    ? { kind: "changed" as const, value: resolved }
+    : { kind: "invalid_lifecycle" as const };
+};
+const transitionDates = (current: FlatGrouping, target: GroupingState, now: Date) => ({
+  state: target,
+  updatedAt: now,
+  activatedAt:
+    target === "active" ? (current.activatedAt ? new Date(current.activatedAt) : now) : undefined,
+  archivedAt: target === "archived" ? now : null,
+});
+const membershipIds = (
+  groupingId: string,
+  memberships: readonly { groupingId: string; catalogItemId: string }[],
+) =>
+  memberships
+    .filter((membership) => membership.groupingId === groupingId)
+    .map((membership) => membership.catalogItemId);
 
 export const groupingQueries = {
   findCategory,
@@ -234,29 +362,12 @@ export const groupingQueries = {
     ]);
     return {
       categories: categoryRows.map((row) =>
-        categoryDto(
-          row,
-          categoryMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
+        categoryDto(row, membershipIds(row.id, categoryMemberships)),
       ),
       collections: collectionRows.map((row) =>
-        collectionDto(
-          row,
-          collectionMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
+        collectionDto(row, membershipIds(row.id, collectionMemberships)),
       ),
-      tags: tagRows.map((row) =>
-        tagDto(
-          row,
-          tagMemberships
-            .filter((membership) => membership.groupingId === row.id)
-            .map((membership) => membership.catalogItemId),
-        ),
-      ),
+      tags: tagRows.map((row) => tagDto(row, membershipIds(row.id, tagMemberships))),
       catalogItems: catalogItemRows,
       cachePurgeDebt: cacheDebtRows[0]
         ? {
@@ -295,28 +406,7 @@ export const groupingQueries = {
     return { kind: "cycle" as const };
   },
 
-  async createCategory(input: CategoryInput) {
-    if (await categorySlugExists(input.slug)) {
-      return { kind: "duplicate_slug" as const };
-    }
-    const id = createCategoryId();
-    const now = new Date();
-    try {
-      await database().batch([
-        database()
-          .insert(categories)
-          .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
-        catalogDebtStatement(now),
-      ]);
-      return { kind: "changed" as const, value: await findCategory(id) };
-    } catch {
-      return {
-        kind: (await categorySlugExists(input.slug))
-          ? ("duplicate_slug" as const)
-          : ("infrastructure" as const),
-      };
-    }
-  },
+  createCategory: categoryQuerySet.create,
 
   async updateCategory(
     id: CategoryId,
@@ -380,28 +470,7 @@ export const groupingQueries = {
     }
   },
 
-  async createCollection(input: CollectionInput) {
-    if (await collectionSlugExists(input.slug)) {
-      return { kind: "duplicate_slug" as const };
-    }
-    const id = createCollectionId();
-    const now = new Date();
-    try {
-      await database().batch([
-        database()
-          .insert(collections)
-          .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
-        catalogDebtStatement(now),
-      ]);
-      return { kind: "changed" as const, value: await findCollection(id) };
-    } catch {
-      return {
-        kind: (await collectionSlugExists(input.slug))
-          ? ("duplicate_slug" as const)
-          : ("infrastructure" as const),
-      };
-    }
-  },
+  createCollection: collectionQuerySet.create,
 
   async updateCollection(id: CollectionId, input: CollectionInput) {
     const current = await findCollection(id);
@@ -453,34 +522,7 @@ export const groupingQueries = {
     }
   },
 
-  async createTag(input: TagInput) {
-    const normalizedLabel = normalizedTagLabel(input.label);
-    if (await tagLabelExists(normalizedLabel)) {
-      return { kind: "duplicate_label" as const };
-    }
-    const id = createTagId();
-    const now = new Date();
-    try {
-      await database().batch([
-        database().insert(tags).values({
-          id,
-          label: input.label,
-          normalizedLabel,
-          state: "draft",
-          createdAt: now,
-          updatedAt: now,
-        }),
-        catalogDebtStatement(now),
-      ]);
-      return { kind: "changed" as const, value: await findTag(id) };
-    } catch {
-      return {
-        kind: (await tagLabelExists(normalizedLabel))
-          ? ("duplicate_label" as const)
-          : ("infrastructure" as const),
-      };
-    }
-  },
+  createTag: tagQuerySet.create,
 
   async updateTag(id: TagId, input: TagInput) {
     if (!(await findTag(id))) {
@@ -616,165 +658,44 @@ export const groupingQueries = {
   },
 
   async transitionCollection(id: CollectionId, target: GroupingState) {
-    const current = await findCollection(id);
-    if (!current) {
-      return { kind: "not_found" as const };
-    }
-    if (current.state === target) {
-      return { kind: "changed" as const, value: current };
-    }
-    if (target === "draft" || (current.state === "draft" && target === "archived")) {
-      return { kind: "invalid_lifecycle" as const };
-    }
-    const now = new Date();
-    const changed = (
-      await database().batch([
-        database()
-          .update(collections)
-          .set({
-            state: target,
-            updatedAt: now,
-            activatedAt:
-              target === "active"
-                ? current.activatedAt
-                  ? new Date(current.activatedAt)
-                  : now
-                : undefined,
-            archivedAt: target === "archived" ? now : null,
-          })
-          .where(and(eq(collections.id, id), eq(collections.state, current.state)))
-          .returning({ id: collections.id }),
-        catalogDebtStatement(now),
-      ])
-    )[0];
-    if (changed.length === 0) {
-      const resolved = await findCollection(id);
-      return resolved?.state === target
-        ? { kind: "changed" as const, value: resolved }
-        : { kind: "invalid_lifecycle" as const };
-    }
-    return { kind: "changed" as const, value: await findCollection(id) };
+    return transitionFlatGrouping(
+      () => findCollection(id),
+      target,
+      async (current, now) => {
+        const [changed] = await database().batch([
+          database()
+            .update(collections)
+            .set(transitionDates(current, target, now))
+            .where(and(eq(collections.id, id), eq(collections.state, current.state)))
+            .returning({ id: collections.id }),
+          catalogDebtStatement(now),
+        ]);
+        return changed.length;
+      },
+    );
   },
 
   async transitionTag(id: TagId, target: GroupingState) {
-    const current = await findTag(id);
-    if (!current) {
-      return { kind: "not_found" as const };
-    }
-    if (current.state === target) {
-      return { kind: "changed" as const, value: current };
-    }
-    if (target === "draft" || (current.state === "draft" && target === "archived")) {
-      return { kind: "invalid_lifecycle" as const };
-    }
-    const now = new Date();
-    const changed = (
-      await database().batch([
-        database()
-          .update(tags)
-          .set({
-            state: target,
-            updatedAt: now,
-            activatedAt:
-              target === "active"
-                ? current.activatedAt
-                  ? new Date(current.activatedAt)
-                  : now
-                : undefined,
-            archivedAt: target === "archived" ? now : null,
-          })
-          .where(and(eq(tags.id, id), eq(tags.state, current.state)))
-          .returning({ id: tags.id }),
-        catalogDebtStatement(now),
-      ])
-    )[0];
-    if (changed.length === 0) {
-      const resolved = await findTag(id);
-      return resolved?.state === target
-        ? { kind: "changed" as const, value: resolved }
-        : { kind: "invalid_lifecycle" as const };
-    }
-    return { kind: "changed" as const, value: await findTag(id) };
+    return transitionFlatGrouping(
+      () => findTag(id),
+      target,
+      async (current, now) => {
+        const [changed] = await database().batch([
+          database()
+            .update(tags)
+            .set(transitionDates(current, target, now))
+            .where(and(eq(tags.id, id), eq(tags.state, current.state)))
+            .returning({ id: tags.id }),
+          catalogDebtStatement(now),
+        ]);
+        return changed.length;
+      },
+    );
   },
 
-  async replaceCategoryMembership(id: CategoryId, input: GroupingMembershipInput) {
-    if (!(await findCategory(id))) {
-      return { kind: "not_found" as const };
-    }
-    if (!(await validateCatalogItemIds(input.catalogItemIds))) {
-      return { kind: "catalog_item_not_found" as const };
-    }
-    const remove = database()
-      .delete(catalogItemCategories)
-      .where(eq(catalogItemCategories.categoryId, id));
-    const debt = catalogDebtStatement(new Date());
-    if (input.catalogItemIds.length === 0) {
-      await database().batch([remove, debt]);
-    } else {
-      await database().batch([
-        remove,
-        database()
-          .insert(catalogItemCategories)
-          .values(input.catalogItemIds.map((catalogItemId) => ({ categoryId: id, catalogItemId }))),
-        debt,
-      ]);
-    }
-    return { kind: "changed" as const, value: await findCategory(id) };
-  },
-
-  async replaceCollectionMembership(id: CollectionId, input: GroupingMembershipInput) {
-    if (!(await findCollection(id))) {
-      return { kind: "not_found" as const };
-    }
-    if (!(await validateCatalogItemIds(input.catalogItemIds))) {
-      return { kind: "catalog_item_not_found" as const };
-    }
-    const remove = database()
-      .delete(catalogItemCollections)
-      .where(eq(catalogItemCollections.collectionId, id));
-    const debt = catalogDebtStatement(new Date());
-    if (input.catalogItemIds.length === 0) {
-      await database().batch([remove, debt]);
-    } else {
-      await database().batch([
-        remove,
-        database()
-          .insert(catalogItemCollections)
-          .values(
-            input.catalogItemIds.map((catalogItemId, position) => ({
-              collectionId: id,
-              catalogItemId,
-              position,
-            })),
-          ),
-        debt,
-      ]);
-    }
-    return { kind: "changed" as const, value: await findCollection(id) };
-  },
-
-  async replaceTagMembership(id: TagId, input: GroupingMembershipInput) {
-    if (!(await findTag(id))) {
-      return { kind: "not_found" as const };
-    }
-    if (!(await validateCatalogItemIds(input.catalogItemIds))) {
-      return { kind: "catalog_item_not_found" as const };
-    }
-    const remove = database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id));
-    const debt = catalogDebtStatement(new Date());
-    if (input.catalogItemIds.length === 0) {
-      await database().batch([remove, debt]);
-    } else {
-      await database().batch([
-        remove,
-        database()
-          .insert(catalogItemTags)
-          .values(input.catalogItemIds.map((catalogItemId) => ({ tagId: id, catalogItemId }))),
-        debt,
-      ]);
-    }
-    return { kind: "changed" as const, value: await findTag(id) };
-  },
+  replaceCategoryMembership: categoryQuerySet.replaceMembership,
+  replaceCollectionMembership: collectionQuerySet.replaceMembership,
+  replaceTagMembership: tagQuerySet.replaceMembership,
 
   async findCatalogCachePurgeDebt() {
     const [row] = await database()
@@ -854,18 +775,14 @@ export const groupingQueries = {
         slug: row.slug,
         name: row.name,
         description: "",
-        catalogItemIds: categoryMemberships
-          .filter((membership) => membership.groupingId === row.id)
-          .map((membership) => membership.catalogItemId),
+        catalogItemIds: membershipIds(row.id, categoryMemberships),
       })),
       collections: collectionRows.map((row) => ({
         id: row.id,
         slug: row.slug,
         name: row.name,
         description: row.description,
-        catalogItemIds: collectionMemberships
-          .filter((membership) => membership.groupingId === row.id)
-          .map((membership) => membership.catalogItemId),
+        catalogItemIds: membershipIds(row.id, collectionMemberships),
       })),
     };
   },
@@ -882,7 +799,7 @@ export const groupingQueries = {
           slug: row.slug,
           name: row.name,
           description: "",
-          catalogItemIds: await categoryCatalogItemIds(row.id),
+          catalogItemIds: await categoryQuerySet.catalogItemIds(row.id),
         }
       : undefined;
   },
@@ -899,7 +816,7 @@ export const groupingQueries = {
           slug: row.slug,
           name: row.name,
           description: row.description,
-          catalogItemIds: await collectionCatalogItemIds(row.id),
+          catalogItemIds: await collectionQuerySet.catalogItemIds(row.id),
         }
       : undefined;
   },

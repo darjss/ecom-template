@@ -19,15 +19,16 @@ import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogQueries } from "../catalog/persistence";
 import { catalogMediaQueries } from "./persistence";
 
+type CatalogMediaFailureCode =
+  | "forbidden"
+  | "not_found"
+  | "unsupported_media_type"
+  | "invalid_media_bytes"
+  | "media_too_large"
+  | "infrastructure_unavailable";
 export type CatalogMediaFailure = {
-  readonly code:
-    | "forbidden"
-    | "not_found"
-    | "unsupported_media_type"
-    | "invalid_media_bytes"
-    | "media_too_large"
-    | "infrastructure_unavailable";
-};
+  [Code in CatalogMediaFailureCode]: { readonly code: Code };
+}[CatalogMediaFailureCode];
 
 type AttachCatalogImageInput = {
   readonly declaredContentType: string;

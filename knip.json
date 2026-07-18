@@ -16,13 +16,5 @@
       "entry": ["scripts/*.ts"]
     }
   },
-  "ignoreDependencies": [
-    "@astrojs/check",
-    "@date-fns/tz",
-    "cloudflare",
-    "culori",
-    "date-fns",
-    "dismatch",
-    "es-toolkit"
-  ]
+  "ignoreDependencies": ["@astrojs/check", "@date-fns/tz", "cloudflare", "culori", "date-fns"]
 }

@@ -58,40 +58,41 @@ export const PersonalizationSelectValueSchema = v.strictObject({
   position: PersonalizationPositionSchema,
   state: v.picklist(["active", "archived"]),
 });
-export const PersonalizationDefinitionSchema = v.variant("kind", [
-  v.strictObject({
-    id: PersonalizationIdSchema,
+const PersonalizationStateSchema = v.picklist(["active", "archived"]);
+const PersonalizationFields = {
+  key: PersonalizationKeySchema,
+  label: PersonalizationLabelSchema,
+  position: PersonalizationPositionSchema,
+  required: v.boolean(),
+};
+const PersonalizationDefinitionFields = {
+  ...PersonalizationFields,
+  id: PersonalizationIdSchema,
+  state: PersonalizationStateSchema,
+};
+const PersonalizationDraftFields = {
+  ...PersonalizationFields,
+  id: v.optional(PersonalizationIdSchema),
+  state: v.optional(PersonalizationStateSchema, "active"),
+};
+const PersonalizationKindFields = {
+  text: {
     kind: v.literal("text"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.picklist(["active", "archived"]),
     maxLength: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(240)),
     values: v.tuple([]),
-  }),
+  },
+  singleSelect: { kind: v.literal("single_select"), maxLength: v.null() },
+  checkbox: { kind: v.literal("checkbox"), maxLength: v.null(), values: v.tuple([]) },
+};
+
+export const PersonalizationDefinitionSchema = v.variant("kind", [
+  v.strictObject({ ...PersonalizationDefinitionFields, ...PersonalizationKindFields.text }),
   v.strictObject({
-    id: PersonalizationIdSchema,
-    kind: v.literal("single_select"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.picklist(["active", "archived"]),
-    maxLength: v.null(),
+    ...PersonalizationDefinitionFields,
+    ...PersonalizationKindFields.singleSelect,
     values: v.pipe(v.array(PersonalizationSelectValueSchema), v.minLength(1), v.maxLength(12)),
   }),
-  v.strictObject({
-    id: PersonalizationIdSchema,
-    kind: v.literal("checkbox"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.picklist(["active", "archived"]),
-    maxLength: v.null(),
-    values: v.tuple([]),
-  }),
+  v.strictObject({ ...PersonalizationDefinitionFields, ...PersonalizationKindFields.checkbox }),
 ]);
 export const PersonalizationDefinitionsSchema = v.pipe(
   v.array(PersonalizationDefinitionSchema),
@@ -103,42 +104,16 @@ const PersonalizationValueDraftSchema = v.strictObject({
   key: PersonalizationKeySchema,
   label: PersonalizationLabelSchema,
   position: PersonalizationPositionSchema,
-  state: v.optional(v.picklist(["active", "archived"]), "active"),
+  state: v.optional(PersonalizationStateSchema, "active"),
 });
 export const PersonalizationDefinitionDraftSchema = v.variant("kind", [
+  v.strictObject({ ...PersonalizationDraftFields, ...PersonalizationKindFields.text }),
   v.strictObject({
-    id: v.optional(PersonalizationIdSchema),
-    kind: v.literal("text"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.optional(v.picklist(["active", "archived"]), "active"),
-    maxLength: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(240)),
-    values: v.tuple([]),
-  }),
-  v.strictObject({
-    id: v.optional(PersonalizationIdSchema),
-    kind: v.literal("single_select"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.optional(v.picklist(["active", "archived"]), "active"),
-    maxLength: v.null(),
+    ...PersonalizationDraftFields,
+    ...PersonalizationKindFields.singleSelect,
     values: v.pipe(v.array(PersonalizationValueDraftSchema), v.minLength(1), v.maxLength(12)),
   }),
-  v.strictObject({
-    id: v.optional(PersonalizationIdSchema),
-    kind: v.literal("checkbox"),
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state: v.optional(v.picklist(["active", "archived"]), "active"),
-    maxLength: v.null(),
-    values: v.tuple([]),
-  }),
+  v.strictObject({ ...PersonalizationDraftFields, ...PersonalizationKindFields.checkbox }),
 ]);
 export const SavePersonalizationsInputSchema = v.strictObject({
   definitions: v.pipe(

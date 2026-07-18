@@ -15,6 +15,7 @@ import {
 } from "@ecom/contracts";
 import { and, asc, count, eq, exists, gt, inArray, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import {
   bundleComponents,
@@ -129,8 +130,6 @@ export const readProductOptionConfiguration = async (productId: ProductId) => {
   return configuration.configuration;
 };
 
-const distinct = (values: readonly string[]) => new Set(values).size === values.length;
-
 const temporaryPositions = (
   currentPositions: readonly number[],
   nextPositions: readonly number[],
@@ -180,14 +179,14 @@ export const catalogVariantQueries = {
       })),
     );
     if (
-      !distinct(groups.map(({ id }) => id)) ||
-      !distinct(groups.map(({ key }) => key)) ||
-      !distinct(groups.map(({ position }) => String(position))) ||
-      !distinct(values.map(({ id }) => id)) ||
+      uniq(groups.map(({ id }) => id)).length !== groups.length ||
+      uniq(groups.map(({ key }) => key)).length !== groups.length ||
+      uniq(groups.map(({ position }) => position)).length !== groups.length ||
+      uniq(values.map(({ id }) => id)).length !== values.length ||
       groups.some(
         (group) =>
-          !distinct(group.values.map(({ key }) => key)) ||
-          !distinct(group.values.map(({ position }) => String(position))),
+          uniq(group.values.map(({ key }) => key)).length !== group.values.length ||
+          uniq(group.values.map(({ position }) => position)).length !== group.values.length,
       )
     ) {
       return { kind: "invalid_combination" as const };
@@ -211,13 +210,16 @@ export const catalogVariantQueries = {
     if (
       requestedVariants.some(
         (variant) =>
-          !distinct(variant.optionValueIds) ||
+          uniq(variant.optionValueIds).length !== variant.optionValueIds.length ||
           variant.optionValueIds.some((id) => !valueIds.has(id)),
       )
     ) {
       return { kind: "invalid_combination" as const };
     }
-    if (!distinct(requestedVariants.map(({ combinationKey: key }) => key))) {
+    if (
+      uniq(requestedVariants.map(({ combinationKey: key }) => key)).length !==
+      requestedVariants.length
+    ) {
       return { kind: "duplicate_combination" as const };
     }
 
@@ -282,7 +284,7 @@ export const catalogVariantQueries = {
             inArray(catalogItemImages.mediaAssetId, imageIds),
           ),
         );
-      if (new Set(ownedImages.map(({ id }) => id)).size !== new Set(imageIds).size) {
+      if (uniq(ownedImages.map(({ id }) => id)).length !== uniq(imageIds).length) {
         return { kind: "media_not_owned" as const };
       }
     }
