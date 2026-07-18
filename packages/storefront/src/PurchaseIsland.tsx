@@ -13,6 +13,7 @@ import { ProductVariantSelector } from "./ProductVariantSelector";
 import { QueryClientProvider } from "@tanstack/solid-query";
 import { createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { createPurchaseAvailability } from "./purchase-availability";
+import { resolvePurchasePrice } from "./purchase-price";
 
 const money = new Intl.NumberFormat("mn-MN");
 
@@ -69,6 +70,13 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
   const availability = createPurchaseAvailability(() => target());
   const definitions = () =>
     props.kind === "product" ? props.personalizations : props.bundle.personalizations;
+  const catalogPriceMnt = () =>
+    props.kind === "bundle"
+      ? props.bundle.priceMnt
+      : (props.product.variants.find(({ id }) => id === selectedVariantId())?.priceMnt ??
+        props.product.priceMnt);
+  const price = () =>
+    resolvePurchasePrice(catalogPriceMnt(), availability.state(), availability.fact());
   const statusText = () => {
     if (availability.state() === "checking") {
       return "Боломжийг шалгаж байна…";
@@ -79,8 +87,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     if (availability.state() === "unavailable") {
       return "Одоогоор авах боломжгүй.";
     }
-    const current = availability.fact();
-    return current ? `${money.format(current.unitPriceMnt)} ₮ · Авах боломжтой` : "";
+    return "Авах боломжтой";
   };
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
@@ -146,6 +153,14 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
             }}
           />
         </label>
+        <div>
+          <strong class="block text-2xl tabular-nums">
+            {money.format(price().unitPriceMnt)} ₮
+          </strong>
+          <span class="text-sm text-(--muted)">
+            {price().source === "current" ? "Шинэчилсэн үнэ" : "Каталогийн үнэ · танилцуулга"}
+          </span>
+        </div>
         <p class="m-0 min-h-6 font-bold" aria-live="polite" aria-atomic="true">
           {statusText()}
         </p>
