@@ -1,5 +1,5 @@
 ---
-import { PersonalizationControls, ProductVariantSelector } from "@ecom/storefront";
+import { PurchaseIsland } from "@ecom/storefront";
 import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import OrderingNotices from "../../components/OrderingNotices.astro";
 import StoreShell from "../../components/StoreShell.astro";
@@ -66,8 +66,13 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
-        <ProductVariantSelector product={product} client:load />
-        <PersonalizationControls definitions={personalizations} />
+        <PurchaseIsland
+          kind="product"
+          product={product}
+          personalizations={personalizations}
+          storageKey="cart:urnuun-48:v1"
+          client:load
+        />
       </div>
     </article>
     <OrderingNotices document={orderingNotices} placement="product" />

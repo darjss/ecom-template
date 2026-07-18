@@ -2,7 +2,9 @@ import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
 import { ApiErrorCodeSchema, type ClientRequestError } from "./client-error";
 
+export * from "./availability";
 export * from "./bundle";
+export * from "./cart";
 export * from "./catalog";
 export * from "./client-error";
 export * from "./cms";
@@ -231,17 +233,6 @@ export const StorefrontSummarySchema = v.strictObject({
   status: v.literal("open"),
 });
 
-export const CartLineSchema = v.strictObject({
-  id: v.string(),
-  title: v.string(),
-  quantity: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  unitPriceMnt: v.pipe(v.number(), v.integer(), v.minValue(0)),
-});
-
-export const CartSchema = v.strictObject({
-  lines: v.array(CartLineSchema),
-});
-
 export type StaffId = v.InferOutput<typeof StaffIdSchema>;
 export type CustomerId = v.InferOutput<typeof CustomerIdSchema>;
 export type AuditActorKind = v.InferOutput<typeof AuditActorKindSchema>;
@@ -274,8 +265,6 @@ export type HealthClientError = ClientRequestError<
 >;
 export type StoreDefinition = v.InferOutput<typeof StoreDefinitionSchema>;
 export type StorefrontSummary = v.InferOutput<typeof StorefrontSummarySchema>;
-export type Cart = v.InferOutput<typeof CartSchema>;
-export type CartLine = v.InferOutput<typeof CartLineSchema>;
 
 export const createStaffId = () => typeidUnboxed("staff");
 export const createCustomerId = () => typeidUnboxed("customer");

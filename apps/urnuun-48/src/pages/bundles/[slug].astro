@@ -1,5 +1,5 @@
 ---
-import { PersonalizationControls } from "@ecom/storefront";
+import { PurchaseIsland } from "@ecom/storefront";
 import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
@@ -23,7 +23,6 @@ applyPublicHtmlCache(Astro.response.headers, [
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
-const money = new Intl.NumberFormat("mn-MN");
 ---
 <StoreLayout title={`${bundle.name} · ${storeName}`} description={bundle.description || bundle.name}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
@@ -47,7 +46,6 @@ const money = new Intl.NumberFormat("mn-MN");
         <p class="kicker">Тогтмол Bundle</p>
         <h1 id="bundle-title">{bundle.name}</h1>
         {bundle.description && <p>{bundle.description}</p>}
-        <p class="price"><strong>{money.format(bundle.priceMnt)} ₮</strong></p>
         <section aria-labelledby="bundle-contents">
           <h2 id="bundle-contents">Bundle-ийн бүрэлдэхүүн</h2>
           <ul>
@@ -56,7 +54,12 @@ const money = new Intl.NumberFormat("mn-MN");
             ))}
           </ul>
         </section>
-        <PersonalizationControls definitions={bundle.personalizations} />
+        <PurchaseIsland
+          kind="bundle"
+          bundle={bundle}
+          storageKey="cart:urnuun-48:v1"
+          client:load
+        />
       </div>
     </article>
   </main>

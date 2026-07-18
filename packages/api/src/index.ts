@@ -62,6 +62,7 @@ import {
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
+import { createAvailabilityRoutes } from "./availability-routes";
 import { createBundleRoutes } from "./bundle-routes";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { createCmsRoutes } from "./cms-routes";
@@ -268,6 +269,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       set.headers["cache-control"] = "private, no-store";
       return responseValue;
     })
+    .use(createAvailabilityRoutes())
     .use(createCustomerAuthRoutes(definition, smsGateway))
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
