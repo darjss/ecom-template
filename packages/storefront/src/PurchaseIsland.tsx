@@ -13,6 +13,7 @@ import { ProductVariantSelector } from "./ProductVariantSelector";
 import { QueryClientProvider } from "@tanstack/solid-query";
 import { createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { createPurchaseAvailability } from "./purchase-availability";
+import { resolvePurchaseDemand } from "./purchase-demand";
 import { resolvePurchasePrice } from "./purchase-price";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -62,11 +63,13 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     untrack(() => (props.kind === "product" ? (props.product.variants[0]?.id ?? "") : "")),
   );
   const [announcement, setAnnouncement] = createSignal("");
-  const target = createMemo(() =>
+  const identity = createMemo(() =>
     props.kind === "product"
-      ? { kind: "variant" as const, id: selectedVariantId(), quantity: quantity() }
-      : { kind: "bundle" as const, id: props.bundle.id, quantity: quantity() },
+      ? { kind: "variant" as const, id: selectedVariantId() }
+      : { kind: "bundle" as const, id: props.bundle.id },
   );
+  const demand = createMemo(() => resolvePurchaseDemand(cart.lines(), identity(), quantity()));
+  const target = createMemo(() => ({ ...identity(), quantity: demand().quantity }));
   const availability = createPurchaseAvailability(() => target());
   const definitions = () =>
     props.kind === "product" ? props.personalizations : props.bundle.personalizations;
@@ -78,6 +81,9 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
   const price = () =>
     resolvePurchasePrice(catalogPriceMnt(), availability.state(), availability.fact());
   const statusText = () => {
+    if (!demand().withinBounds) {
+      return "Сагсанд энэ бараанаас нийт 999-өөс ихийг хадгалах боломжгүй.";
+    }
     if (availability.state() === "checking") {
       return "Боломжийг шалгаж байна…";
     }
@@ -91,7 +97,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
   };
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    if (availability.state() !== "ready") {
+    if (availability.state() !== "ready" || !demand().withinBounds) {
       return;
     }
     const form = event.currentTarget;
@@ -102,12 +108,16 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     if (!Number.isInteger(quantityValue) || quantityValue < 1 || quantityValue > 999) {
       return;
     }
+    const submittedDemand = resolvePurchaseDemand(cart.lines(), identity(), quantityValue);
+    if (!submittedDemand.withinBounds || submittedDemand.quantity !== target().quantity) {
+      return;
+    }
     const personalizations = answersFromForm(form, definitions());
-    const current = { ...target(), quantity: quantityValue };
+    const current = identity();
     const line: CartLine =
       current.kind === "variant"
-        ? { kind: "variant", variantId: current.id, quantity: current.quantity, personalizations }
-        : { kind: "bundle", bundleId: current.id, quantity: current.quantity, personalizations };
+        ? { kind: "variant", variantId: current.id, quantity: quantityValue, personalizations }
+        : { kind: "bundle", bundleId: current.id, quantity: quantityValue, personalizations };
     const result = cart.addLine(line);
     setAnnouncement(
       result === "added"
@@ -166,7 +176,9 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
         </p>
         <Button
           type="submit"
-          disabled={availability.state() !== "ready" || cart.recovery() !== null}
+          disabled={
+            availability.state() !== "ready" || !demand().withinBounds || cart.recovery() !== null
+          }
         >
           {availability.state() === "checking" ? "Шалгаж байна…" : "Сагсанд нэмэх"}
         </Button>
