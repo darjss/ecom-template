@@ -2,6 +2,7 @@
 import { PurchaseIsland } from "@ecom/storefront";
 import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import OrderingNotices from "../../components/OrderingNotices.astro";
+import PurchaseFallback from "../../components/PurchaseFallback.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -25,8 +26,14 @@ applyPublicHtmlCache(Astro.response.headers, [
   "catalog",
   productCacheTag(product.id),
 ]);
-const money = new Intl.NumberFormat("mn-MN");
 const selectedCatalogVariant = product.variants[0];
+const availableValueIds = new Set(
+  product.variants.flatMap((variant) => variant.optionValues.map(({ valueId }) => valueId)),
+);
+const fallbackOptionGroups = product.optionGroups.map((group) => ({
+  ...group,
+  values: group.values.filter(({ id }) => availableValueIds.has(id)),
+}));
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
@@ -68,13 +75,13 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
-        <div data-purchase-fallback aria-live="polite">
-          {selectedCatalogVariant && (
-            <p class="price"><strong>{money.format(selectedCatalogVariant.priceMnt)} ₮</strong></p>
-          )}
-          <p>Каталогийн үнэ · Боломжийг шалгаж байна…</p>
-          <button type="button" disabled>Шалгаж байна…</button>
-        </div>
+        {selectedCatalogVariant && (
+          <PurchaseFallback
+            priceMnt={selectedCatalogVariant.priceMnt}
+            optionGroups={fallbackOptionGroups}
+            personalizations={personalizations}
+          />
+        )}
         <PurchaseIsland
           kind="product"
           product={product}

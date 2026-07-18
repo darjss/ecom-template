@@ -1,0 +1,56 @@
+---
+import type { PersonalizationDefinition, PublicProductDetail } from "@ecom/storefront";
+
+type Props = {
+  priceMnt: number;
+  optionGroups?: PublicProductDetail["optionGroups"];
+  personalizations?: readonly PersonalizationDefinition[];
+};
+
+const { priceMnt, optionGroups = [], personalizations = [] } = Astro.props;
+const activePersonalizations = personalizations.filter(({ state }) => state === "active");
+const money = new Intl.NumberFormat("mn-MN");
+---
+<div data-purchase-fallback aria-live="polite">
+  <p class="price"><strong>{money.format(priceMnt)} ₮</strong></p>
+  <p>Каталогийн мэдээлэл · Боломжийг шалгаж байна…</p>
+  {optionGroups.map((group) => (
+    <fieldset class="m-0 grid gap-2 border-0 p-0" disabled>
+      <legend class="mb-1 text-sm font-bold">{group.label}</legend>
+      <div class="flex flex-wrap gap-2">
+        {group.values.map((value) => (
+          <button type="button" class="min-h-11 rounded-lg border border-black/25 bg-white px-4 py-2 text-sm font-bold text-(--ink)" disabled>
+            {value.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  ))}
+  {activePersonalizations.length > 0 && (
+    <fieldset class="m-0 grid gap-4 border-0 p-0" disabled>
+      <legend class="mb-3 text-lg font-bold">Таны сонголт · каталогийн мэдээлэл</legend>
+      {activePersonalizations.map((definition) => (
+        definition.kind === "text"
+          ? <label class="grid gap-1.5 font-bold">
+              <span>{definition.label}{definition.required ? " · заавал" : " · сонголттой"}</span>
+              <input class="min-h-12 rounded-lg border border-black/30 bg-white px-3" maxlength={definition.maxLength} required={definition.required} disabled />
+            </label>
+          : definition.kind === "single_select"
+            ? <label class="grid gap-1.5 font-bold">
+                <span>{definition.label}{definition.required ? " · заавал" : " · сонголттой"}</span>
+                <select class="min-h-12 rounded-lg border border-black/30 bg-white px-3" required={definition.required} disabled>
+                  <option>Сонгоно уу</option>
+                  {definition.values.filter(({ state }) => state === "active").map((value) => (
+                    <option>{value.label}</option>
+                  ))}
+                </select>
+              </label>
+            : <label class="flex min-h-12 items-center gap-3 rounded-lg border border-black/20 px-3 font-bold">
+                <input class="size-5" type="checkbox" required={definition.required} disabled />
+                <span>{definition.label}{definition.required ? " · заавал" : " · сонголттой"}</span>
+              </label>
+      ))}
+    </fieldset>
+  )}
+  <button type="button" disabled>Шалгаж байна…</button>
+</div>
