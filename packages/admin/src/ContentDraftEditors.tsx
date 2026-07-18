@@ -230,9 +230,9 @@ export const HomepageEditor = (
       featuredCatalogItemIds: [...restored.content.featuredCatalogItemIds],
     },
   }));
-  const values = form.useSelector((state) => state.values);
+  const valuesVersion = form.useSelector((state) => JSON.stringify(state.values));
   const content = () => {
-    const current = values();
+    const current = form.state.values;
     return {
       version: 1,
       headline: current.headline,
@@ -253,7 +253,7 @@ export const HomepageEditor = (
   });
   createEffect(
     on(
-      values,
+      valuesVersion,
       () => {
         if (local.issue()) return;
         const parsed = v.safeParse(HomepageDocumentSchema, content());
@@ -447,17 +447,17 @@ export const AnnouncementEditor = (
   const compatible = local.compatible();
   const restored = compatible.kind === "announcement" ? compatible : props.initial;
   const form = createForm(() => ({ defaultValues: { ...restored.content } }));
-  const values = form.useSelector((state) => state.values);
+  const valuesVersion = form.useSelector((state) => JSON.stringify(state.values));
   const document = (): Extract<ContentDocument, { kind: "announcement" }> => ({
     kind: "announcement",
-    content: v.parse(AnnouncementDocumentSchema, values()),
+    content: v.parse(AnnouncementDocumentSchema, form.state.values),
   });
   createEffect(
     on(
-      values,
-      (current) => {
+      valuesVersion,
+      () => {
         if (local.issue()) return;
-        const parsed = v.safeParse(AnnouncementDocumentSchema, current);
+        const parsed = v.safeParse(AnnouncementDocumentSchema, form.state.values);
         if (parsed.success) local.setDraft({ kind: "announcement", content: parsed.output });
       },
       { defer: true },
@@ -514,17 +514,17 @@ export const OrderingNoticesEditor = (
   const form = createForm(() => ({
     defaultValues: { ...restored.content, notices: [...restored.content.notices] },
   }));
-  const values = form.useSelector((state) => state.values);
+  const valuesVersion = form.useSelector((state) => JSON.stringify(state.values));
   const document = (): Extract<ContentDocument, { kind: "ordering_notices" }> => ({
     kind: "ordering_notices",
-    content: v.parse(OrderingNoticesDocumentSchema, values()),
+    content: v.parse(OrderingNoticesDocumentSchema, form.state.values),
   });
   createEffect(
     on(
-      values,
-      (current) => {
+      valuesVersion,
+      () => {
         if (local.issue()) return;
-        const parsed = v.safeParse(OrderingNoticesDocumentSchema, current);
+        const parsed = v.safeParse(OrderingNoticesDocumentSchema, form.state.values);
         if (parsed.success) local.setDraft({ kind: "ordering_notices", content: parsed.output });
       },
       { defer: true },
