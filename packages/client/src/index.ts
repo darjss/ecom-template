@@ -1,3 +1,4 @@
+export { requestAvailability } from "./availability/request";
 export { CartProvider, useCart } from "./cart/index";
 export {
   requestBundleMutation,
@@ -34,6 +35,7 @@ export {
   requestUpdateTag,
 } from "./grouping/request";
 export { createStoreQueryClient } from "./query/client";
+export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
 export {
   bundleMutationOptions,
   bundleQueryOptions,

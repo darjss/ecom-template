@@ -1,4 +1,5 @@
 export { signOutCustomer } from "./auth/customer-runtime";
+export { readAvailability, type AvailabilityFailure } from "./availability/operations";
 export {
   createBundle,
   expandBundleDemand,

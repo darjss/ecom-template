@@ -1,7 +1,8 @@
 ---
-import { PersonalizationControls, ProductVariantSelector } from "@ecom/storefront";
+import { PurchaseIsland } from "@ecom/storefront";
 import { applyPublicHtmlCache, productCacheTag } from "@ecom/storefront/cache";
 import OrderingNotices from "../../components/OrderingNotices.astro";
+import PurchaseFallback from "../../components/PurchaseFallback.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -25,6 +26,14 @@ applyPublicHtmlCache(Astro.response.headers, [
   "catalog",
   productCacheTag(product.id),
 ]);
+const selectedCatalogVariant = product.variants[0];
+const availableValueIds = new Set(
+  product.variants.flatMap((variant) => variant.optionValues.map(({ valueId }) => valueId)),
+);
+const fallbackOptionGroups = product.optionGroups.map((group) => ({
+  ...group,
+  values: group.values.filter(({ id }) => availableValueIds.has(id)),
+}));
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
@@ -66,8 +75,21 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
-        <ProductVariantSelector product={product} client:load />
-        <PersonalizationControls definitions={personalizations} />
+        {selectedCatalogVariant && (
+          <PurchaseFallback
+            priceMnt={selectedCatalogVariant.priceMnt}
+            sku={selectedCatalogVariant.sku}
+            optionGroups={fallbackOptionGroups}
+            personalizations={personalizations}
+          />
+        )}
+        <PurchaseIsland
+          kind="product"
+          product={product}
+          personalizations={personalizations}
+          storageKey="cart:urnuun-48:v1"
+          client:only="solid-js"
+        />
       </div>
     </article>
     <OrderingNotices document={orderingNotices} placement="product" />

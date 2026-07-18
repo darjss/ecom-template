@@ -2,7 +2,7 @@ import type { PersonalizationDefinition } from "@ecom/contracts";
 import { For, Match, Show, Switch } from "solid-js";
 
 export const PersonalizationControls = (props: {
-  definitions: readonly PersonalizationDefinition[];
+  readonly definitions: readonly PersonalizationDefinition[];
 }) => (
   <Show when={props.definitions.some(({ state }) => state === "active")}>
     <fieldset class="m-0 grid gap-4 border-0 p-0">
@@ -13,35 +13,22 @@ export const PersonalizationControls = (props: {
             <Match when={definition.kind === "text" && definition}>
               {(text) => (
                 <label class="grid gap-1.5 font-bold">
-                  <span>
-                    {text().label}
-                    <Show when={!text().required}>
-                      <small class="ml-1 font-normal">(заавал биш)</small>
-                    </Show>
-                  </span>
+                  <span>{text().label}</span>
                   <input
-                    class="min-h-12 rounded-lg border border-black/30 bg-(--paper) px-3 text-(--ink) focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-(--focus)"
+                    class="min-h-12 rounded-lg border border-black/30 bg-white px-3 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
                     name={`personalization-${text().key}`}
                     maxlength={text().maxLength}
                     required={text().required}
                   />
-                  <small class="font-normal text-(--muted)">
-                    {text().maxLength} тэмдэгт хүртэл
-                  </small>
                 </label>
               )}
             </Match>
             <Match when={definition.kind === "single_select" && definition}>
               {(select) => (
                 <label class="grid gap-1.5 font-bold">
-                  <span>
-                    {select().label}
-                    <Show when={!select().required}>
-                      <small class="ml-1 font-normal">(заавал биш)</small>
-                    </Show>
-                  </span>
+                  <span>{select().label}</span>
                   <select
-                    class="min-h-12 rounded-lg border border-black/30 bg-(--paper) px-3 text-(--ink) focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-(--focus)"
+                    class="min-h-12 rounded-lg border border-black/30 bg-white px-3 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
                     name={`personalization-${select().key}`}
                     required={select().required}
                   >
@@ -62,12 +49,7 @@ export const PersonalizationControls = (props: {
                     name={`personalization-${checkbox().key}`}
                     required={checkbox().required}
                   />
-                  <span>
-                    {checkbox().label}
-                    <Show when={!checkbox().required}>
-                      <small class="ml-1 font-normal">(заавал биш)</small>
-                    </Show>
-                  </span>
+                  {checkbox().label}
                 </label>
               )}
             </Match>
