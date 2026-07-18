@@ -188,13 +188,16 @@ export const catalogQueries = {
       ]);
     } catch {
       return {
-        conflict: (await hasDuplicateSlug(input.slug))
+        kind: (await hasDuplicateSlug(input.slug))
           ? ("duplicate_slug" as const)
           : ("infrastructure" as const),
       };
     }
 
-    return { product: await findCatalogProductById(id) };
+    const product = await findCatalogProductById(id);
+    return product
+      ? { kind: "changed" as const, product }
+      : { kind: "infrastructure" as const };
   },
 
   async update(actor: StaffActor, id: ProductId, input: UpdateProductInput) {

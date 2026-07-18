@@ -38,141 +38,88 @@ export type CatalogMutationResult = {
   readonly cachePurgeRequestId: string | null;
 };
 
-const authorize = (actor: StaffActor) =>
+const authorized = (actor: StaffActor) =>
   hasStaffCapability(actor.role, "catalog_cms") &&
   hasStaffCapability(actor.role, "inventory_discounts");
 
-export const listCatalog = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  try {
-    return Result.ok(await catalogQueries.listAll());
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const createProduct = async (actor: StaffActor, input: CreateProductInput) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  try {
-    const result = await catalogQueries.create(actor, input);
-    if (!result.product) {
-      return Result.err<never, CatalogOperationFailure>({
-        code:
-          result.conflict === "infrastructure"
-            ? "infrastructure_unavailable"
-            : (result.conflict ?? "infrastructure_unavailable"),
-      });
-    }
-    return Result.ok<CatalogMutationResult, never>({
-      product: result.product,
-      cache: "not_required",
-      cachePurgeRequestId: null,
-    });
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const updateProduct = async (
+const execute = async <Value>(
   actor: StaffActor,
-  id: ProductId,
-  input: UpdateProductInput,
+  operation: () => Promise<Result<Value, CatalogOperationFailure>>,
 ) => {
-  if (!authorize(actor)) {
+  if (!authorized(actor)) {
     return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
   }
   try {
-    const result = await catalogQueries.update(actor, id, input);
-    if (result.kind === "changed" && result.product) {
-      return Result.ok(await resolvePendingCatalogCachePurge(result.product));
-    }
-    if (result.kind === "not_found" || result.kind === "duplicate_slug") {
-      return Result.err<never, CatalogOperationFailure>({ code: result.kind });
-    }
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
+    return await operation();
   } catch {
     return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
   }
 };
 
-export const transitionProduct = async (
+const unchangedCache = (product: Product): CatalogMutationResult => ({
+  product,
+  cache: "not_required",
+  cachePurgeRequestId: null,
+});
+
+export const listCatalog = (actor: StaffActor) =>
+  execute(actor, async () => Result.ok(await catalogQueries.listAll()));
+
+export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
+  execute(actor, async () => {
+    const result = await catalogQueries.create(actor, input);
+    return result.kind === "changed"
+      ? Result.ok(unchangedCache(result.product))
+      : Result.err<never, CatalogOperationFailure>({
+          code:
+            result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+        });
+  });
+
+export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
+  execute(actor, async () => {
+    const result = await catalogQueries.update(actor, id, input);
+    return result.kind === "changed"
+      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
+      : Result.err<never, CatalogOperationFailure>({
+          code:
+            result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+        });
+  });
+
+export const transitionProduct = (
   actor: StaffActor,
   id: ProductId,
   transition: "publish" | "archive" | "reactivate",
-) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  try {
+) =>
+  execute(actor, async () => {
     const result = await catalogQueries.transition(actor, id, transition);
-    if (result.kind === "changed" && result.product) {
-      return Result.ok(await resolvePendingCatalogCachePurge(result.product));
-    }
-    return Result.err<never, CatalogOperationFailure>({
-      code:
-        result.kind === "not_found" ||
-        result.kind === "invalid_lifecycle" ||
-        result.kind === "invalid_publication" ||
-        result.kind === "published_bundle_dependency" ||
-        result.kind === "published_cms_dependency"
-          ? result.kind
-          : "infrastructure_unavailable",
-    });
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
+    return result.kind === "changed"
+      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
+      : Result.err<never, CatalogOperationFailure>({ code: result.kind });
+  });
 
-export const retryProductCachePurge = async (actor: StaffActor, id: ProductId) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  try {
+export const retryProductCachePurge = (actor: StaffActor, id: ProductId) =>
+  execute(actor, async () => {
     const product = await catalogQueries.findById(id);
     return product
       ? Result.ok(await resolvePendingCatalogCachePurge(product))
       : Result.err<never, CatalogOperationFailure>({ code: "not_found" });
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
+  });
 
-export const adjustProductInventory = async (
+export const adjustProductInventory = (
   actor: StaffActor,
   id: ProductId,
   input: InventoryAdjustmentInput,
-) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  try {
+) =>
+  execute(actor, async () => {
     const result = await inventoryQueries.adjust(actor, id, input);
-    if (result.kind === "changed" && result.product) {
-      return Result.ok<CatalogMutationResult, never>({
-        product: result.product,
-        cache: "not_required",
-        cachePurgeRequestId: null,
-      });
+    if (result.kind === "changed") {
+      return Result.ok(unchangedCache(result.product));
     }
-    if (result.kind === "reservation_blocked" || result.kind === "inventory_inconsistent") {
-      return Result.err<never, CatalogOperationFailure>({
-        code: result.kind,
-        blockers: result.blockers,
-      });
-    }
-    return Result.err<never, CatalogOperationFailure>({
-      code:
-        result.kind === "not_found" ||
-        result.kind === "conflict" ||
-        result.kind === "inventory_limit"
-          ? result.kind
-          : "conflict",
-    });
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
+    return Result.err<never, CatalogOperationFailure>(
+      result.kind === "reservation_blocked" || result.kind === "inventory_inconsistent"
+        ? { code: result.kind, blockers: result.blockers }
+        : { code: result.kind },
+    );
+  });
