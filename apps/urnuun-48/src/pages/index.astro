@@ -92,5 +92,5 @@ const destinationHref = (destination: typeof navigation extends undefined ? neve
       <CustomerAuthIsland client:only="solid-js" />
     </section>
   </main>
-  <footer><span>{storeName}</span><span>{locations?.locations.find((location) => location.active)?.address ?? summary.location}</span></footer>
+  <footer><span>{storeName}</span>{navigation?.footer.map((group) => <nav aria-label={group.label}>{group.items.filter((item) => item.enabled).map((item) => { const href = destinationHref(item.destination); return href ? <a href={href}>{item.label}</a> : null; })}</nav>)}<span>{locations?.locations.find((location) => location.active)?.address ?? summary.location}</span></footer>
 </StoreLayout>

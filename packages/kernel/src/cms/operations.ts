@@ -252,7 +252,7 @@ export const saveCommerceSettings = async (
     if (!debt) {
       return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
     }
-    const purge = await purgeCacheTags(["store-shell"]);
+    const purge = await purgeCacheTags(["store-shell", "homepage", "catalog", "policies"]);
     const recorded = await cmsQueries.recordPurge(
       debt.revision,
       purge.requestId,

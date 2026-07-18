@@ -63,7 +63,8 @@ const error = (failure: CmsOperationFailure, status: Status) => {
                 ? "unavailable"
                 : "conflict",
         message: messages[failure.code],
-        reason: failure.code === "forbidden" ? undefined : failure.code,
+        reason:
+          failure.code === "forbidden" || failure.code === "not_found" ? undefined : failure.code,
       },
     }),
   );
