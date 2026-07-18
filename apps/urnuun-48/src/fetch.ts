@@ -1,4 +1,5 @@
 import { handle } from "@astrojs/cloudflare/handler";
+import { WorkerEntrypoint } from "cloudflare:workers";
 import {
   isPublicMediaPath,
   MediaUploadMultipartMaxBytes,
@@ -110,15 +111,14 @@ const acceptsMediaUploadSize = (request: Request) => {
   );
 };
 
-export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
+const dispatchStoreRequest = async (
+  request: Request,
+  environment: Env,
+  context: ExecutionContext,
+) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
   if (!origin) {
     return rejectedHostResponse();
-  }
-
-  const redirect = canonicalRedirect(request);
-  if (redirect) {
-    return redirect;
   }
 
   const pathname = new URL(request.url).pathname;
@@ -178,4 +178,37 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     }
   }
   return classifyResponse(request, await handle(presentationRequest, environment, context));
+};
+
+const isAnonymousCacheCandidate = (request: Request) => {
+  const url = new URL(request.url);
+  return (
+    (request.method === "GET" || request.method === "HEAD") &&
+    isPublicStorefrontPath(url.pathname) &&
+    url.search === "" &&
+    !request.headers.has("authorization") &&
+    !request.headers.has("cookie")
+  );
+};
+
+export class StorefrontCache extends WorkerEntrypoint<Env> {
+  override fetch(request: Request) {
+    return dispatchStoreRequest(request, this.env, this.ctx);
+  }
+}
+
+export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
+  const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
+  if (!origin) {
+    return rejectedHostResponse();
+  }
+
+  const redirect = canonicalRedirect(request);
+  if (redirect) {
+    return redirect;
+  }
+
+  return isAnonymousCacheCandidate(request)
+    ? context.exports.StorefrontCache.fetch(request)
+    : dispatchStoreRequest(request, environment, context);
 };
