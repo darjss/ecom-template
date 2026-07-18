@@ -195,9 +195,7 @@ export const catalogQueries = {
     }
 
     const product = await findCatalogProductById(id);
-    return product
-      ? { kind: "changed" as const, product }
-      : { kind: "infrastructure" as const };
+    return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
   },
 
   async update(actor: StaffActor, id: ProductId, input: UpdateProductInput) {
@@ -551,7 +549,8 @@ export const catalogQueries = {
           )[3]
         : (await db.batch([auditStatement, debtStatement, transitionStatement] as const))[2];
     if (transitioned.length === 1) {
-      return { kind: "changed" as const, product: await findCatalogProductById(id) };
+      const product = await findCatalogProductById(id);
+      return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
     }
 
     const resolved = await findCatalogProductById(id);
@@ -597,7 +596,7 @@ export const catalogQueries = {
             ? "invalid_lifecycle"
             : "invalid_publication";
     await recordRejectedAttempt(actor, action, "product", id, kind);
-    return { kind };
+    return { kind } as const;
   },
 
   async findCachePurgeDebt(id: ProductId) {

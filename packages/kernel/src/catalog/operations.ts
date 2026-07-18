@@ -71,8 +71,7 @@ export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
     return result.kind === "changed"
       ? Result.ok(unchangedCache(result.product))
       : Result.err<never, CatalogOperationFailure>({
-          code:
-            result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+          code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
         });
   });
 
@@ -82,8 +81,7 @@ export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdatePro
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
       : Result.err<never, CatalogOperationFailure>({
-          code:
-            result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+          code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
         });
   });
 
@@ -96,7 +94,9 @@ export const transitionProduct = (
     const result = await catalogQueries.transition(actor, id, transition);
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
-      : Result.err<never, CatalogOperationFailure>({ code: result.kind });
+      : Result.err<never, CatalogOperationFailure>({
+          code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+        });
   });
 
 export const retryProductCachePurge = (actor: StaffActor, id: ProductId) =>

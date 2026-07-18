@@ -129,7 +129,7 @@ const tagCatalogItemIds = (id: string) =>
 
 const findGrouping = async <Row extends { id: string }, Dto>(
   rows: PromiseLike<Row[]>,
-  memberships: (id: string) => Promise<string[]>,
+  memberships: (id: string) => PromiseLike<string[]>,
   dto: (row: Row, ids: string[]) => Dto,
 ) => {
   const [row] = await rows;
@@ -242,11 +242,7 @@ const transitionDates = (current: FlatGrouping, target: GroupingState, now: Date
   state: target,
   updatedAt: now,
   activatedAt:
-    target === "active"
-      ? current.activatedAt
-        ? new Date(current.activatedAt)
-        : now
-      : undefined,
+    target === "active" ? (current.activatedAt ? new Date(current.activatedAt) : now) : undefined,
   archivedAt: target === "archived" ? now : null,
 });
 
@@ -685,91 +681,113 @@ export const groupingQueries = {
   },
 
   async transitionCollection(id: CollectionId, target: GroupingState) {
-    return transitionFlatGrouping(() => findCollection(id), target, async (current, now) => {
-      const [changed] = await database().batch([
-        database()
-          .update(collections)
-          .set(transitionDates(current, target, now))
-          .where(and(eq(collections.id, id), eq(collections.state, current.state)))
-          .returning({ id: collections.id }),
-        catalogDebtStatement(now),
-      ]);
-      return changed.length;
-    });
+    return transitionFlatGrouping(
+      () => findCollection(id),
+      target,
+      async (current, now) => {
+        const [changed] = await database().batch([
+          database()
+            .update(collections)
+            .set(transitionDates(current, target, now))
+            .where(and(eq(collections.id, id), eq(collections.state, current.state)))
+            .returning({ id: collections.id }),
+          catalogDebtStatement(now),
+        ]);
+        return changed.length;
+      },
+    );
   },
 
   async transitionTag(id: TagId, target: GroupingState) {
-    return transitionFlatGrouping(() => findTag(id), target, async (current, now) => {
-      const [changed] = await database().batch([
-        database()
-          .update(tags)
-          .set(transitionDates(current, target, now))
-          .where(and(eq(tags.id, id), eq(tags.state, current.state)))
-          .returning({ id: tags.id }),
-        catalogDebtStatement(now),
-      ]);
-      return changed.length;
-    });
+    return transitionFlatGrouping(
+      () => findTag(id),
+      target,
+      async (current, now) => {
+        const [changed] = await database().batch([
+          database()
+            .update(tags)
+            .set(transitionDates(current, target, now))
+            .where(and(eq(tags.id, id), eq(tags.state, current.state)))
+            .returning({ id: tags.id }),
+          catalogDebtStatement(now),
+        ]);
+        return changed.length;
+      },
+    );
   },
 
   async replaceCategoryMembership(id: CategoryId, input: GroupingMembershipInput) {
-    return replaceMembership(() => findCategory(id), input, () => {
-      const remove = database()
-        .delete(catalogItemCategories)
-        .where(eq(catalogItemCategories.categoryId, id));
-      const debt = catalogDebtStatement(new Date());
-      return input.catalogItemIds.length === 0
-        ? database().batch([remove, debt])
-        : database().batch([
-            remove,
-            database()
-              .insert(catalogItemCategories)
-              .values(
-                input.catalogItemIds.map((catalogItemId) => ({ categoryId: id, catalogItemId })),
-              ),
-            debt,
-          ]);
-    });
+    return replaceMembership(
+      () => findCategory(id),
+      input,
+      () => {
+        const remove = database()
+          .delete(catalogItemCategories)
+          .where(eq(catalogItemCategories.categoryId, id));
+        const debt = catalogDebtStatement(new Date());
+        return input.catalogItemIds.length === 0
+          ? database().batch([remove, debt])
+          : database().batch([
+              remove,
+              database()
+                .insert(catalogItemCategories)
+                .values(
+                  input.catalogItemIds.map((catalogItemId) => ({ categoryId: id, catalogItemId })),
+                ),
+              debt,
+            ]);
+      },
+    );
   },
 
   async replaceCollectionMembership(id: CollectionId, input: GroupingMembershipInput) {
-    return replaceMembership(() => findCollection(id), input, () => {
-      const remove = database()
-        .delete(catalogItemCollections)
-        .where(eq(catalogItemCollections.collectionId, id));
-      const debt = catalogDebtStatement(new Date());
-      return input.catalogItemIds.length === 0
-        ? database().batch([remove, debt])
-        : database().batch([
-            remove,
-            database()
-              .insert(catalogItemCollections)
-              .values(
-                input.catalogItemIds.map((catalogItemId, position) => ({
-                  collectionId: id,
-                  catalogItemId,
-                  position,
-                })),
-              ),
-            debt,
-          ]);
-    });
+    return replaceMembership(
+      () => findCollection(id),
+      input,
+      () => {
+        const remove = database()
+          .delete(catalogItemCollections)
+          .where(eq(catalogItemCollections.collectionId, id));
+        const debt = catalogDebtStatement(new Date());
+        return input.catalogItemIds.length === 0
+          ? database().batch([remove, debt])
+          : database().batch([
+              remove,
+              database()
+                .insert(catalogItemCollections)
+                .values(
+                  input.catalogItemIds.map((catalogItemId, position) => ({
+                    collectionId: id,
+                    catalogItemId,
+                    position,
+                  })),
+                ),
+              debt,
+            ]);
+      },
+    );
   },
 
   async replaceTagMembership(id: TagId, input: GroupingMembershipInput) {
-    return replaceMembership(() => findTag(id), input, () => {
-      const remove = database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id));
-      const debt = catalogDebtStatement(new Date());
-      return input.catalogItemIds.length === 0
-        ? database().batch([remove, debt])
-        : database().batch([
-            remove,
-            database()
-              .insert(catalogItemTags)
-              .values(input.catalogItemIds.map((catalogItemId) => ({ tagId: id, catalogItemId }))),
-            debt,
-          ]);
-    });
+    return replaceMembership(
+      () => findTag(id),
+      input,
+      () => {
+        const remove = database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id));
+        const debt = catalogDebtStatement(new Date());
+        return input.catalogItemIds.length === 0
+          ? database().batch([remove, debt])
+          : database().batch([
+              remove,
+              database()
+                .insert(catalogItemTags)
+                .values(
+                  input.catalogItemIds.map((catalogItemId) => ({ tagId: id, catalogItemId })),
+                ),
+              debt,
+            ]);
+      },
+    );
   },
 
   async findCatalogCachePurgeDebt() {
