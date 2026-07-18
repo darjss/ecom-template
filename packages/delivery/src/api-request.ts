@@ -8,7 +8,7 @@ const StatusSchema = v.pipe(v.string(), v.regex(/^\d{3}$/), v.transform(Number))
 const MethodSchema = v.pipe(v.string(), v.toUpperCase(), v.regex(/^[A-Z]+$/));
 const PathSchema = v.pipe(
   v.string(),
-  v.check((value) => value.startsWith("/") && !value.startsWith("//")),
+  v.check((value) => value === "/api" || value.startsWith("/api/")),
 );
 
 const { values, positionals } = parseArgs({
