@@ -9,6 +9,7 @@ export * from "./catalog";
 export * from "./client-error";
 export * from "./cms";
 export * from "./grouping";
+export * from "./search";
 
 export const ApiErrorSchema = v.strictObject({
   error: v.strictObject({

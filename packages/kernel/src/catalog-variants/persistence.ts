@@ -30,7 +30,7 @@ import {
   variants,
 } from "../db/schema";
 import { database } from "../db/database";
-import { compactSku, skuFromVariantId } from "../catalog/sku";
+import { catalogSku, compactSku } from "../catalog/sku";
 
 const combinationKey = (valueIds: readonly string[]) => [...valueIds].toSorted().join("|");
 
@@ -152,7 +152,7 @@ export const catalogVariantQueries = {
     const db = database();
     const [productRows, defaultVariantRows] = await Promise.all([
       db
-        .select({ publishedAt: catalogItems.publishedAt })
+        .select({ publishedAt: catalogItems.publishedAt, slug: catalogItems.slug })
         .from(catalogItems)
         .where(eq(catalogItems.id, productId))
         .limit(1),
@@ -555,7 +555,7 @@ export const catalogVariantQueries = {
         ),
       );
       const insertSkus = newVariants.map((variant) => {
-        const sku = skuFromVariantId(variant.id);
+        const sku = catalogSku(product.slug, variant.id);
         return db.insert(skus).select(
           db
             .select({

@@ -1,7 +1,8 @@
-import type { VariantId } from "@ecom/contracts";
-
-export const skuFromVariantId = (variantId: VariantId) =>
-  `SKU-${variantId.slice("variant_".length).toUpperCase()}`;
+export const catalogSku = (slug: string, ownerId: string) => {
+  const suffix = ownerId.slice(-10).toUpperCase();
+  const stem = slug.slice(0, 64 - suffix.length - 1).toUpperCase();
+  return `${stem}-${suffix}`;
+};
 
 export const compactSku = (value: string) =>
   value

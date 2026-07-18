@@ -28,6 +28,13 @@ export {
   type CatalogVariantFailure,
 } from "./catalog-variants/operations";
 export {
+  readCatalogSearchDiagnostics,
+  repairCatalogSearchProjection,
+  searchCatalog,
+  type CatalogSearchFailure,
+  type CatalogSearchInput,
+} from "./catalog-search/operations";
+export {
   adjustProductInventory,
   createProduct,
   listCatalog,

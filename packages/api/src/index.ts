@@ -4,6 +4,8 @@ import {
   CatalogItemIdSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
+  CatalogSearchApiErrorSchema,
+  CatalogSearchResponseSchema,
   CreateProductInputSchema,
   HealthApiErrorSchema,
   InventoryAdjustmentInputSchema,
@@ -48,6 +50,7 @@ import {
   retryProductCachePurge,
   revokeStaff,
   saveProductOptions,
+  searchCatalog,
   setVariantState,
   updateVariantPresentation,
   transitionProduct,
@@ -68,9 +71,11 @@ import { createCustomerAuthRoutes } from "./customer-routes";
 import { createCmsRoutes } from "./cms-routes";
 import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
+import { parseCatalogSearchParameters } from "./search-parameters";
 
 export { MediaUploadMultipartMaxBytes };
 export { parseCmsPreviewDocument } from "./cms-routes";
+export { parseCatalogSearchParameters } from "./search-parameters";
 
 export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
 
@@ -601,6 +606,32 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     )
     .use(createBundleRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
+    .get("/catalog/search", async ({ request, status }) => {
+      const parameters = parseCatalogSearchParameters(new URL(request.url).searchParams, {
+        allowEmptyQuery: false,
+        allowLimit: true,
+      });
+      if (!parameters.success) {
+        return status(
+          400,
+          v.parse(CatalogSearchApiErrorSchema, {
+            error: {
+              code: "validation",
+              message: "Valid q, filters, page, and limit parameters are required",
+            },
+          }),
+        );
+      }
+      const result = await searchCatalog(parameters.value);
+      return result.isErr()
+        ? status(
+            503,
+            v.parse(CatalogSearchApiErrorSchema, {
+              error: { code: "unavailable", message: "Catalog search is unavailable" },
+            }),
+          )
+        : v.parse(CatalogSearchResponseSchema, result.value);
+    })
     .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();
       if (databaseHealth.isErr()) {

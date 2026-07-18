@@ -20,7 +20,7 @@ const linkAttributes = (openInNewTab: boolean) =>
       ? <><a aria-current={currentPath === "/" ? "page" : undefined} href="/">Дэлгүүр</a><a aria-current={currentPath.startsWith("/locations") ? "page" : undefined} href="/locations">Байршил</a></>
       : shell.primary.map((item) => <span class="relative"><a aria-current={item.href === currentPath ? "page" : undefined} href={item.href} {...linkAttributes(item.openInNewTab)}>{item.label}</a>{item.children.length > 0 && <ul class="m-0 flex list-none gap-3 p-0 pt-2">{item.children.map((child) => <li><a aria-current={child.href === currentPath ? "page" : undefined} href={child.href} {...linkAttributes(child.openInNewTab)}>{child.label}</a></li>)}</ul>}</span>) }
   </nav>
-  <a class="admin-link" href="/admin">Удирдлага</a>
+  <span class="flex items-center gap-4 justify-self-end"><a class="font-bold underline decoration-transparent underline-offset-4 hover:decoration-current" aria-current={currentPath === "/search" ? "page" : undefined} href="/search">Хайлт</a><a class="admin-link" href="/admin">Удирдлага</a></span>
 </header>
 <slot />
 <footer>

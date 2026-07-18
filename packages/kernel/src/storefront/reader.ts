@@ -17,6 +17,7 @@ import {
   type StorefrontIdentityDocument,
   type PublicBundleDetail,
   type PublicCatalogItemSummary,
+  type CatalogSearchResponse,
   type PublicGrouping,
   type PublicGroupingListing,
   type PublicProductDetail,
@@ -26,6 +27,7 @@ import {
 import * as v from "valibot";
 import { bundleQueries, readPersonalizations } from "../bundles/persistence";
 import { catalogQueries } from "../catalog/persistence";
+import { searchCatalog } from "../catalog-search/operations";
 import { readDatabaseHealth } from "../db/health";
 import { groupingQueries } from "../grouping/persistence";
 import { cmsQueries } from "../cms/persistence";
@@ -65,6 +67,13 @@ export type StorefrontReader = {
     status?: "draft" | "published",
   ) => Promise<OrderingNoticesDocument | undefined>;
   readonly listPublishedCatalogItems: () => Promise<readonly PublicCatalogItemSummary[]>;
+  readonly searchCatalog: (input: {
+    readonly query: string;
+    readonly category?: string;
+    readonly collection?: string;
+    readonly page: number;
+    readonly limit: number;
+  }) => Promise<CatalogSearchResponse>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
   readonly readPublishedBundle: (slug: string) => Promise<PublicBundleDetail | undefined>;
@@ -293,6 +302,13 @@ export const createStorefrontReader = (
   readHomeCmsContent: (status = "published") => readHomeCmsContent(status),
   readOrderingNotices: (status = "published") => readOrderingNotices(status),
   listPublishedCatalogItems: () => catalogQueries.listPublishedCatalogItems(),
+  searchCatalog: async (input) => {
+    const result = await searchCatalog(input);
+    if (result.isErr()) {
+      throw new Error("Catalog search is unavailable");
+    }
+    return result.value;
+  },
   listPublishedProducts,
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);
