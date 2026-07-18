@@ -47,7 +47,7 @@ export type StoreShell = {
   readonly commerceSettings: CommerceSettings | undefined;
 };
 
-export type HomeCmsContent = {
+type HomeCmsContent = {
   readonly homepage: HomepageDocument | undefined;
   readonly announcement: AnnouncementDocument | undefined;
   readonly orderingNotices: OrderingNoticesDocument | undefined;
