@@ -33,6 +33,88 @@ FROM catalog_items item
 WHERE item.state = 'published';
 --> statement-breakpoint
 CREATE VIEW catalog_search_documents AS
+WITH
+  catalog_search_transliteration_1 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(slug, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(title, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(description, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(facets, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_facets
+    FROM catalog_search_source
+  ),
+  catalog_search_transliteration_2 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_facets
+    FROM catalog_search_transliteration_1
+  ),
+  catalog_search_transliteration_3 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_facets
+    FROM catalog_search_transliteration_2
+  ),
+  catalog_search_transliteration_4 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_facets
+    FROM catalog_search_transliteration_3
+  ),
+  catalog_search_transliteration_5 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_facets
+    FROM catalog_search_transliteration_4
+  ),
+  catalog_search_transliteration_6 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_facets
+    FROM catalog_search_transliteration_5
+  ),
+  catalog_search_transliteration_7 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_facets
+    FROM catalog_search_transliteration_6
+  ),
+  catalog_search_transliteration_8 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_facets
+    FROM catalog_search_transliteration_7
+  ),
+  catalog_search_transliteration_9 AS (
+    SELECT
+      item_id, kind, slug, title, description, facets,
+      replace(replace(replace(replace(replace(replace(latin_slug, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(latin_title, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_title,
+      replace(replace(replace(replace(replace(replace(latin_description, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_description,
+      replace(replace(replace(replace(replace(replace(latin_facets, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_facets
+    FROM catalog_search_transliteration_8
+  )
 SELECT
   item_id,
   kind,
@@ -42,11 +124,11 @@ SELECT
   title,
   description,
   facets,
-  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(slug, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c'), 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye'), 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b'), 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e'), 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k'), 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o'), 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't'), 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w'), 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_slug,
-  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(title, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c'), 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye'), 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b'), 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e'), 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k'), 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o'), 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't'), 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w'), 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_title,
-  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(description, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c'), 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye'), 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b'), 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e'), 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k'), 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o'), 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't'), 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w'), 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_description,
-  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(facets, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c'), 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye'), 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b'), 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e'), 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k'), 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o'), 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't'), 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w'), 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_facets
-FROM catalog_search_source;
+  latin_slug,
+  latin_title,
+  latin_description,
+  latin_facets
+FROM catalog_search_transliteration_9;
 --> statement-breakpoint
 INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets FROM catalog_search_documents;
 --> statement-breakpoint
