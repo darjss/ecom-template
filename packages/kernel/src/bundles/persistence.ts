@@ -373,7 +373,28 @@ export const bundleQueries = {
     if (!distinct(input.components.map(({ variantId }) => variantId))) {
       return { kind: "duplicate_component" as const };
     }
+    if (
+      input.components.length < 1 ||
+      input.components.length > 24 ||
+      input.components.some(
+        ({ quantity }) => !Number.isInteger(quantity) || quantity < 1 || quantity > 999,
+      )
+    ) {
+      return { kind: "invalid_component" as const };
+    }
     const db = database();
+    const componentVariants = await db
+      .select({ id: variants.id })
+      .from(variants)
+      .where(
+        inArray(
+          variants.id,
+          input.components.map(({ variantId }) => variantId),
+        ),
+      );
+    if (componentVariants.length !== input.components.length) {
+      return { kind: "invalid_component" as const };
+    }
     const now = new Date();
     const draft = db
       .select({ id: catalogItems.id })
@@ -419,22 +440,16 @@ export const bundleQueries = {
           ),
       ),
     );
-    try {
-      const results = await db.batch([guard, clear, ...inserts] as const);
-      if (results[0].length) {
-        return { kind: "changed" as const };
-      }
-      const rows = await db
-        .select({ id: catalogItems.id })
-        .from(catalogItems)
-        .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
-        .limit(1);
-      return rows.length
-        ? { kind: "immutable_components" as const }
-        : { kind: "not_found" as const };
-    } catch {
-      return { kind: "invalid_component" as const };
+    const results = await db.batch([guard, clear, ...inserts] as const);
+    if (results[0].length) {
+      return { kind: "changed" as const };
     }
+    const rows = await db
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+      .limit(1);
+    return rows.length ? { kind: "immutable_components" as const } : { kind: "not_found" as const };
   },
   async savePersonalizations(id: CatalogItemId, input: SavePersonalizationsInput) {
     const definitions = input.definitions.map((definition) => ({
@@ -519,6 +534,15 @@ export const bundleQueries = {
   },
   async transition(actor: StaffActor, id: BundleId, action: "publish" | "archive" | "reactivate") {
     const db = database();
+    const target = action === "archive" ? "archived" : "published";
+    const currentState = await db
+      .select({ state: catalogItems.state })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, id), eq(catalogItems.kind, "bundle")))
+      .limit(1);
+    if (currentState.at(0)?.state === target) {
+      return { kind: "changed" as const };
+    }
     const now = new Date();
     const revision = crypto.randomUUID();
     const auditAction = `catalog.bundle.${action}`;
