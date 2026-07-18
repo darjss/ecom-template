@@ -34,7 +34,6 @@ import {
   categories,
   collections,
   discountRules,
-  discountTargets,
   tags,
 } from "../db/schema";
 import { database } from "../db/database";
@@ -263,6 +262,15 @@ const findTag = tagQuerySet.find;
 const categorySlugExists = categoryQuerySet.identityExists;
 const collectionSlugExists = collectionQuerySet.identityExists;
 const tagLabelExists = tagQuerySet.identityExists;
+const discountDependencyPredicate = (
+  kind: "category" | "collection",
+  id: CategoryId | CollectionId,
+) =>
+  sql<boolean>`EXISTS (
+    SELECT 1 FROM json_each(${discountRules.targetsJson}) AS target
+    WHERE json_extract(target.value, '$.kind') = ${kind}
+      AND json_extract(target.value, '$.id') = ${id}
+  )`;
 const activeDiscountDependency = async (
   kind: "category" | "collection",
   id: CategoryId | CollectionId,
@@ -270,16 +278,8 @@ const activeDiscountDependency = async (
   (
     await database()
       .select({ id: discountRules.id })
-      .from(discountTargets)
-      .innerJoin(discountRules, eq(discountRules.id, discountTargets.discountRuleId))
-      .where(
-        and(
-          eq(discountRules.state, "active"),
-          kind === "category"
-            ? eq(discountTargets.categoryId, id)
-            : eq(discountTargets.collectionId, id),
-        ),
-      )
+      .from(discountRules)
+      .where(and(eq(discountRules.state, "active"), discountDependencyPredicate(kind, id)))
       .limit(1)
   ).length > 0;
 
@@ -628,10 +628,11 @@ export const groupingQueries = {
       target === "archived"
         ? notExists(
             db
-              .select({ id: discountTargets.discountRuleId })
-              .from(discountTargets)
-              .innerJoin(discountRules, eq(discountRules.id, discountTargets.discountRuleId))
-              .where(and(eq(discountTargets.categoryId, id), eq(discountRules.state, "active"))),
+              .select({ id: discountRules.id })
+              .from(discountRules)
+              .where(
+                and(eq(discountRules.state, "active"), discountDependencyPredicate("category", id)),
+              ),
           )
         : undefined,
       ...lineagePredicates,
@@ -721,11 +722,13 @@ export const groupingQueries = {
             target === "archived"
               ? notExists(
                   db
-                    .select({ id: discountTargets.discountRuleId })
-                    .from(discountTargets)
-                    .innerJoin(discountRules, eq(discountRules.id, discountTargets.discountRuleId))
+                    .select({ id: discountRules.id })
+                    .from(discountRules)
                     .where(
-                      and(eq(discountTargets.collectionId, id), eq(discountRules.state, "active")),
+                      and(
+                        eq(discountRules.state, "active"),
+                        discountDependencyPredicate("collection", id),
+                      ),
                     ),
                 )
               : undefined,

@@ -1,4 +1,5 @@
 import {
+  CheckoutOptionsResponseSchema,
   CheckoutQuoteSchema,
   type CartPersonalizationAnswer,
   type CheckoutQuote,
@@ -13,6 +14,7 @@ type CheckoutFailureCode =
   | "catalog_unavailable"
   | "invalid_personalization"
   | "insufficient_inventory"
+  | "quantity_exceeded"
   | "delivery_unavailable"
   | "pickup_unavailable"
   | "infrastructure_unavailable";
@@ -174,38 +176,41 @@ const resolveLines = (input: CheckoutQuoteInput, snapshot: Snapshot) => {
 };
 
 const hasTarget = (line: CheckoutQuoteLine, ruleId: string, snapshot: Snapshot) =>
-  snapshot.targets.some((target) => {
-    if (target.discountRuleId !== ruleId) {
-      return false;
-    }
-    if (target.kind === "all") {
-      return true;
-    }
-    if (target.kind === "product") {
-      return target.productId === line.source.catalogItemId;
-    }
-    if (target.kind === "variant") {
-      return line.source.kind === "variant" && target.variantId === line.source.id;
-    }
-    if (target.kind === "category") {
+  snapshot.rules
+    .find((rule) => rule.id === ruleId)
+    ?.targets.some((target) => {
+      if (target.kind === "all") {
+        return true;
+      }
+      if (target.kind === "product") {
+        return target.id === line.source.catalogItemId;
+      }
+      if (target.kind === "variant") {
+        return line.source.kind === "variant" && target.id === line.source.id;
+      }
+      if (target.kind === "category") {
+        return (
+          snapshot.categoryRows.some(
+            (category) => category.id === target.id && category.state === "active",
+          ) &&
+          snapshot.categoryMemberships.some(
+            (membership) =>
+              membership.categoryId === target.id &&
+              membership.catalogItemId === line.source.catalogItemId,
+          )
+        );
+      }
       return (
-        target.categoryState === "active" &&
-        snapshot.categoryMemberships.some(
+        snapshot.collectionRows.some(
+          (collection) => collection.id === target.id && collection.state === "active",
+        ) &&
+        snapshot.collectionMemberships.some(
           (membership) =>
-            membership.categoryId === target.categoryId &&
+            membership.collectionId === target.id &&
             membership.catalogItemId === line.source.catalogItemId,
         )
       );
-    }
-    return (
-      target.collectionState === "active" &&
-      snapshot.collectionMemberships.some(
-        (membership) =>
-          membership.collectionId === target.collectionId &&
-          membership.catalogItemId === line.source.catalogItemId,
-      )
-    );
-  });
+    }) ?? false;
 
 const candidate = (
   rule: Snapshot["rules"][number],
@@ -232,7 +237,7 @@ const candidate = (
   const reduction = Math.min(
     eligibleSubtotal,
     rule.calculation === "percentage"
-      ? Math.floor((eligibleSubtotal * rule.value) / 100)
+      ? Number((BigInt(eligibleSubtotal) * BigInt(rule.value)) / 100n)
       : rule.value,
   );
   return reduction > 0 ? { rule, positions, eligibleSubtotal, reduction } : undefined;
@@ -244,12 +249,21 @@ const allocate = (chosen: Candidate, lines: readonly CheckoutQuoteLine[]) => {
     .filter((line) => chosen.positions.includes(line.position))
     .map((line) => ({
       position: line.position,
-      amount: Math.floor((line.merchandiseAmountMnt * chosen.reduction) / chosen.eligibleSubtotal),
-      remainder: (line.merchandiseAmountMnt * chosen.reduction) % chosen.eligibleSubtotal,
+      amount: Number(
+        (BigInt(line.merchandiseAmountMnt) * BigInt(chosen.reduction)) /
+          BigInt(chosen.eligibleSubtotal),
+      ),
+      remainder:
+        (BigInt(line.merchandiseAmountMnt) * BigInt(chosen.reduction)) %
+        BigInt(chosen.eligibleSubtotal),
     }));
   let remaining = chosen.reduction - shares.reduce((sum, share) => sum + share.amount, 0);
-  for (const share of shares.toSorted(
-    (left, right) => right.remainder - left.remainder || left.position - right.position,
+  for (const share of shares.toSorted((left, right) =>
+    left.remainder === right.remainder
+      ? left.position - right.position
+      : left.remainder > right.remainder
+        ? -1
+        : 1,
   )) {
     if (remaining === 0) {
       break;
@@ -266,6 +280,27 @@ const digest = async (value: unknown) => {
     new TextEncoder().encode(JSON.stringify(value)),
   );
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+export const readCheckoutOptions = async () => {
+  try {
+    const snapshot = await checkoutQueries.readOptions();
+    if (!snapshot.settings) {
+      return failure("infrastructure_unavailable");
+    }
+    return Result.ok(
+      v.parse(CheckoutOptionsResponseSchema.entries.data, {
+        deliveryEnabled: snapshot.settings.deliveryEnabled,
+        pickupLocations: snapshot.settings.pickupEnabled
+          ? snapshot.locations
+              .filter((location) => location.active && location.pickupEnabled)
+              .map(({ id, name, address }) => ({ id, name, address }))
+          : [],
+      }),
+    );
+  } catch {
+    return failure("infrastructure_unavailable");
+  }
 };
 
 export const quoteCheckout = async (
@@ -285,6 +320,14 @@ export const quoteCheckout = async (
       for (const item of line.demand) {
         demand.set(item.variantId, (demand.get(item.variantId) ?? 0) + item.quantity);
       }
+    }
+    if ([...demand.values()].some((quantity) => quantity > 1_000_000)) {
+      const positions = resolved.lines
+        .filter((line) =>
+          line.demand.some(({ variantId }) => (demand.get(variantId) ?? 0) > 1_000_000),
+        )
+        .map(({ position }) => position);
+      return failure("quantity_exceeded", positions);
     }
     const inventory = new Map(
       snapshot.variantRows.map((row) => [

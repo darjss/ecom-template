@@ -9,7 +9,7 @@ export const CheckoutAmountMntSchema = v.pipe(
   v.number(),
   v.integer(),
   v.minValue(0),
-  v.maxValue(100_000_000_000),
+  v.maxValue(100_000_000_000_000),
 );
 export const CheckoutFulfillmentSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("delivery") }),
@@ -22,7 +22,7 @@ export const CheckoutQuoteInputSchema = v.strictObject({
 });
 export const CheckoutDemandSchema = v.strictObject({
   variantId: VariantIdSchema,
-  quantity: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(99_900)),
+  quantity: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1_000_000)),
 });
 export const CheckoutPersonalizationSchema = v.strictObject({
   label: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
@@ -86,10 +86,23 @@ export const CheckoutQuoteSchema = v.strictObject({
   commercialFingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/)),
 });
 export const CheckoutQuoteResponseSchema = v.strictObject({ data: CheckoutQuoteSchema });
+export const CheckoutOptionsResponseSchema = v.strictObject({
+  data: v.strictObject({
+    deliveryEnabled: v.boolean(),
+    pickupLocations: v.array(
+      v.strictObject({
+        id: LocationIdSchema,
+        name: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+        address: v.pipe(v.string(), v.minLength(1), v.maxLength(240)),
+      }),
+    ),
+  }),
+});
 export const CheckoutFailureReasonSchema = v.picklist([
   "catalog_unavailable",
   "invalid_personalization",
   "insufficient_inventory",
+  "quantity_exceeded",
   "delivery_unavailable",
   "pickup_unavailable",
 ]);
@@ -111,5 +124,6 @@ export const CheckoutClientErrorSchema = v.variant("kind", [
 
 export type CheckoutQuoteInput = v.InferOutput<typeof CheckoutQuoteInputSchema>;
 export type CheckoutQuote = v.InferOutput<typeof CheckoutQuoteSchema>;
+export type CheckoutOptions = v.InferOutput<typeof CheckoutOptionsResponseSchema>["data"];
 export type CheckoutQuoteLine = v.InferOutput<typeof CheckoutQuoteLineSchema>;
 export type CheckoutClientError = v.InferOutput<typeof CheckoutClientErrorSchema>;

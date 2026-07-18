@@ -1,8 +1,8 @@
-import { checkoutQuoteMutationOptions, useCart } from "@ecom/client";
+import { checkoutOptionsQueryOptions, checkoutQuoteMutationOptions, useCart } from "@ecom/client";
 import { CheckoutQuoteInputSchema, type CheckoutClientError } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
-import { useMutation } from "@tanstack/solid-query";
+import { useMutation, useQuery } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
 
@@ -31,6 +31,7 @@ const errorMessage = (error: CheckoutClientError) => {
 
 export const CheckoutQuote = () => {
   const cart = useCart();
+  const options = useQuery(() => checkoutOptionsQueryOptions());
   const mutation = useMutation(() => checkoutQuoteMutationOptions());
   const [invalid, setInvalid] = createSignal(false);
   const form = createForm(() => ({
@@ -89,8 +90,12 @@ export const CheckoutQuote = () => {
                 value={field().state.value}
                 onChange={(event) => field().handleChange(event.currentTarget.value)}
               >
-                <option value="delivery">Delivery</option>
-                <option value="pickup">Pickup</option>
+                <Show when={options.data?.data.deliveryEnabled}>
+                  <option value="delivery">Delivery</option>
+                </Show>
+                <Show when={(options.data?.data.pickupLocations.length ?? 0) > 0}>
+                  <option value="pickup">Pickup</option>
+                </Show>
               </select>
             </label>
           )}
@@ -98,13 +103,21 @@ export const CheckoutQuote = () => {
         <form.Field name="locationId">
           {(field) => (
             <label class="grid gap-1.5 text-sm font-bold">
-              Pickup Location ID
-              <input
+              Pickup Location
+              <select
                 class="min-h-11 rounded-lg border border-black/30 bg-white px-3 font-normal focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
                 value={field().state.value}
-                onInput={(event) => field().handleChange(event.currentTarget.value)}
-                placeholder="location_…"
-              />
+                onChange={(event) => field().handleChange(event.currentTarget.value)}
+              >
+                <option value="">Байршил сонгох</option>
+                <For each={options.data?.data.pickupLocations ?? []}>
+                  {(location) => (
+                    <option value={location.id}>
+                      {location.name} · {location.address}
+                    </option>
+                  )}
+                </For>
+              </select>
             </label>
           )}
         </form.Field>

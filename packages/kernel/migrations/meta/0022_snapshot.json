@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "741993ae-f13e-443c-b00e-0d1c0fc8ee76",
+  "id": "df275250-6e19-4e4b-808a-cd868f125993",
   "prevId": "e0521373-d35c-4a89-8573-1695cf677aad",
   "tables": {
     "audit_events": {
@@ -1385,6 +1385,103 @@
         }
       }
     },
+    "discount_redemption_entries": {
+      "name": "discount_redemption_entries",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "discount_rule_id": {
+          "name": "discount_rule_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity_delta": {
+          "name": "quantity_delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "command_correlation_id": {
+          "name": "command_correlation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "discount_redemption_entries_order_kind_idx": {
+          "name": "discount_redemption_entries_order_kind_idx",
+          "columns": ["discount_rule_id", "order_id", "kind"],
+          "isUnique": true
+        },
+        "discount_redemption_entries_rule_timeline_idx": {
+          "name": "discount_redemption_entries_rule_timeline_idx",
+          "columns": ["discount_rule_id", "created_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "discount_redemption_entries_discount_rule_id_discount_rules_id_fk": {
+          "name": "discount_redemption_entries_discount_rule_id_discount_rules_id_fk",
+          "tableFrom": "discount_redemption_entries",
+          "tableTo": "discount_rules",
+          "columnsFrom": ["discount_rule_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "discount_redemption_entries_id_check": {
+          "name": "discount_redemption_entries_id_check",
+          "value": "length(\"discount_redemption_entries\".\"id\") = 46 AND substr(\"discount_redemption_entries\".\"id\", 1, 20) = 'discount_redemption_' AND substr(\"discount_redemption_entries\".\"id\", 21, 1) GLOB '[0-7]' AND substr(\"discount_redemption_entries\".\"id\", 21) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'"
+        },
+        "discount_redemption_entries_kind_check": {
+          "name": "discount_redemption_entries_kind_check",
+          "value": "(\"discount_redemption_entries\".\"kind\" = 'claim' AND \"discount_redemption_entries\".\"quantity_delta\" = 1) OR (\"discount_redemption_entries\".\"kind\" = 'release' AND \"discount_redemption_entries\".\"quantity_delta\" = -1)"
+        },
+        "discount_redemption_entries_order_check": {
+          "name": "discount_redemption_entries_order_check",
+          "value": "length(\"discount_redemption_entries\".\"order_id\") BETWEEN 1 AND 128"
+        },
+        "discount_redemption_entries_correlation_check": {
+          "name": "discount_redemption_entries_correlation_check",
+          "value": "length(\"discount_redemption_entries\".\"command_correlation_id\") BETWEEN 1 AND 64"
+        }
+      }
+    },
     "discount_rules": {
       "name": "discount_rules",
       "columns": {
@@ -1465,13 +1562,12 @@
           "notNull": false,
           "autoincrement": false
         },
-        "redemption_count": {
-          "name": "redemption_count",
-          "type": "integer",
+        "targets_json": {
+          "name": "targets_json",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "autoincrement": false
         },
         "revision": {
           "name": "revision",
@@ -1545,155 +1641,13 @@
           "name": "discount_rules_limit_check",
           "value": "\"discount_rules\".\"global_limit\" IS NULL OR \"discount_rules\".\"global_limit\" BETWEEN 1 AND 1000000"
         },
-        "discount_rules_redemption_check": {
-          "name": "discount_rules_redemption_check",
-          "value": "\"discount_rules\".\"redemption_count\" >= 0 AND (\"discount_rules\".\"global_limit\" IS NULL OR \"discount_rules\".\"redemption_count\" <= \"discount_rules\".\"global_limit\")"
+        "discount_rules_targets_check": {
+          "name": "discount_rules_targets_check",
+          "value": "json_valid(\"discount_rules\".\"targets_json\") AND json_type(\"discount_rules\".\"targets_json\") = 'array' AND json_array_length(\"discount_rules\".\"targets_json\") BETWEEN 1 AND 100"
         },
         "discount_rules_revision_check": {
           "name": "discount_rules_revision_check",
           "value": "\"discount_rules\".\"revision\" >= 1"
-        }
-      }
-    },
-    "discount_targets": {
-      "name": "discount_targets",
-      "columns": {
-        "discount_rule_id": {
-          "name": "discount_rule_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "product_id": {
-          "name": "product_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "variant_id": {
-          "name": "variant_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "category_id": {
-          "name": "category_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "collection_id": {
-          "name": "collection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "discount_targets_identity_idx": {
-          "name": "discount_targets_identity_idx",
-          "columns": [
-            "discount_rule_id",
-            "kind",
-            "product_id",
-            "variant_id",
-            "category_id",
-            "collection_id"
-          ],
-          "isUnique": true
-        },
-        "discount_targets_category_idx": {
-          "name": "discount_targets_category_idx",
-          "columns": ["category_id", "discount_rule_id"],
-          "isUnique": false
-        },
-        "discount_targets_collection_idx": {
-          "name": "discount_targets_collection_idx",
-          "columns": ["collection_id", "discount_rule_id"],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "discount_targets_discount_rule_id_discount_rules_id_fk": {
-          "name": "discount_targets_discount_rule_id_discount_rules_id_fk",
-          "tableFrom": "discount_targets",
-          "tableTo": "discount_rules",
-          "columnsFrom": ["discount_rule_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "discount_targets_product_id_catalog_items_id_fk": {
-          "name": "discount_targets_product_id_catalog_items_id_fk",
-          "tableFrom": "discount_targets",
-          "tableTo": "catalog_items",
-          "columnsFrom": ["product_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "discount_targets_variant_id_variants_id_fk": {
-          "name": "discount_targets_variant_id_variants_id_fk",
-          "tableFrom": "discount_targets",
-          "tableTo": "variants",
-          "columnsFrom": ["variant_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "discount_targets_category_id_categories_id_fk": {
-          "name": "discount_targets_category_id_categories_id_fk",
-          "tableFrom": "discount_targets",
-          "tableTo": "categories",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "discount_targets_collection_id_collections_id_fk": {
-          "name": "discount_targets_collection_id_collections_id_fk",
-          "tableFrom": "discount_targets",
-          "tableTo": "collections",
-          "columnsFrom": ["collection_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "discount_targets_discount_rule_id_position_pk": {
-          "columns": ["discount_rule_id", "position"],
-          "name": "discount_targets_discount_rule_id_position_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "discount_targets_position_check": {
-          "name": "discount_targets_position_check",
-          "value": "\"discount_targets\".\"position\" BETWEEN 0 AND 99"
-        },
-        "discount_targets_shape_check": {
-          "name": "discount_targets_shape_check",
-          "value": "(\"discount_targets\".\"kind\" = 'all' AND \"discount_targets\".\"product_id\" IS NULL AND \"discount_targets\".\"variant_id\" IS NULL AND \"discount_targets\".\"category_id\" IS NULL AND \"discount_targets\".\"collection_id\" IS NULL) OR (\"discount_targets\".\"kind\" = 'product' AND \"discount_targets\".\"product_id\" IS NOT NULL AND \"discount_targets\".\"variant_id\" IS NULL AND \"discount_targets\".\"category_id\" IS NULL AND \"discount_targets\".\"collection_id\" IS NULL) OR (\"discount_targets\".\"kind\" = 'variant' AND \"discount_targets\".\"product_id\" IS NULL AND \"discount_targets\".\"variant_id\" IS NOT NULL AND \"discount_targets\".\"category_id\" IS NULL AND \"discount_targets\".\"collection_id\" IS NULL) OR (\"discount_targets\".\"kind\" = 'category' AND \"discount_targets\".\"product_id\" IS NULL AND \"discount_targets\".\"variant_id\" IS NULL AND \"discount_targets\".\"category_id\" IS NOT NULL AND \"discount_targets\".\"collection_id\" IS NULL) OR (\"discount_targets\".\"kind\" = 'collection' AND \"discount_targets\".\"product_id\" IS NULL AND \"discount_targets\".\"variant_id\" IS NULL AND \"discount_targets\".\"category_id\" IS NULL AND \"discount_targets\".\"collection_id\" IS NOT NULL)"
         }
       }
     },

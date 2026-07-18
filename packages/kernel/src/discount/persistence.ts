@@ -1,5 +1,6 @@
 import {
   DiscountRuleSchema,
+  DiscountTargetSchema,
   createAuditEventId,
   createDiscountRuleId,
   type DiscountRule,
@@ -15,80 +16,69 @@ import {
   catalogItems,
   categories,
   collections,
+  discountRedemptionEntries,
   discountRules,
-  discountTargets,
   variants,
 } from "../db/schema";
 import type { StaffActor } from "../staff/operations";
 
-const targetRow = (discountRuleId: DiscountRuleId, target: DiscountTarget, position: number) => ({
-  discountRuleId,
-  position,
-  kind: target.kind,
-  productId: target.kind === "product" ? target.id : null,
-  variantId: target.kind === "variant" ? target.id : null,
-  categoryId: target.kind === "category" ? target.id : null,
-  collectionId: target.kind === "collection" ? target.id : null,
-});
+const TargetListSchema = v.pipe(v.array(DiscountTargetSchema), v.minLength(1), v.maxLength(100));
+const encodeTargets = (targets: readonly DiscountTarget[]) =>
+  JSON.stringify(
+    targets.map((target) =>
+      target.kind === "all" ? { kind: target.kind } : { id: target.id, kind: target.kind },
+    ),
+  );
+const decodeTargets = (targetsJson: string) => v.parse(TargetListSchema, JSON.parse(targetsJson));
 
-const targetsFor = (ruleId: string, rows: readonly (typeof discountTargets.$inferSelect)[]) =>
-  rows
-    .filter(({ discountRuleId }) => discountRuleId === ruleId)
-    .map((target) => {
-      if (target.kind === "all") {
-        return { kind: "all" as const };
-      }
-      if (target.kind === "product" && target.productId) {
-        return { kind: "product" as const, id: target.productId };
-      }
-      if (target.kind === "variant" && target.variantId) {
-        return { kind: "variant" as const, id: target.variantId };
-      }
-      if (target.kind === "category" && target.categoryId) {
-        return { kind: "category" as const, id: target.categoryId };
-      }
-      if (target.kind === "collection" && target.collectionId) {
-        return { kind: "collection" as const, id: target.collectionId };
-      }
-      throw new Error("Invalid persisted Discount target");
-    });
-
-const dto = (row: typeof discountRules.$inferSelect, targets: DiscountTarget[]) =>
-  v.parse(DiscountRuleSchema, {
-    ...row,
-    targets,
+const dto = (row: typeof discountRules.$inferSelect, redemptionCount: number): DiscountRule => {
+  const { targetsJson, ...rule } = row;
+  return v.parse(DiscountRuleSchema, {
+    ...rule,
+    targets: decodeTargets(targetsJson),
+    redemptionCount,
     startsAt: row.startsAt?.toISOString() ?? null,
     endsAt: row.endsAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   });
+};
 
 const readRules = async (onlyActive = false) => {
   const db = database();
-  const ruleQuery = db
-    .select()
-    .from(discountRules)
-    .where(onlyActive ? eq(discountRules.state, "active") : undefined)
-    .orderBy(asc(discountRules.createdAt), asc(discountRules.id));
-  const targetQuery = db.select().from(discountTargets).orderBy(asc(discountTargets.position));
-  const [rows, targetRows] = await db.batch([ruleQuery, targetQuery] as const);
-  return rows.map((row) => dto(row, targetsFor(row.id, targetRows)));
+  const [rows, redemptionRows] = await db.batch([
+    db
+      .select()
+      .from(discountRules)
+      .where(onlyActive ? eq(discountRules.state, "active") : undefined)
+      .orderBy(asc(discountRules.createdAt), asc(discountRules.id)),
+    db
+      .select({
+        discountRuleId: discountRedemptionEntries.discountRuleId,
+        count: sql<number>`coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0)`.as(
+          "redemption_count",
+        ),
+      })
+      .from(discountRedemptionEntries)
+      .groupBy(discountRedemptionEntries.discountRuleId),
+  ] as const);
+  const counts = new Map(redemptionRows.map((row) => [row.discountRuleId, row.count]));
+  return rows.map((row) => dto(row, counts.get(row.id) ?? 0));
 };
 
-const audit = (actor: StaffActor, action: string, id: DiscountRuleId, now: Date) =>
-  database().insert(auditEvents).values({
-    id: createAuditEventId(),
-    actorKind: "staff",
-    actorId: actor.staffId,
-    staffRole: actor.role,
-    sourceChannel: "admin",
-    action,
-    outcome: "accepted",
-    entityKind: "discount_rule",
-    entityId: id,
-    commandCorrelationId: crypto.randomUUID(),
-    createdAt: now,
-  });
+const auditValues = (actor: StaffActor, action: string, id: DiscountRuleId, now: Date) => ({
+  id: createAuditEventId(),
+  actorKind: "staff" as const,
+  actorId: actor.staffId,
+  staffRole: actor.role,
+  sourceChannel: "admin" as const,
+  action,
+  outcome: "accepted" as const,
+  entityKind: "discount_rule",
+  entityId: id,
+  commandCorrelationId: crypto.randomUUID(),
+  createdAt: now,
+});
 
 const inputValues = (input: DiscountRuleInput) => ({
   name: input.name,
@@ -100,6 +90,7 @@ const inputValues = (input: DiscountRuleInput) => ({
   endsAt: input.endsAt ? new Date(input.endsAt) : null,
   minimumSubtotalMnt: input.minimumSubtotalMnt,
   globalLimit: input.globalLimit,
+  targetsJson: encodeTargets(input.targets),
 });
 
 const validTargets = async (targets: readonly DiscountTarget[]) => {
@@ -139,7 +130,7 @@ export const discountQueries = {
   validTargets,
   async create(actor: StaffActor, input: DiscountRuleInput): Promise<DiscountPersistenceResult> {
     if (!(await validTargets(input.targets))) {
-      return { kind: "invalid_target" as const };
+      return { kind: "invalid_target" };
     }
     const db = database();
     const id = createDiscountRuleId();
@@ -150,26 +141,19 @@ export const discountQueries = {
           id,
           ...inputValues(input),
           state: "draft",
-          redemptionCount: 0,
           revision: 1,
           createdAt: now,
           updatedAt: now,
         }),
-        db
-          .insert(discountTargets)
-          .values(input.targets.map((target, position) => targetRow(id, target, position))),
-        audit(actor, "discount.create", id, now),
+        db.insert(auditEvents).values(auditValues(actor, "discount.create", id, now)),
       ] as const);
-      return {
-        kind: "changed" as const,
-        value: (await readRules()).find((rule) => rule.id === id),
-      };
+      return { kind: "changed", value: (await readRules()).find((rule) => rule.id === id) };
     } catch (error) {
       return {
         kind:
           error instanceof Error && error.message.includes("discount_rules.code")
-            ? ("duplicate_code" as const)
-            : ("infrastructure" as const),
+            ? "duplicate_code"
+            : "infrastructure",
       };
     }
   },
@@ -185,62 +169,24 @@ export const discountQueries = {
     const db = database();
     const now = new Date();
     try {
-      const [changed] = await db.batch([
-        db
-          .update(discountRules)
-          .set({
-            ...inputValues(input),
-            revision: sql`${discountRules.revision} + 1`,
-            updatedAt: now,
-          })
-          .where(and(eq(discountRules.id, id), eq(discountRules.revision, expectedRevision)))
-          .returning({ id: discountRules.id }),
-        db
-          .delete(discountTargets)
-          .where(
-            and(
-              eq(discountTargets.discountRuleId, id),
-              sql`EXISTS (SELECT 1 FROM discount_rules WHERE id = ${id} AND revision = ${expectedRevision + 1})`,
-            ),
-          ),
-        db.insert(discountTargets).select(
-          db
-            .select({
-              discountRuleId: sql<string>`${id}`.as("discount_rule_id"),
-              position: sql<number>`json_each.key`.as("position"),
-              kind: sql<
-                typeof discountTargets.$inferInsert.kind
-              >`json_extract(json_each.value, '$.kind')`.as("kind"),
-              productId: sql<string | null>`json_extract(json_each.value, '$.productId')`.as(
-                "product_id",
-              ),
-              variantId: sql<string | null>`json_extract(json_each.value, '$.variantId')`.as(
-                "variant_id",
-              ),
-              categoryId: sql<string | null>`json_extract(json_each.value, '$.categoryId')`.as(
-                "category_id",
-              ),
-              collectionId: sql<string | null>`json_extract(json_each.value, '$.collectionId')`.as(
-                "collection_id",
-              ),
-            })
-            .from(
-              sql`json_each(${JSON.stringify(input.targets.map((target, position) => targetRow(id, target, position)))})`,
-            )
-            .where(
-              sql`EXISTS (SELECT 1 FROM discount_rules WHERE id = ${id} AND revision = ${expectedRevision + 1})`,
-            ),
-        ),
-        audit(actor, "discount.change", id, now),
-      ] as const);
+      const changed = await db
+        .update(discountRules)
+        .set({
+          ...inputValues(input),
+          revision: sql`${discountRules.revision} + 1`,
+          updatedAt: now,
+        })
+        .where(and(eq(discountRules.id, id), eq(discountRules.revision, expectedRevision)))
+        .returning({ id: discountRules.id });
       if (changed.length === 0) {
-        const [existing] = await db
+        const existing = await db
           .select({ id: discountRules.id })
           .from(discountRules)
           .where(eq(discountRules.id, id))
           .limit(1);
-        return { kind: existing ? ("revision_conflict" as const) : ("not_found" as const) };
+        return { kind: existing.length ? ("revision_conflict" as const) : ("not_found" as const) };
       }
+      await db.insert(auditEvents).values(auditValues(actor, "discount.change", id, now));
       return {
         kind: "changed" as const,
         value: (await readRules()).find((rule) => rule.id === id),
@@ -261,32 +207,40 @@ export const discountQueries = {
     state: "active" | "inactive",
   ) {
     const db = database();
-    const [current] = await db
-      .select()
+    const current = await db
+      .select({ state: discountRules.state, revision: discountRules.revision })
       .from(discountRules)
       .where(eq(discountRules.id, id))
       .limit(1);
-    if (!current) {
+    const rule = current.at(0);
+    if (!rule) {
       return { kind: "not_found" as const };
     }
-    if (current.revision !== expectedRevision) {
+    if (rule.revision !== expectedRevision) {
       return { kind: "revision_conflict" as const };
     }
-    if ((current.state === "draft" && state === "inactive") || current.state === state) {
+    if ((rule.state === "draft" && state === "inactive") || rule.state === state) {
       return { kind: "invalid_lifecycle" as const };
     }
     const now = new Date();
-    const [changed] = await db.batch([
-      db
-        .update(discountRules)
-        .set({ state, revision: sql`${discountRules.revision} + 1`, updatedAt: now })
-        .where(and(eq(discountRules.id, id), eq(discountRules.revision, expectedRevision)))
-        .returning({ id: discountRules.id }),
-      audit(actor, state === "active" ? "discount.activate" : "discount.deactivate", id, now),
-    ] as const);
+    const changed = await db
+      .update(discountRules)
+      .set({ state, revision: sql`${discountRules.revision} + 1`, updatedAt: now })
+      .where(and(eq(discountRules.id, id), eq(discountRules.revision, expectedRevision)))
+      .returning({ id: discountRules.id });
     if (changed.length === 0) {
       return { kind: "revision_conflict" as const };
     }
-    return { kind: "changed" as const, value: (await readRules()).find((rule) => rule.id === id) };
+    await db
+      .insert(auditEvents)
+      .values(
+        auditValues(
+          actor,
+          state === "active" ? "discount.activate" : "discount.deactivate",
+          id,
+          now,
+        ),
+      );
+    return { kind: "changed" as const, value: (await readRules()).find((item) => item.id === id) };
   },
 };

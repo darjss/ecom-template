@@ -1,9 +1,10 @@
 import {
   CheckoutApiErrorSchema,
+  CheckoutOptionsResponseSchema,
   CheckoutQuoteInputSchema,
   CheckoutQuoteResponseSchema,
 } from "@ecom/contracts";
-import { quoteCheckout, type CheckoutFailure } from "@ecom/kernel";
+import { quoteCheckout, readCheckoutOptions, type CheckoutFailure } from "@ecom/kernel";
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
@@ -29,6 +30,11 @@ const mapping = createPipeHandlers<CheckoutFailure>("code").match<CheckoutFailur
     code: "conflict" as const,
     message: "Current inventory cannot fulfill the Cart",
   }),
+  quantity_exceeded: () => ({
+    status: 422,
+    code: "validation" as const,
+    message: "Aggregate Variant demand exceeds the Checkout limit",
+  }),
   delivery_unavailable: () => ({
     status: 422,
     code: "validation" as const,
@@ -47,34 +53,47 @@ const mapping = createPipeHandlers<CheckoutFailure>("code").match<CheckoutFailur
 });
 
 export const createCheckoutRoutes = () =>
-  new Elysia({ aot: false }).post("/checkout/quote", async ({ body, status }) => {
-    const input = v.safeParse(CheckoutQuoteInputSchema, body);
-    if (!input.success) {
+  new Elysia({ aot: false })
+    .get("/checkout/options", async ({ status }) => {
+      const result = await readCheckoutOptions();
+      if (result.isOk()) {
+        return v.parse(CheckoutOptionsResponseSchema, { data: result.value });
+      }
       return status(
-        422,
+        503,
+        v.parse(CheckoutApiErrorSchema, {
+          error: { code: "unavailable", message: "Checkout options are unavailable" },
+        }),
+      );
+    })
+    .post("/checkout/quote", async ({ body, status }) => {
+      const input = v.safeParse(CheckoutQuoteInputSchema, body);
+      if (!input.success) {
+        return status(
+          422,
+          v.parse(CheckoutApiErrorSchema, {
+            error: {
+              code: "validation",
+              message: "A valid bounded Cart and fulfillment choice are required",
+            },
+          }),
+        );
+      }
+      const result = await quoteCheckout(input.output);
+      if (result.isOk()) {
+        return v.parse(CheckoutQuoteResponseSchema, { data: result.value });
+      }
+      const mapped = mapping(result.error);
+      return status(
+        mapped.status,
         v.parse(CheckoutApiErrorSchema, {
           error: {
-            code: "validation",
-            message: "A valid bounded Cart and fulfillment choice are required",
+            code: mapped.code,
+            message: mapped.message,
+            reason:
+              result.error.code === "infrastructure_unavailable" ? undefined : result.error.code,
+            linePositions: result.error.linePositions,
           },
         }),
       );
-    }
-    const result = await quoteCheckout(input.output);
-    if (result.isOk()) {
-      return v.parse(CheckoutQuoteResponseSchema, { data: result.value });
-    }
-    const mapped = mapping(result.error);
-    return status(
-      mapped.status,
-      v.parse(CheckoutApiErrorSchema, {
-        error: {
-          code: mapped.code,
-          message: mapped.message,
-          reason:
-            result.error.code === "infrastructure_unavailable" ? undefined : result.error.code,
-          linePositions: result.error.linePositions,
-        },
-      }),
-    );
-  });
+    });

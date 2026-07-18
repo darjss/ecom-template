@@ -1,4 +1,5 @@
 import {
+  DiscountTargetSchema,
   LocationsDocumentSchema,
   type CatalogItemId,
   type CheckoutQuoteInput,
@@ -16,8 +17,8 @@ import {
   cmsDocuments,
   collections,
   commerceSettings,
+  discountRedemptionEntries,
   discountRules,
-  discountTargets,
   personalizationDefinitions,
   personalizationValues,
   skus,
@@ -26,6 +27,24 @@ import {
 } from "../db/schema";
 
 export const checkoutQueries = {
+  async readOptions() {
+    const db = database();
+    const [settingRows, locationRows] = await db.batch([
+      db.select().from(commerceSettings).where(eq(commerceSettings.key, "commerce")).limit(1),
+      db
+        .select({ contentJson: cmsDocuments.contentJson })
+        .from(cmsDocuments)
+        .where(and(eq(cmsDocuments.kind, "locations"), eq(cmsDocuments.status, "published")))
+        .limit(1),
+    ] as const);
+    const locationRow = locationRows.at(0);
+    return {
+      settings: settingRows.at(0),
+      locations: locationRow
+        ? v.parse(LocationsDocumentSchema, JSON.parse(locationRow.contentJson)).locations
+        : [],
+    };
+  },
   async readQuoteSnapshot(input: CheckoutQuoteInput) {
     const variantIds = input.lines.flatMap((line) =>
       line.kind === "variant" ? [line.variantId] : [],
@@ -138,7 +157,9 @@ export const checkoutQueries = {
       allDefinitions,
       allValues,
       ruleRows,
-      targetRows,
+      redemptionRows,
+      categoryRows,
+      collectionRows,
       categoryMemberships,
       collectionMemberships,
       settingRows,
@@ -156,36 +177,15 @@ export const checkoutQueries = {
         .orderBy(asc(discountRules.id)),
       db
         .select({
-          discountRuleId: sql<string>`${discountTargets.discountRuleId}`.as(
-            "checkout_target_rule_id",
+          discountRuleId: discountRedemptionEntries.discountRuleId,
+          count: sql<number>`coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0)`.as(
+            "checkout_redemption_count",
           ),
-          position: sql<number>`${discountTargets.position}`.as("checkout_target_position"),
-          kind: sql<typeof discountTargets.$inferSelect.kind>`${discountTargets.kind}`.as(
-            "checkout_target_kind",
-          ),
-          productId: sql<string | null>`${discountTargets.productId}`.as(
-            "checkout_target_product_id",
-          ),
-          variantId: sql<string | null>`${discountTargets.variantId}`.as(
-            "checkout_target_variant_id",
-          ),
-          categoryId: sql<string | null>`${discountTargets.categoryId}`.as(
-            "checkout_target_category_id",
-          ),
-          collectionId: sql<string | null>`${discountTargets.collectionId}`.as(
-            "checkout_target_collection_id",
-          ),
-          categoryState: sql<typeof categories.$inferSelect.state | null>`${categories.state}`.as(
-            "checkout_target_category_state",
-          ),
-          collectionState: sql<
-            typeof collections.$inferSelect.state | null
-          >`${collections.state}`.as("checkout_target_collection_state"),
         })
-        .from(discountTargets)
-        .leftJoin(categories, eq(categories.id, discountTargets.categoryId))
-        .leftJoin(collections, eq(collections.id, discountTargets.collectionId))
-        .orderBy(asc(discountTargets.position)),
+        .from(discountRedemptionEntries)
+        .groupBy(discountRedemptionEntries.discountRuleId),
+      db.select({ id: categories.id, state: categories.state }).from(categories),
+      db.select({ id: collections.id, state: collections.state }).from(collections),
       db.select().from(catalogItemCategories),
       db.select().from(catalogItemCollections),
       db.select().from(commerceSettings).where(eq(commerceSettings.key, "commerce")).limit(1),
@@ -203,14 +203,25 @@ export const checkoutQueries = {
       resolvedItemIds.has(catalogItemId as CatalogItemId),
     );
     const locationRow = locationRows.at(0);
+    const redemptionCounts = new Map(redemptionRows.map((row) => [row.discountRuleId, row.count]));
+    const TargetListSchema = v.pipe(
+      v.array(DiscountTargetSchema),
+      v.minLength(1),
+      v.maxLength(100),
+    );
     return {
       variantRows,
       bundleRows,
       componentRows,
       definitions,
       values: allValues,
-      rules: ruleRows,
-      targets: targetRows,
+      rules: ruleRows.map((rule) => ({
+        ...rule,
+        targets: v.parse(TargetListSchema, JSON.parse(rule.targetsJson)),
+        redemptionCount: redemptionCounts.get(rule.id) ?? 0,
+      })),
+      categoryRows,
+      collectionRows,
       categoryMemberships,
       collectionMemberships,
       settings: settingRows.at(0),
