@@ -68,6 +68,7 @@ import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 
 export { MediaUploadMultipartMaxBytes };
+export { parseCmsPreviewDocument } from "./cms-routes";
 
 export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
 

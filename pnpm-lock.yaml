@@ -65,9 +65,6 @@ importers:
       '@ecom/api':
         specifier: workspace:*
         version: link:../../packages/api
-      '@ecom/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@ecom/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
@@ -86,9 +83,6 @@ importers:
       solid-js:
         specifier: 1.9.13
         version: 1.9.13
-      valibot:
-        specifier: 1.4.2
-        version: 1.4.2(@typescript/typescript6@6.0.2)
     devDependencies:
       '@antfu/eslint-config':
         specifier: 6.7.3
@@ -11412,10 +11406,6 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   uuid@10.0.0: {}
-
-  valibot@1.4.2(@typescript/typescript6@6.0.2):
-    optionalDependencies:
-      typescript: '@typescript/typescript6@6.0.2'
 
   valibot@1.4.2(typescript@7.0.2):
     optionalDependencies:

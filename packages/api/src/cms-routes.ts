@@ -40,6 +40,21 @@ const exposedKinds = new Set([
   "ordering_notices",
 ]);
 
+export const parseCmsPreviewDocument = (value: unknown) => {
+  const parsed = v.safeParse(CmsDocumentSchema, value);
+  if (!parsed.success) {
+    return undefined;
+  }
+  switch (parsed.output.kind) {
+    case "homepage":
+    case "announcement":
+    case "ordering_notices":
+      return parsed.output;
+    default:
+      return undefined;
+  }
+};
+
 const error = (failure: CmsOperationFailure, status: Status) => {
   const httpStatus =
     failure.code === "forbidden"

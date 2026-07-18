@@ -1,6 +1,5 @@
 ---
-import { CmsDocumentKindSchema, CmsDocumentSchema } from "@ecom/contracts";
-import * as v from "valibot";
+import { parseCmsPreviewDocument } from "@ecom/api";
 import HomeContent from "../../components/HomeContent.astro";
 import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
@@ -10,22 +9,19 @@ export const prerender = false;
 Astro.response.headers.set("Cache-Control", "private, no-store");
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
-const previewKind = v.safeParse(CmsDocumentKindSchema, Astro.url.searchParams.get("kind"));
-let localDocument: v.InferOutput<typeof CmsDocumentSchema> | undefined;
+const previewKind = Astro.url.searchParams.get("kind");
+const supportedPreviewKinds = new Set(["homepage", "announcement", "ordering_notices"]);
+let localDocument: ReturnType<typeof parseCmsPreviewDocument>;
 let validationMessage: string | undefined;
 if (Astro.request.method === "POST") {
   try {
     const formData = await Astro.request.formData();
     const serialized = formData.get("document");
-    const parsed = v.safeParse(
-      CmsDocumentSchema,
+    const parsed = parseCmsPreviewDocument(
       typeof serialized === "string" ? JSON.parse(serialized) : undefined,
     );
-    if (
-      parsed.success &&
-      ["homepage", "announcement", "ordering_notices"].includes(parsed.output.kind)
-    ) {
-      localDocument = parsed.output;
+    if (parsed) {
+      localDocument = parsed;
     } else {
       Astro.response.status = 422;
       validationMessage = "Preview-д хатуу схемтэй агуулгын баримт шаардлагатай.";
@@ -34,7 +30,7 @@ if (Astro.request.method === "POST") {
     Astro.response.status = 422;
     validationMessage = "Preview агуулгыг уншиж чадсангүй. Засварлагч руу буцаж шалгана уу.";
   }
-} else if (!previewKind.success || !["homepage", "announcement", "ordering_notices"].includes(previewKind.output)) {
+} else if (!previewKind || !supportedPreviewKinds.has(previewKind)) {
   Astro.response.status = 422;
   validationMessage = "Preview хийх агуулгын төрөл буруу байна.";
 }
