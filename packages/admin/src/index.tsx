@@ -19,6 +19,7 @@ import { resolveAdminSurface } from "./access";
 import { BundleManagement } from "./BundleManagement";
 import { CatalogManagement } from "./CatalogManagement";
 import { CmsManagement } from "./CmsManagement";
+import { DiscountManagement } from "./DiscountManagement";
 import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
@@ -379,6 +380,7 @@ const Dashboard = (props: AdminAppProps) => (
       <CatalogManagement />
       <BundleManagement />
       <GroupingManagement />
+      <DiscountManagement />
       <Show when={resolveAdminSurface(props.role) === "staff_management"}>
         <StaffManagement />
       </Show>

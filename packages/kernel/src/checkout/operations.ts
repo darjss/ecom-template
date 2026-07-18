@@ -1,0 +1,394 @@
+import {
+  CheckoutQuoteSchema,
+  type CartPersonalizationAnswer,
+  type CheckoutQuote,
+  type CheckoutQuoteInput,
+  type CheckoutQuoteLine,
+} from "@ecom/contracts";
+import { Result } from "better-result";
+import * as v from "valibot";
+import { checkoutQueries } from "./persistence";
+
+type CheckoutFailureCode =
+  | "catalog_unavailable"
+  | "invalid_personalization"
+  | "insufficient_inventory"
+  | "delivery_unavailable"
+  | "pickup_unavailable"
+  | "infrastructure_unavailable";
+export type CheckoutFailure = {
+  [Code in CheckoutFailureCode]: {
+    readonly code: Code;
+    readonly linePositions?: readonly number[];
+  };
+}[CheckoutFailureCode];
+
+const failure = (code: CheckoutFailure["code"], linePositions?: readonly number[]) =>
+  Result.err<never, CheckoutFailure>({ code, ...(linePositions ? { linePositions } : {}) });
+
+type Snapshot = Awaited<ReturnType<typeof checkoutQueries.readQuoteSnapshot>>;
+type Definition = Snapshot["definitions"][number];
+type Value = Snapshot["values"][number];
+
+const validatedPersonalizations = (
+  catalogItemId: string,
+  answers: readonly CartPersonalizationAnswer[],
+  definitions: readonly Definition[],
+  values: readonly Value[],
+) => {
+  const active = definitions.filter(
+    (definition) => definition.catalogItemId === catalogItemId && definition.state === "active",
+  );
+  if (
+    answers.length > active.length ||
+    active.some(
+      (definition) => definition.required && !answers.some(({ key }) => key === definition.key),
+    )
+  ) {
+    return undefined;
+  }
+  const resolved = answers.flatMap((answer) => {
+    const definition = active.find(({ key }) => key === answer.key);
+    if (!definition || definition.kind !== answer.kind) {
+      return [];
+    }
+    if (answer.kind === "text") {
+      if (
+        definition.maxLength === null ||
+        answer.value.length > definition.maxLength ||
+        (definition.required && answer.value.trim().length === 0)
+      ) {
+        return [];
+      }
+    } else if (answer.kind === "single_select") {
+      const selected = values.find(
+        ({ id, personalizationId, state }) =>
+          id === answer.valueId && personalizationId === definition.id && state === "active",
+      );
+      if (!selected) {
+        return [];
+      }
+    } else if (definition.required && !answer.checked) {
+      return [];
+    }
+    return [{ label: definition.label, answer }];
+  });
+  return resolved.length === answers.length ? resolved : undefined;
+};
+
+const resolveLines = (input: CheckoutQuoteInput, snapshot: Snapshot) => {
+  const invalidCatalog: number[] = [];
+  const invalidPersonalization: number[] = [];
+  const lines: CheckoutQuoteLine[] = [];
+  for (const [position, intent] of input.lines.entries()) {
+    if (intent.kind === "variant") {
+      const row = snapshot.variantRows.find(({ id }) => id === intent.variantId);
+      if (
+        !row ||
+        row.variantState !== "active" ||
+        row.productState !== "published" ||
+        row.productKind !== "product"
+      ) {
+        invalidCatalog.push(position);
+        continue;
+      }
+      const personalizations = validatedPersonalizations(
+        row.catalogItemId,
+        intent.personalizations,
+        snapshot.definitions,
+        snapshot.values,
+      );
+      if (!personalizations) {
+        invalidPersonalization.push(position);
+        continue;
+      }
+      const unitPriceMnt = row.unitPriceMnt ?? row.productPriceMnt;
+      lines.push({
+        position,
+        source: { kind: "variant", id: intent.variantId, catalogItemId: row.catalogItemId },
+        name: row.name,
+        sku: row.sku,
+        quantity: intent.quantity,
+        unitPriceMnt,
+        merchandiseAmountMnt: unitPriceMnt * intent.quantity,
+        discountMnt: 0,
+        totalMnt: unitPriceMnt * intent.quantity,
+        personalizations,
+        demand: [{ variantId: intent.variantId, quantity: intent.quantity }],
+      });
+      continue;
+    }
+    const row = snapshot.bundleRows.find(({ id }) => id === intent.bundleId);
+    const components = snapshot.componentRows.filter(
+      ({ bundleId }) => bundleId === intent.bundleId,
+    );
+    if (
+      !row ||
+      row.state !== "published" ||
+      row.kind !== "bundle" ||
+      components.length === 0 ||
+      components.some(
+        (component) =>
+          component.variantState !== "active" ||
+          component.productState !== "published" ||
+          component.productKind !== "product",
+      )
+    ) {
+      invalidCatalog.push(position);
+      continue;
+    }
+    const personalizations = validatedPersonalizations(
+      row.catalogItemId,
+      intent.personalizations,
+      snapshot.definitions,
+      snapshot.values,
+    );
+    if (!personalizations) {
+      invalidPersonalization.push(position);
+      continue;
+    }
+    const demandByVariant = new Map<string, number>();
+    for (const component of components) {
+      demandByVariant.set(
+        component.variantId,
+        (demandByVariant.get(component.variantId) ?? 0) + component.quantity * intent.quantity,
+      );
+    }
+    lines.push({
+      position,
+      source: { kind: "bundle", id: intent.bundleId, catalogItemId: row.catalogItemId },
+      name: row.name,
+      sku: row.sku,
+      quantity: intent.quantity,
+      unitPriceMnt: row.unitPriceMnt,
+      merchandiseAmountMnt: row.unitPriceMnt * intent.quantity,
+      discountMnt: 0,
+      totalMnt: row.unitPriceMnt * intent.quantity,
+      personalizations,
+      demand: [...demandByVariant]
+        .toSorted(([left], [right]) => left.localeCompare(right))
+        .map(([variantId, quantity]) => ({ variantId, quantity })),
+    });
+  }
+  return { lines, invalidCatalog, invalidPersonalization };
+};
+
+const hasTarget = (line: CheckoutQuoteLine, ruleId: string, snapshot: Snapshot) =>
+  snapshot.targets.some((target) => {
+    if (target.discountRuleId !== ruleId) {
+      return false;
+    }
+    if (target.kind === "all") {
+      return true;
+    }
+    if (target.kind === "product") {
+      return target.productId === line.source.catalogItemId;
+    }
+    if (target.kind === "variant") {
+      return line.source.kind === "variant" && target.variantId === line.source.id;
+    }
+    if (target.kind === "category") {
+      return (
+        target.categoryState === "active" &&
+        snapshot.categoryMemberships.some(
+          (membership) =>
+            membership.categoryId === target.categoryId &&
+            membership.catalogItemId === line.source.catalogItemId,
+        )
+      );
+    }
+    return (
+      target.collectionState === "active" &&
+      snapshot.collectionMemberships.some(
+        (membership) =>
+          membership.collectionId === target.collectionId &&
+          membership.catalogItemId === line.source.catalogItemId,
+      )
+    );
+  });
+
+const candidate = (
+  rule: Snapshot["rules"][number],
+  lines: readonly CheckoutQuoteLine[],
+  snapshot: Snapshot,
+  now: number,
+) => {
+  if (
+    (rule.startsAt && rule.startsAt.getTime() > now) ||
+    (rule.endsAt && rule.endsAt.getTime() <= now) ||
+    (rule.globalLimit !== null && rule.redemptionCount >= rule.globalLimit)
+  ) {
+    return undefined;
+  }
+  const positions = lines
+    .filter((line) => hasTarget(line, rule.id, snapshot))
+    .map(({ position }) => position);
+  const eligibleSubtotal = lines
+    .filter((line) => positions.includes(line.position))
+    .reduce((sum, line) => sum + line.merchandiseAmountMnt, 0);
+  if (eligibleSubtotal < rule.minimumSubtotalMnt || eligibleSubtotal === 0) {
+    return undefined;
+  }
+  const reduction = Math.min(
+    eligibleSubtotal,
+    rule.calculation === "percentage"
+      ? Math.floor((eligibleSubtotal * rule.value) / 100)
+      : rule.value,
+  );
+  return reduction > 0 ? { rule, positions, eligibleSubtotal, reduction } : undefined;
+};
+
+type Candidate = NonNullable<ReturnType<typeof candidate>>;
+const allocate = (chosen: Candidate, lines: readonly CheckoutQuoteLine[]) => {
+  const shares = lines
+    .filter((line) => chosen.positions.includes(line.position))
+    .map((line) => ({
+      position: line.position,
+      amount: Math.floor((line.merchandiseAmountMnt * chosen.reduction) / chosen.eligibleSubtotal),
+      remainder: (line.merchandiseAmountMnt * chosen.reduction) % chosen.eligibleSubtotal,
+    }));
+  let remaining = chosen.reduction - shares.reduce((sum, share) => sum + share.amount, 0);
+  for (const share of shares.toSorted(
+    (left, right) => right.remainder - left.remainder || left.position - right.position,
+  )) {
+    if (remaining === 0) {
+      break;
+    }
+    share.amount += 1;
+    remaining -= 1;
+  }
+  return new Map(shares.map(({ position, amount }) => [position, amount]));
+};
+
+const digest = async (value: unknown) => {
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(value)),
+  );
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+export const quoteCheckout = async (
+  input: CheckoutQuoteInput,
+): Promise<Result<CheckoutQuote, CheckoutFailure>> => {
+  try {
+    const snapshot = await checkoutQueries.readQuoteSnapshot(input);
+    const resolved = resolveLines(input, snapshot);
+    if (resolved.invalidCatalog.length) {
+      return failure("catalog_unavailable", resolved.invalidCatalog);
+    }
+    if (resolved.invalidPersonalization.length) {
+      return failure("invalid_personalization", resolved.invalidPersonalization);
+    }
+    const demand = new Map<string, number>();
+    for (const line of resolved.lines) {
+      for (const item of line.demand) {
+        demand.set(item.variantId, (demand.get(item.variantId) ?? 0) + item.quantity);
+      }
+    }
+    const inventory = new Map(
+      snapshot.variantRows.map((row) => [
+        row.id,
+        { onHandQuantity: row.onHandQuantity, reservedQuantity: row.reservedQuantity },
+      ]),
+    );
+    for (const component of snapshot.componentRows) {
+      inventory.set(component.variantId, {
+        onHandQuantity: component.onHandQuantity,
+        reservedQuantity: component.reservedQuantity,
+      });
+    }
+    const unavailable = resolved.lines
+      .filter((line) =>
+        line.demand.some(({ variantId }) => {
+          const row = inventory.get(variantId);
+          return !row || row.onHandQuantity - row.reservedQuantity < (demand.get(variantId) ?? 0);
+        }),
+      )
+      .map(({ position }) => position);
+    if (unavailable.length) {
+      return failure("insufficient_inventory", unavailable);
+    }
+    if (!snapshot.settings) {
+      return failure("infrastructure_unavailable");
+    }
+    if (input.fulfillment.kind === "delivery" && !snapshot.settings.deliveryEnabled) {
+      return failure("delivery_unavailable");
+    }
+    if (input.fulfillment.kind === "pickup") {
+      const locationId = input.fulfillment.locationId;
+      if (
+        !snapshot.settings.pickupEnabled ||
+        !snapshot.locations.some(
+          (location) => location.id === locationId && location.active && location.pickupEnabled,
+        )
+      ) {
+        return failure("pickup_unavailable");
+      }
+    }
+    const now = Date.parse(snapshot.quotedAt);
+    const candidates = snapshot.rules
+      .map((rule) => candidate(rule, resolved.lines, snapshot, now))
+      .filter((value): value is Candidate => value !== undefined);
+    const coded =
+      input.code === null
+        ? undefined
+        : candidates.find(({ rule }) => rule.mode === "code" && rule.code === input.code);
+    const automatic = candidates
+      .filter(({ rule }) => rule.mode === "automatic")
+      .toSorted(
+        (left, right) =>
+          right.reduction - left.reduction || left.rule.id.localeCompare(right.rule.id),
+      )
+      .at(0);
+    const chosen = coded ?? automatic;
+    const allocations = chosen ? allocate(chosen, resolved.lines) : new Map<number, number>();
+    const lines = resolved.lines.map((line) => {
+      const discountMnt = allocations.get(line.position) ?? 0;
+      return { ...line, discountMnt, totalMnt: line.merchandiseAmountMnt - discountMnt };
+    });
+    const subtotalMnt = lines.reduce((sum, line) => sum + line.merchandiseAmountMnt, 0);
+    const discountMnt = chosen?.reduction ?? 0;
+    const postDiscountMerchandiseMnt = subtotalMnt - discountMnt;
+    const deliveryFeeMnt =
+      input.fulfillment.kind === "pickup" ||
+      (snapshot.settings.freeDeliveryThresholdMnt !== null &&
+        postDiscountMerchandiseMnt >= snapshot.settings.freeDeliveryThresholdMnt)
+        ? 0
+        : snapshot.settings.deliveryFeeMnt;
+    const facts = {
+      lines,
+      subtotalMnt,
+      discount: chosen
+        ? {
+            kind: "applied" as const,
+            ruleId: chosen.rule.id,
+            name: chosen.rule.name,
+            amountMnt: chosen.reduction,
+            submittedCode: input.code,
+            codeAccepted: coded !== undefined,
+          }
+        : { kind: "none" as const, submittedCode: input.code, codeAccepted: false },
+      postDiscountMerchandiseMnt,
+      fulfillment: input.fulfillment,
+      deliveryFeeMnt,
+      fees: [
+        {
+          kind: "delivery" as const,
+          label: input.fulfillment.kind === "pickup" ? "Pickup" : "Delivery",
+          amountMnt: deliveryFeeMnt,
+        },
+      ],
+      totalMnt: postDiscountMerchandiseMnt + deliveryFeeMnt,
+    };
+    return Result.ok(
+      v.parse(CheckoutQuoteSchema, {
+        quotedAt: snapshot.quotedAt,
+        ...facts,
+        commercialFingerprint: await digest(facts),
+      }),
+    );
+  } catch {
+    return failure("infrastructure_unavailable");
+  }
+};

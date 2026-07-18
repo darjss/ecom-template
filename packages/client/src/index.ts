@@ -1,5 +1,6 @@
 export { requestAvailability } from "./availability/request";
 export { CartProvider, useCart } from "./cart/index";
+export { requestCheckoutQuote } from "./checkout/request";
 export {
   requestBundleMutation,
   requestBundles,
@@ -17,6 +18,11 @@ export {
   requestCommerceSettingsMutation,
   type CmsMutation,
 } from "./cms/request";
+export {
+  requestDiscountMutation,
+  requestDiscountRules,
+  type DiscountMutation,
+} from "./discount/request";
 export { createApiClient } from "./eden";
 export {
   requestCreateCategory,
@@ -43,6 +49,7 @@ export {
   personalizationQueryOptions,
 } from "./query/bundle";
 export { catalogImageMutationOptions } from "./query/catalog-media";
+export { checkoutQuoteMutationOptions } from "./query/checkout";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export {
   cmsCachePurgeMutationOptions,
@@ -52,6 +59,7 @@ export {
   commerceSettingsQueryOptions,
 } from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
+export { discountMutationOptions, discountQueryOptions } from "./query/discount";
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
 export { catalogSearchQueryOptions } from "./query/search";

@@ -155,6 +155,13 @@
       "when": 1784358470665,
       "tag": "0021_catalog_search",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1784377644722,
+      "tag": "0022_unknown_hitman",
+      "breakpoints": true
     }
   ]
 }

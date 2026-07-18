@@ -62,6 +62,7 @@ const groupingError = (failure: GroupingOperationFailure, status: Status) => {
     parent_not_found: "Parent Category was not found",
     category_cycle: "Category parent would create a cycle",
     active_child: "Active child Categories must be resolved before archival",
+    active_discount_dependency: "Active Discount Rules must be deactivated before archival",
     inactive_ancestor: "Every ancestor Category must be active before activation",
     concurrent_parent_change: "Category ancestry changed while saving; retry the edit",
     duplicate_membership: "A Catalog Item may appear only once in a grouping",

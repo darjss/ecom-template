@@ -226,6 +226,9 @@ importers:
       better-result:
         specifier: 2.9.2
         version: 2.9.2
+      dismatch:
+        specifier: 2.6.0
+        version: 2.6.0
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@prisma/client@5.22.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.29.2)(pg@8.22.0)
@@ -269,6 +272,9 @@ importers:
       solid-js:
         specifier: 1.9.13
         version: 1.9.13
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@7.0.2)
 
   packages/ui:
     dependencies:

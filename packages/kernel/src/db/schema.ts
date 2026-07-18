@@ -334,6 +334,64 @@ export const collections = sqliteTable(
   ],
 );
 
+export const discountRules = sqliteTable(
+  "discount_rules",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    mode: text("mode", { enum: ["automatic", "code"] }).notNull(),
+    code: text("code"),
+    calculation: text("calculation", { enum: ["percentage", "fixed_mnt"] }).notNull(),
+    value: integer("value").notNull(),
+    state: text("state", { enum: ["draft", "active", "inactive"] }).notNull(),
+    startsAt: integer("starts_at", { mode: "timestamp_ms" }),
+    endsAt: integer("ends_at", { mode: "timestamp_ms" }),
+    minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
+    globalLimit: integer("global_limit"),
+    redemptionCount: integer("redemption_count").notNull().default(0),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "discount_rules_id_check",
+      sql`length(${table.id}) = 35 AND substr(${table.id}, 1, 9) = 'discount_' AND substr(${table.id}, 10, 1) GLOB '[0-7]' AND substr(${table.id}, 10) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("discount_rules_name_check", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
+    check(
+      "discount_rules_mode_check",
+      sql`(${table.mode} = 'automatic' AND ${table.code} IS NULL) OR (${table.mode} = 'code' AND ${table.code} IS NOT NULL AND ${table.code} = upper(trim(${table.code})) AND length(${table.code}) BETWEEN 1 AND 32)`,
+    ),
+    check(
+      "discount_rules_calculation_check",
+      sql`(${table.calculation} = 'percentage' AND ${table.value} BETWEEN 1 AND 100) OR (${table.calculation} = 'fixed_mnt' AND ${table.value} BETWEEN 1 AND 1000000000)`,
+    ),
+    check("discount_rules_state_check", sql`${table.state} IN ('draft', 'active', 'inactive')`),
+    check(
+      "discount_rules_window_check",
+      sql`${table.startsAt} IS NULL OR ${table.endsAt} IS NULL OR ${table.startsAt} < ${table.endsAt}`,
+    ),
+    check(
+      "discount_rules_minimum_check",
+      sql`${table.minimumSubtotalMnt} BETWEEN 0 AND 1000000000`,
+    ),
+    check(
+      "discount_rules_limit_check",
+      sql`${table.globalLimit} IS NULL OR ${table.globalLimit} BETWEEN 1 AND 1000000`,
+    ),
+    check(
+      "discount_rules_redemption_check",
+      sql`${table.redemptionCount} >= 0 AND (${table.globalLimit} IS NULL OR ${table.redemptionCount} <= ${table.globalLimit})`,
+    ),
+    check("discount_rules_revision_check", sql`${table.revision} >= 1`),
+    uniqueIndex("discount_rules_code_idx")
+      .on(table.code)
+      .where(sql`${table.code} IS NOT NULL`),
+    index("discount_rules_eligibility_idx").on(table.state, table.startsAt, table.endsAt, table.id),
+  ],
+);
+
 export const tags = sqliteTable(
   "tags",
   {
@@ -606,6 +664,41 @@ export const variants = sqliteTable(
     uniqueIndex("variants_product_combination_idx").on(table.productId, table.combinationKey),
     index("variants_product_state_idx").on(table.productId, table.state),
     index("variants_image_media_idx").on(table.imageMediaAssetId),
+  ],
+);
+
+export const discountTargets = sqliteTable(
+  "discount_targets",
+  {
+    discountRuleId: text("discount_rule_id")
+      .notNull()
+      .references(() => discountRules.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    kind: text("kind", {
+      enum: ["all", "product", "variant", "category", "collection"],
+    }).notNull(),
+    productId: text("product_id").references(() => catalogItems.id, { onDelete: "restrict" }),
+    variantId: text("variant_id").references(() => variants.id, { onDelete: "restrict" }),
+    categoryId: text("category_id").references(() => categories.id, { onDelete: "restrict" }),
+    collectionId: text("collection_id").references(() => collections.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.discountRuleId, table.position] }),
+    check("discount_targets_position_check", sql`${table.position} BETWEEN 0 AND 99`),
+    check(
+      "discount_targets_shape_check",
+      sql`(${table.kind} = 'all' AND ${table.productId} IS NULL AND ${table.variantId} IS NULL AND ${table.categoryId} IS NULL AND ${table.collectionId} IS NULL) OR (${table.kind} = 'product' AND ${table.productId} IS NOT NULL AND ${table.variantId} IS NULL AND ${table.categoryId} IS NULL AND ${table.collectionId} IS NULL) OR (${table.kind} = 'variant' AND ${table.productId} IS NULL AND ${table.variantId} IS NOT NULL AND ${table.categoryId} IS NULL AND ${table.collectionId} IS NULL) OR (${table.kind} = 'category' AND ${table.productId} IS NULL AND ${table.variantId} IS NULL AND ${table.categoryId} IS NOT NULL AND ${table.collectionId} IS NULL) OR (${table.kind} = 'collection' AND ${table.productId} IS NULL AND ${table.variantId} IS NULL AND ${table.categoryId} IS NULL AND ${table.collectionId} IS NOT NULL)`,
+    ),
+    uniqueIndex("discount_targets_identity_idx").on(
+      table.discountRuleId,
+      table.kind,
+      table.productId,
+      table.variantId,
+      table.categoryId,
+      table.collectionId,
+    ),
+    index("discount_targets_category_idx").on(table.categoryId, table.discountRuleId),
+    index("discount_targets_collection_idx").on(table.collectionId, table.discountRuleId),
   ],
 );
 
