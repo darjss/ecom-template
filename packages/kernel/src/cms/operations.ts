@@ -45,8 +45,8 @@ const validateDocument = async (
   }
   if (document.kind === "homepage") {
     if (
-      document.content.heroMediaAssetId !== null &&
-      !references.media.has(document.content.heroMediaAssetId)
+      document.content.hero !== null &&
+      !references.media.has(document.content.hero.mediaAssetId)
     ) {
       return { code: "invalid_reference" };
     }

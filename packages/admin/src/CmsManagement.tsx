@@ -19,6 +19,7 @@ import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
+import { AnnouncementEditor, HomepageEditor, OrderingNoticesEditor } from "./ContentDraftEditors";
 
 const fieldClass =
   "min-h-11 w-full rounded-lg border border-black/25 bg-(--paper) px-3 text-base text-(--ink) focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600";
@@ -330,12 +331,15 @@ const SettingsForm = () => {
 
 const sections: readonly { kind: CmsDocumentKind | "settings"; label: string }[] = [
   { kind: "storefront_identity", label: "Нэр ба холбоо" },
+  { kind: "homepage", label: "Нүүр хуудас" },
+  { kind: "announcement", label: "Мэдэгдэл" },
+  { kind: "ordering_notices", label: "Захиалгын мэдээлэл" },
   { kind: "navigation", label: "Цэс" },
   { kind: "locations", label: "Байршил" },
   { kind: "policies", label: "Бодлого" },
   { kind: "settings", label: "Худалдааны тохиргоо" },
 ];
-export const CmsManagement = () => {
+export const CmsManagement = (props: { store: string }) => {
   const query = useQuery(() => cmsQueryOptions());
   const cachePurge = useMutation(() => cmsCachePurgeMutationOptions());
   const [active, setActive] =
@@ -344,6 +348,18 @@ export const CmsManagement = () => {
   const identity = () => {
     const value = document("storefront_identity");
     return value?.kind === "storefront_identity" ? value : undefined;
+  };
+  const homepage = () => {
+    const value = document("homepage");
+    return value?.kind === "homepage" ? value : undefined;
+  };
+  const announcement = () => {
+    const value = document("announcement");
+    return value?.kind === "announcement" ? value : undefined;
+  };
+  const orderingNotices = () => {
+    const value = document("ordering_notices");
+    return value?.kind === "ordering_notices" ? value : undefined;
   };
   const navigation = () => {
     const value = document("navigation");
@@ -356,6 +372,24 @@ export const CmsManagement = () => {
   const policies = () => {
     const value = document("policies");
     return value?.kind === "policies" ? value : undefined;
+  };
+  const emptyHomepage: Extract<CmsDocument, { kind: "homepage" }> = {
+    kind: "homepage",
+    content: {
+      version: 1,
+      headline: "Гэрийн тавиур.",
+      summary: "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.",
+      hero: null,
+      featuredCatalogItemIds: [],
+    },
+  };
+  const emptyAnnouncement: Extract<CmsDocument, { kind: "announcement" }> = {
+    kind: "announcement",
+    content: { version: 1, enabled: false, message: "Дэлгүүрийн мэдэгдэл" },
+  };
+  const emptyOrderingNotices: Extract<CmsDocument, { kind: "ordering_notices" }> = {
+    kind: "ordering_notices",
+    content: { version: 1, notices: [] },
   };
   const emptyNavigation: Extract<CmsDocument, { kind: "navigation" }> = {
     kind: "navigation",
@@ -477,6 +511,18 @@ export const CmsManagement = () => {
       >
         <Show when={active() === "storefront_identity"}>
           <IdentityForm initial={identity()} />
+        </Show>
+        <Show when={active() === "homepage"}>
+          <HomepageEditor store={props.store} initial={homepage() ?? emptyHomepage} />
+        </Show>
+        <Show when={active() === "announcement"}>
+          <AnnouncementEditor store={props.store} initial={announcement() ?? emptyAnnouncement} />
+        </Show>
+        <Show when={active() === "ordering_notices"}>
+          <OrderingNoticesEditor
+            store={props.store}
+            initial={orderingNotices() ?? emptyOrderingNotices}
+          />
         </Show>
         <Show when={active() === "navigation"}>
           <FullCmsDocumentForm

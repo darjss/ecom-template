@@ -32,6 +32,15 @@ html {
   font-weight: 700;
   text-align: center;
 }
+.announcement {
+  margin: 0;
+  padding: 0.65rem clamp(1.2rem, 4vw, 4.5rem);
+  background: var(--yellow);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
 .site-header {
   min-height: 5rem;
   display: grid;
@@ -178,9 +187,11 @@ html {
 }
 .pantry-copy h1 {
   margin: 0;
-  font-size: clamp(3.2rem, 6vw, 7rem);
-  line-height: 0.8;
-  letter-spacing: -0.08em;
+  max-width: 8ch;
+  font-size: clamp(3.2rem, 6vw, 6rem);
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 .pantry-copy h1 span {
   color: var(--yellow);
@@ -209,6 +220,7 @@ html {
   background: var(--paper);
 }
 .pantry-image img,
+.pantry-image picture,
 .bundle-bay img,
 .product-visual img {
   width: 100%;
@@ -343,7 +355,8 @@ html {
   margin: 0 0 1.25rem;
   font-size: clamp(2.5rem, 5vw, 5rem);
   line-height: 0.95;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 .product-copy > p:not(.kicker, .availability) {
   max-width: 42ch;
@@ -495,7 +508,8 @@ footer {
     display: flex;
     justify-content: flex-end;
   }
-  .featured {
+  .featured,
+  .ordering-notices {
     grid-template-columns: 1fr;
   }
   .product-visual {
@@ -514,6 +528,62 @@ footer {
   }
 }
 
+.ordering-notices {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+  gap: clamp(2rem, 8vw, 8rem);
+  padding: clamp(3rem, 8vw, 7rem) clamp(1.2rem, 7vw, 7rem);
+  background: var(--yellow);
+  color: var(--ink);
+}
+.ordering-notices h2 {
+  max-width: 12ch;
+  margin: 0 0 1rem;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.ordering-notices article {
+  border-top: 1px solid oklch(24% 0.025 48 / 25%);
+  padding: 1.25rem 0;
+}
+.ordering-notices article:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.ordering-notices h3 {
+  margin: 0 0 0.5rem;
+}
+.notice-prose > :first-child {
+  margin-top: 0;
+}
+.notice-prose > :last-child {
+  margin-bottom: 0;
+}
+.preview-ribbon {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem clamp(1rem, 4vw, 3rem);
+  background: var(--ink);
+  color: var(--paper);
+}
+.preview-ribbon a {
+  margin-left: auto;
+  color: inherit;
+}
+.preview-error {
+  min-height: 60vh;
+  display: grid;
+  place-content: center;
+  justify-items: start;
+  padding: 2rem;
+}
 .customer-auth {
   display: flex;
   align-items: flex-start;

@@ -1,76 +1,25 @@
 ---
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
-import { CustomerAuthIsland } from "@ecom/storefront";
+import HomeContent from "../components/HomeContent.astro";
 import StoreShell from "../components/StoreShell.astro";
 import StoreLayout from "../layouts/StoreLayout.astro";
 import { storefront } from "../api";
 
 export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
-const [summary, shell, catalogItems, groupings] = await Promise.all([
+const [summary, shell, homeContent, catalogItems, groupings] = await Promise.all([
   storefront.readSummary(),
   storefront.readShell(),
+  storefront.readHomeCmsContent(),
   storefront.listPublishedCatalogItems(),
   storefront.listPublishedGroupings(),
 ]);
 const identity = shell.identity;
-const commerceSettings = shell.commerceSettings;
-const products = catalogItems.filter(({ kind }) => kind === "product");
 const storeName = identity?.displayName ?? summary.storeName;
 ---
 <StoreLayout title={`${storeName} · Өдөр бүрийн хэрэгцээ`} description={identity?.summary ?? "Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт"}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
-  <StoreShell shell={shell} currentPath="/" fallbackName={summary.storeName}>
-  <main id="content">
-    <section class="pantry" aria-labelledby="pantry-title">
-      <div class="pantry-beam">
-        <span>Ө48 Өдөр</span><b>Тавиур 01 · өдөр тутмын нөөц</b><span>УБ · 09:00–21:00</span>
-      </div>
-      <div class="pantry-grid">
-        <aside class="pantry-categories" aria-label="Бүтээгдэхүүний ангилал">
-          <p>Тасалгаа</p>
-          <ol>
-            {groupings.categories.length === 0
-              ? <li><span>—</span>Ангилал удахгүй нэмэгдэнэ</li>
-              : groupings.categories.map((category, index) => <li><span>{String(index + 1).padStart(2, "0")}</span><a href={`/categories/${category.slug}`}>{category.name}</a></li>)}
-          </ol>
-        </aside>
-        <div class="pantry-copy">
-          <p class="kicker">Өдөр бүрийн хэрэгцээг цэгцтэй</p>
-          <h1 id="pantry-title">Гэрийн<br /><span>тавиур.</span></h1>
-          <p>{identity?.tagline ?? "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой."}</p>
-          <a href="#featured">Тавиур үзэх</a>
-        </div>
-        <div class="pantry-image">
-          <img src="/media/hero-pantry.webp" alt="Хүнс, гэр ахуйн бүтээгдэхүүн өрсөн Өрнүүн 48-ын цайвар модон тавиур" width="1000" height="1000" fetchpriority="high" />
-          <div class="shelf-marker" aria-hidden="true"><b>48</b><span>гэрийн нөөц</span></div>
-        </div>
-        <article class="bundle-bay">
-          <img src="/media/b01-cleaning-bundle.webp" alt="Угаалгын нунтаг болон аяга таваг угаагчийн цэвэрлэгээний хослол" width="1000" height="1000" loading="lazy" />
-          <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>Каталогоос сонгоорой</span>
-        </article>
-        <div class="delivery-bay">{commerceSettings?.freeDeliveryThresholdMnt == null ? <><span>Хүргэлтийн нөхцөл</span><strong>Үнэгүй хүргэлт тохируулаагүй</strong></> : <><span>{new Intl.NumberFormat("mn-MN").format(commerceSettings.freeDeliveryThresholdMnt)} ₮</span><strong>дээш хүргэлт үнэгүй</strong></>}<small>{commerceSettings?.deliveryEnabled === false ? "Хүргэлт түр хаалттай" : "Улаанбаатар хотод"}</small></div>
-      </div>
-      <div class="pantry-plinth"><span>01 Хүнс</span><span>02 Гэр ахуй</span><span>03 Жижиг бэлэг</span><b>ӨРНҮҮН / 48</b></div>
-    </section>
-    <section id="featured" class="featured" aria-labelledby="featured-title">
-      <div class="product-copy">
-        <p class="kicker">Нийтлэгдсэн каталог</p>
-        <h2 id="featured-title">Өдөр тутмын сонголт</h2>
-        <p>Үнэ нь бүхэл төгрөгөөр харагдана. Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
-      </div>
-      <div class="product-copy">
-        {groupings.collections.length > 0 && <nav class="mb-6 flex flex-wrap gap-3" aria-label="Цуглуулга"><span class="font-bold">Цуглуулга:</span>{groupings.collections.map((collection) => <a href={`/collections/${collection.slug}`}>{collection.name}</a>)}</nav>}
-        {products.length === 0 ? <p>Одоогоор нийтлэгдсэн бүтээгдэхүүн алга.</p> : <ul class="catalog-list">{products.map((product) => <li><a href={`/products/${product.slug}`}><strong>{product.name}</strong><span>{new Intl.NumberFormat("mn-MN").format(product.priceMnt)} ₮</span></a></li>)}</ul>}
-      </div>
-    </section>
-    <section class="customer-auth" aria-labelledby="customer-auth-title">
-      <div>
-        <h2 id="customer-auth-title">Захиалгын түүхээ хадгалах</h2>
-        <p>Утасны дугаараа нэг удаагийн кодоор баталгаажуулбал энэ дэлгүүрийн захиалгуудаа дараа нь харж болно. Худалдан авалт хийхэд нэвтрэх шаардлагагүй.</p>
-      </div>
-      <CustomerAuthIsland client:only="solid-js" />
-    </section>
-  </main>
+  <StoreShell shell={{ ...shell, announcement: homeContent.announcement }} currentPath="/" fallbackName={summary.storeName}>
+    <HomeContent homepage={homeContent.homepage} orderingNotices={homeContent.orderingNotices} shell={shell} catalogItems={catalogItems} groupings={groupings} />
   </StoreShell>
 </StoreLayout>

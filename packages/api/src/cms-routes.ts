@@ -30,7 +30,15 @@ type Authorize = (
   | { readonly authorized: true; readonly actor: StaffActor }
   | { readonly authorized: false; readonly response: unknown }
 >;
-const exposedKinds = new Set(["storefront_identity", "navigation", "locations", "policies"]);
+const exposedKinds = new Set([
+  "storefront_identity",
+  "homepage",
+  "navigation",
+  "locations",
+  "policies",
+  "announcement",
+  "ordering_notices",
+]);
 
 const error = (failure: CmsOperationFailure, status: Status) => {
   const httpStatus =

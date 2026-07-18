@@ -333,7 +333,7 @@ const StaffManagement = () => {
   );
 };
 
-export type AdminAppProps = { storeName: string; role: StaffRole };
+export type AdminAppProps = { storeName: string; store: string; role: StaffRole };
 
 const Dashboard = (props: AdminAppProps) => (
   <div class="grid min-h-screen grid-cols-1 md:grid-cols-[15rem_1fr]">
@@ -375,7 +375,7 @@ const Dashboard = (props: AdminAppProps) => (
           <HealthStatus />
         </div>
       </header>
-      <CmsManagement />
+      <CmsManagement store={props.store} />
       <CatalogManagement />
       <BundleManagement />
       <GroupingManagement />
@@ -390,7 +390,7 @@ export const AdminApp = (props: AdminAppProps) => {
   const queryClient = createStoreQueryClient();
   return (
     <QueryClientProvider client={queryClient}>
-      <Dashboard role={props.role} storeName={props.storeName} />
+      <Dashboard role={props.role} store={props.store} storeName={props.storeName} />
     </QueryClientProvider>
   );
 };

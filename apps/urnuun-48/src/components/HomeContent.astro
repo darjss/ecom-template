@@ -1,0 +1,95 @@
+---
+import type { StoreBackend } from "@ecom/api";
+import type { HomepageDocument, OrderingNoticesDocument } from "@ecom/contracts";
+import { CustomerAuthIsland, renderPolicyMarkdown } from "@ecom/storefront";
+
+type Storefront = StoreBackend["storefront"];
+type CatalogItems = Awaited<ReturnType<Storefront["listPublishedCatalogItems"]>>;
+type Groupings = Awaited<ReturnType<Storefront["listPublishedGroupings"]>>;
+type Shell = Awaited<ReturnType<Storefront["readShell"]>>;
+interface Props {
+  homepage: HomepageDocument | undefined;
+  orderingNotices: OrderingNoticesDocument | undefined;
+  shell: Shell;
+  catalogItems: CatalogItems;
+  groupings: Groupings;
+}
+const { homepage, orderingNotices, shell, catalogItems, groupings } = Astro.props;
+const commerceSettings = shell.commerceSettings;
+const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+const fallbackProducts = catalogItems.filter(({ kind }) => kind === "product");
+const featuredItems = homepage
+  ? homepage.featuredCatalogItemIds.flatMap((id) => {
+      const item = catalogById.get(id);
+      return item ? [item] : [];
+    })
+  : fallbackProducts;
+const headline = homepage?.headline ?? "Гэрийн тавиур.";
+const headlineParts = headline.split(" ");
+const headlineLead = headlineParts.slice(0, -1).join(" ") || headline;
+const headlineAccent = headlineParts.length > 1 ? headlineParts.at(-1) : undefined;
+const summary =
+  homepage?.summary ?? "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.";
+const homeNotices =
+  orderingNotices?.notices.filter(
+    ({ enabled, placements }) => enabled && placements.includes("home"),
+  ) ?? [];
+const formattedNotices = homeNotices.map((notice) => ({
+  ...notice,
+  html: renderPolicyMarkdown(notice.contentMarkdown),
+}));
+---
+<main id="content">
+  <section class="pantry" aria-labelledby="pantry-title">
+    <div class="pantry-beam">
+      <span>Ө48 Өдөр</span><b>Тавиур 01 · өдөр тутмын нөөц</b><span>УБ · 09:00–21:00</span>
+    </div>
+    <div class="pantry-grid">
+      <aside class="pantry-categories" aria-label="Бүтээгдэхүүний ангилал">
+        <p>Тасалгаа</p>
+        <ol>
+          {groupings.categories.length === 0
+            ? <li><span>—</span>Ангилал удахгүй нэмэгдэнэ</li>
+            : groupings.categories.map((category, index) => <li><span>{String(index + 1).padStart(2, "0")}</span><a href={`/categories/${category.slug}`}>{category.name}</a></li>)}
+        </ol>
+      </aside>
+      <div class="pantry-copy">
+        <p class="kicker">Өдөр бүрийн хэрэгцээг цэгцтэй</p>
+        <h1 id="pantry-title">{headlineLead}{headlineAccent && <><br /><span>{headlineAccent}</span></>}</h1>
+        <p>{summary}</p>
+        <a href="#featured">Тавиур үзэх</a>
+      </div>
+      <div class="pantry-image">
+        {homepage?.hero
+          ? <picture><source type="image/avif" srcset={`/media/${homepage.hero.mediaAssetId}/960.avif`} /><img src={`/media/${homepage.hero.mediaAssetId}/960.webp`} alt={homepage.hero.altText} width="960" height="960" fetchpriority="high" /></picture>
+          : <img src="/media/hero-pantry.webp" alt="Хүнс, гэр ахуйн бүтээгдэхүүн өрсөн Өрнүүн 48-ын цайвар модон тавиур" width="1000" height="1000" fetchpriority="high" />}
+        <div class="shelf-marker" aria-hidden="true"><b>48</b><span>гэрийн нөөц</span></div>
+      </div>
+      <article class="bundle-bay">
+        <img src="/media/b01-cleaning-bundle.webp" alt="Угаалгын нунтаг болон аяга таваг угаагчийн цэвэрлэгээний хослол" width="1000" height="1000" loading="lazy" />
+        <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>Каталогоос сонгоорой</span>
+      </article>
+      <div class="delivery-bay">{commerceSettings?.freeDeliveryThresholdMnt == null ? <><span>Хүргэлтийн нөхцөл</span><strong>Үнэгүй хүргэлт тохируулаагүй</strong></> : <><span>{new Intl.NumberFormat("mn-MN").format(commerceSettings.freeDeliveryThresholdMnt)} ₮</span><strong>дээш хүргэлт үнэгүй</strong></>}<small>{commerceSettings?.deliveryEnabled === false ? "Хүргэлт түр хаалттай" : "Улаанбаатар хотод"}</small></div>
+    </div>
+    <div class="pantry-plinth"><span>01 Хүнс</span><span>02 Гэр ахуй</span><span>03 Жижиг бэлэг</span><b>ӨРНҮҮН / 48</b></div>
+  </section>
+  <section id="featured" class="featured" aria-labelledby="featured-title">
+    <div class="product-copy">
+      <p class="kicker">Нийтлэгдсэн каталог</p>
+      <h2 id="featured-title">Өдөр тутмын сонголт</h2>
+      <p>Үнэ нь бүхэл төгрөгөөр харагдана. Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
+    </div>
+    <div class="product-copy">
+      {groupings.collections.length > 0 && <nav class="mb-6 flex flex-wrap gap-3" aria-label="Цуглуулга"><span class="font-bold">Цуглуулга:</span>{groupings.collections.map((collection) => <a href={`/collections/${collection.slug}`}>{collection.name}</a>)}</nav>}
+      {featuredItems.length === 0 ? <p>Одоогоор сонгосон бүтээгдэхүүн алга.</p> : <ol class="catalog-list">{featuredItems.map((item) => <li><a href={`/${item.kind === "bundle" ? "bundles" : "products"}/${item.slug}`}><strong>{item.name}</strong><span>{new Intl.NumberFormat("mn-MN").format(item.priceMnt)} ₮</span></a></li>)}</ol>}
+    </div>
+  </section>
+  {formattedNotices.length > 0 && <section class="ordering-notices" aria-labelledby="ordering-notices-title"><div><h2 id="ordering-notices-title">Захиалгын мэдээлэл</h2><p>Үнэ, үлдэгдэл, хүргэлт болон төлбөрийн эцсийн нөхцөлийг захиалгын үед дахин шалгана.</p></div><div>{formattedNotices.map((notice) => <article><h3>{notice.title}</h3><div class="notice-prose" set:html={notice.html} /></article>)}</div></section>}
+  <section class="customer-auth" aria-labelledby="customer-auth-title">
+    <div>
+      <h2 id="customer-auth-title">Захиалгын түүхээ хадгалах</h2>
+      <p>Утасны дугаараа нэг удаагийн кодоор баталгаажуулбал энэ дэлгүүрийн захиалгуудаа дараа нь харж болно. Худалдан авалт хийхэд нэвтрэх шаардлагагүй.</p>
+    </div>
+    <CustomerAuthIsland client:only="solid-js" />
+  </section>
+</main>

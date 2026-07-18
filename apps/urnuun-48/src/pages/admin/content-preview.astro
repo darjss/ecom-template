@@ -1,0 +1,67 @@
+---
+import { CmsDocumentKindSchema, CmsDocumentSchema, type CmsDocument } from "@ecom/contracts";
+import * as v from "valibot";
+import HomeContent from "../../components/HomeContent.astro";
+import StoreShell from "../../components/StoreShell.astro";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "private, no-store");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+
+const previewKind = v.safeParse(CmsDocumentKindSchema, Astro.url.searchParams.get("kind"));
+let localDocument: CmsDocument | undefined;
+let validationMessage: string | undefined;
+if (Astro.request.method === "POST") {
+  try {
+    const formData = await Astro.request.formData();
+    const serialized = formData.get("document");
+    const parsed = v.safeParse(
+      CmsDocumentSchema,
+      typeof serialized === "string" ? JSON.parse(serialized) : undefined,
+    );
+    if (
+      parsed.success &&
+      ["homepage", "announcement", "ordering_notices"].includes(parsed.output.kind)
+    ) {
+      localDocument = parsed.output;
+    } else {
+      Astro.response.status = 422;
+      validationMessage = "Preview-д хатуу схемтэй агуулгын баримт шаардлагатай.";
+    }
+  } catch {
+    Astro.response.status = 422;
+    validationMessage = "Preview агуулгыг уншиж чадсангүй. Засварлагч руу буцаж шалгана уу.";
+  }
+} else if (!previewKind.success || !["homepage", "announcement", "ordering_notices"].includes(previewKind.output)) {
+  Astro.response.status = 422;
+  validationMessage = "Preview хийх агуулгын төрөл буруу байна.";
+}
+
+const [summary, shell, draftContent, catalogItems, groupings] = await Promise.all([
+  storefront.readSummary(),
+  storefront.readShell(),
+  storefront.readHomeCmsContent("draft"),
+  storefront.listPublishedCatalogItems(),
+  storefront.listPublishedGroupings(),
+]);
+const homeContent = {
+  homepage:
+    localDocument?.kind === "homepage" ? localDocument.content : draftContent.homepage,
+  announcement:
+    localDocument?.kind === "announcement" ? localDocument.content : draftContent.announcement,
+  orderingNotices:
+    localDocument?.kind === "ordering_notices"
+      ? localDocument.content
+      : draftContent.orderingNotices,
+};
+---
+<StoreLayout title="Агуулгын preview · Өрнүүн 48" description="Нэвтэрсэн ажилтны хувийн агуулгын preview" noindex>
+  <div class="preview-ribbon"><strong>Хувийн preview</strong><span>{localDocument ? "Одоогийн хадгалаагүй утга" : "Сервер ноорог"}</span><a href="/admin">Засварлагч руу буцах</a></div>
+  {validationMessage
+    ? <main id="content" class="preview-error"><h1>Preview нээж чадсангүй</h1><p role="alert">{validationMessage}</p><a href="/admin">Засварлагч руу буцах</a></main>
+    : <StoreShell shell={{ ...shell, announcement: homeContent.announcement }} currentPath="/" fallbackName={summary.storeName}>
+        <HomeContent homepage={homeContent.homepage} orderingNotices={homeContent.orderingNotices} shell={shell} catalogItems={catalogItems} groupings={groupings} />
+      </StoreShell>}
+</StoreLayout>
