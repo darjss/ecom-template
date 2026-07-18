@@ -102,7 +102,7 @@ const SearchAutocompleteList = (props: Props) => {
     if (!element) {
       return;
     }
-    const expanded = debounced().length >= 2 && (query.isLoading || choices().length > 0);
+    const expanded = debounced().length >= 2;
     element.setAttribute("aria-expanded", String(expanded));
     const index = activeIndex();
     if (index >= 0 && index < choices().length) {

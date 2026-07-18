@@ -34,6 +34,15 @@ WHERE item.state = 'published';
 --> statement-breakpoint
 CREATE VIEW catalog_search_documents AS
 WITH
+  catalog_search_normalized AS (
+    SELECT
+      item_id, kind,
+      replace(replace(replace(replace(slug, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS slug,
+      replace(replace(replace(replace(title, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS title,
+      replace(replace(replace(replace(description, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS description,
+      replace(replace(replace(replace(facets, 'ё', 'ё'), 'Ё', 'Ё'), 'й', 'й'), 'Й', 'Й') AS facets
+    FROM catalog_search_source
+  ),
   catalog_search_transliteration_1 AS (
     SELECT
       item_id, kind, slug, title, description, facets,
@@ -41,7 +50,7 @@ WITH
       replace(replace(replace(replace(replace(replace(replace(replace(title, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_title,
       replace(replace(replace(replace(replace(replace(replace(replace(description, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_description,
       replace(replace(replace(replace(replace(replace(replace(replace(facets, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_facets
-    FROM catalog_search_source
+    FROM catalog_search_normalized
   ),
   catalog_search_transliteration_2 AS (
     SELECT
@@ -205,6 +214,22 @@ CREATE TRIGGER catalog_search_option_values_update AFTER UPDATE OF label, state,
   INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT variant.product_id FROM variant_option_values membership JOIN variants variant ON variant.id = membership.variant_id WHERE membership.option_value_id = NEW.id;
 END;
 --> statement-breakpoint
+CREATE TRIGGER catalog_search_variants_insert AFTER INSERT ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.product_id);
+END;
+--> statement-breakpoint
 CREATE TRIGGER catalog_search_variants_update AFTER UPDATE OF state ON variants BEGIN
   INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.product_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variants_delete AFTER DELETE ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.product_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_insert AFTER INSERT ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT product_id FROM variants WHERE id = NEW.variant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_delete AFTER DELETE ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT product_id FROM variants WHERE id = OLD.variant_id;
 END;

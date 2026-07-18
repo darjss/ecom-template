@@ -40,15 +40,19 @@ export const krilleerCyrillicToLatin = [
 
 const transliteration = new Map<string, string>(krilleerCyrillicToLatin);
 
+export const normalizeSearchText = (value: string) => value.normalize("NFC");
+
 export const searchTokens = (value: string) =>
-  value
+  normalizeSearchText(value)
     .trim()
     .toLowerCase()
     .split(/[\p{White_Space}\p{P}\p{S}]+/u)
     .filter(Boolean);
 
 export const transliterateSearchText = (value: string) =>
-  [...value.toLowerCase()].map((character) => transliteration.get(character) ?? character).join("");
+  [...normalizeSearchText(value).toLowerCase()]
+    .map((character) => transliteration.get(character) ?? character)
+    .join("");
 
 export type CatalogSearchDocumentInput = {
   readonly itemId: string;
@@ -61,10 +65,10 @@ export type CatalogSearchDocumentInput = {
 
 export const buildCatalogSearchDocument = (input: CatalogSearchDocumentInput) => {
   const fields = {
-    slug: input.slug.trim(),
-    title: input.title.trim(),
-    description: input.description.trim(),
-    facets: input.facets.trim(),
+    slug: normalizeSearchText(input.slug.trim()),
+    title: normalizeSearchText(input.title.trim()),
+    description: normalizeSearchText(input.description.trim()),
+    facets: normalizeSearchText(input.facets.trim()),
   };
   const fingerprint = JSON.stringify([
     catalogSearchDocumentVersion,

@@ -21,7 +21,12 @@ import {
   skus,
   variants,
 } from "../db/schema";
-import { catalogSearchDocumentVersion, searchTokens, transliterateSearchText } from "./document";
+import {
+  catalogSearchDocumentVersion,
+  normalizeSearchText,
+  searchTokens,
+  transliterateSearchText,
+} from "./document";
 
 const nativePlans = [
   { column: "title", field: "title", priority: 0 },
@@ -228,7 +233,7 @@ const shortcutLists = async (query: string) => {
   const nativeTokens = searchTokens(query);
   const latinTokens = searchTokens(transliterateSearchText(query));
   const matches = ({ name }: { readonly name: string }) => {
-    const nativeName = name.toLowerCase();
+    const nativeName = normalizeSearchText(name).toLowerCase();
     const latinName = transliterateSearchText(name);
     return (
       nativeTokens.every((token) => nativeName.includes(token)) ||

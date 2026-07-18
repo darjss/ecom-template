@@ -96,14 +96,14 @@ const sourceLabels = {
         </div>
         <label class="grid gap-1 text-sm font-bold text-[var(--ink)]">
           Ангилал
-          <select name="category" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3" onchange="this.form.requestSubmit()">
+          <select name="category" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3">
             <option value="">Бүгд</option>
             {groupings.categories.map((group) => <option value={group.slug} selected={category === group.slug}>{group.name}</option>)}
           </select>
         </label>
         <label class="grid gap-1 text-sm font-bold text-[var(--ink)]">
           Цуглуулга
-          <select name="collection" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3" onchange="this.form.requestSubmit()">
+          <select name="collection" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3">
             <option value="">Бүгд</option>
             {groupings.collections.map((group) => <option value={group.slug} selected={collection === group.slug}>{group.name}</option>)}
           </select>
