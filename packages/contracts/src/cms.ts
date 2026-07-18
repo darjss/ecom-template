@@ -123,15 +123,22 @@ export const LocationsDocumentSchema = v.strictObject({
   ),
 });
 
+const InternalStoreHrefSchema = v.pipe(
+  boundedText(240),
+  v.regex(/^\/(?!\/)(?!.*\\)[^\s]*$/, "Link must be an internal Store path"),
+);
+
 const acceptedInlineMarkdown = (source: string) => {
-  if (source.includes("![")) {
+  if (source.includes("![") || /[`<>|\\]/.test(source)) {
     return false;
   }
   let remainder = source;
-  remainder = remainder.replaceAll(/\[([^\n]+?)\]\((https:\/\/[^\s)]+)\)/g, "$1");
+  remainder = remainder.replaceAll(/\[([^\n]+?)\]\((https:\/\/[^\s)]+|\/(?!\/)[^\s)]*)\)/g, "$1");
   remainder = remainder.replaceAll(/\*\*([^*\n]+)\*\*/g, "$1");
+  remainder = remainder.replaceAll(/__([^_\n]+)__/g, "$1");
   remainder = remainder.replaceAll(/\*([^*\n]+)\*/g, "$1");
-  return !/(?:\[|\]|\(|\)|\*|_|`|<|>|\||\\)/.test(remainder);
+  remainder = remainder.replaceAll(/_([^_\n]+)_/g, "$1");
+  return !/(?:\[|\]|\*|_)/.test(remainder);
 };
 
 const acceptedPolicyMarkdown = (value: string) =>
@@ -139,21 +146,27 @@ const acceptedPolicyMarkdown = (value: string) =>
     if (line === "") {
       return true;
     }
+    if (/^(?: {4}|\t| {0,3}(?:-{3,}|_{3,}|\*{3,})\s*$)/.test(line)) {
+      return false;
+    }
     if (/^###?\s/.test(line)) {
       return acceptedInlineMarkdown(line.replace(/^###?\s/, ""));
     }
-    if (/^-\s/.test(line)) {
+    if (/^(?:[-+*]|\d{1,3}[.)])\s/.test(line)) {
+      return acceptedInlineMarkdown(line.replace(/^(?:[-+*]|\d{1,3}[.)])\s/, ""));
+    }
+    if (/^>\s/.test(line)) {
       return acceptedInlineMarkdown(line.slice(2));
     }
-    if (/^(?:#|>|\+\s|\*\s|\d+[.)]\s|\s{4}|-{3,}|_{3,}|\*{3,})/.test(line)) {
+    if (/^#|^>/.test(line)) {
       return false;
     }
     return acceptedInlineMarkdown(line);
   });
 
-const markdown = v.pipe(
+export const CmsMarkdownSchema = v.pipe(
   boundedText(20_000),
-  v.check(acceptedPolicyMarkdown, "Policy content contains unsupported Markdown"),
+  v.check(acceptedPolicyMarkdown, "Content contains unsupported Markdown"),
 );
 export const PoliciesDocumentSchema = v.strictObject({
   version: VersionSchema,
@@ -163,7 +176,7 @@ export const PoliciesDocumentSchema = v.strictObject({
         id: PolicyIdSchema,
         kind: PolicyKindSchema,
         title: boundedText(100),
-        contentMarkdown: markdown,
+        contentMarkdown: CmsMarkdownSchema,
       }),
     ),
     v.maxLength(5),
@@ -174,19 +187,56 @@ export const HomepageDocumentSchema = v.strictObject({
   version: VersionSchema,
   headline: boundedText(120),
   summary: boundedText(320),
-  heroMediaAssetId: v.nullable(MediaAssetIdSchema),
-  featuredCatalogItemIds: v.pipe(v.array(CatalogItemIdSchema), v.maxLength(12)),
+  hero: v.nullable(
+    v.strictObject({
+      mediaAssetId: MediaAssetIdSchema,
+      altText: boundedText(240),
+    }),
+  ),
+  featuredCatalogItemIds: v.pipe(
+    v.array(CatalogItemIdSchema),
+    v.maxLength(12),
+    v.check((ids) => new Set(ids).size === ids.length, "Featured Catalog Items must be unique"),
+  ),
 });
 export const AnnouncementDocumentSchema = v.strictObject({
   version: VersionSchema,
   enabled: v.boolean(),
   message: boundedText(160),
+  emphasis: v.picklist(["neutral", "promotion", "important"]),
+  link: v.nullable(
+    v.strictObject({
+      label: boundedText(60),
+      href: InternalStoreHrefSchema,
+    }),
+  ),
 });
+export const OrderingNoticePlacementSchema = v.picklist(["product", "cart", "checkout"]);
 export const OrderingNoticesDocumentSchema = v.strictObject({
   version: VersionSchema,
   notices: v.pipe(
-    v.array(v.strictObject({ id: v.pipe(v.string(), v.uuid()), text: boundedText(320) })),
-    v.maxLength(20),
+    v.array(
+      v.strictObject({
+        id: v.pipe(v.string(), v.uuid()),
+        enabled: v.boolean(),
+        title: boundedText(80),
+        contentMarkdown: v.pipe(CmsMarkdownSchema, v.maxLength(2_000)),
+        placements: v.pipe(
+          v.array(OrderingNoticePlacementSchema),
+          v.minLength(1),
+          v.maxLength(3),
+          v.check(
+            (placements) => new Set(placements).size === placements.length,
+            "Notice placements must be unique",
+          ),
+        ),
+      }),
+    ),
+    v.maxLength(12),
+    v.check(
+      (notices) => new Set(notices.map(({ id }) => id)).size === notices.length,
+      "Notice IDs must be unique",
+    ),
   ),
 });
 
@@ -289,6 +339,9 @@ export type StorefrontIdentityDocument = v.InferOutput<typeof StorefrontIdentity
 export type NavigationDocument = v.InferOutput<typeof NavigationDocumentSchema>;
 export type LocationsDocument = v.InferOutput<typeof LocationsDocumentSchema>;
 export type PoliciesDocument = v.InferOutput<typeof PoliciesDocumentSchema>;
+export type HomepageDocument = v.InferOutput<typeof HomepageDocumentSchema>;
+export type AnnouncementDocument = v.InferOutput<typeof AnnouncementDocumentSchema>;
+export type OrderingNoticesDocument = v.InferOutput<typeof OrderingNoticesDocumentSchema>;
 export type CommerceSettings = v.InferOutput<typeof CommerceSettingsSchema>;
 export type CmsClientError = ClientRequestError<v.InferOutput<typeof CmsApiErrorSchema>["error"]>;
 export const createLocationId = () => typeidUnboxed("location");

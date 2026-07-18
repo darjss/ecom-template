@@ -25,6 +25,7 @@ import {
   bundleComponents,
   catalogCachePurgeDebts,
   catalogItems,
+  cmsDocuments,
   personalizationDefinitions,
   personalizationValues,
   skus,
@@ -663,10 +664,21 @@ export const bundleQueries = {
       eq(catalogItems.state, to),
       eq(catalogItems.updatedAt, now),
     );
+    const publishedHomepageDependency = db
+      .select({ kind: cmsDocuments.kind })
+      .from(cmsDocuments)
+      .where(
+        and(
+          eq(cmsDocuments.kind, "homepage"),
+          eq(cmsDocuments.status, "published"),
+          sql`EXISTS (SELECT 1 FROM json_each(${cmsDocuments.contentJson}, '$.featuredCatalogItemIds') WHERE value = ${id})`,
+        ),
+      );
     const archivePredicate = and(
       eq(catalogItems.id, id),
       eq(catalogItems.kind, "bundle"),
       eq(catalogItems.state, from),
+      notExists(publishedHomepageDependency),
     );
     const results = await db.batch([
       db.insert(auditEvents).select(
@@ -716,6 +728,21 @@ export const bundleQueries = {
       .limit(1);
     if (!rows.length) {
       return { kind: "not_found" as const };
+    }
+    const homepageDependency = await db
+      .select({ kind: cmsDocuments.kind })
+      .from(cmsDocuments)
+      .where(
+        and(
+          eq(cmsDocuments.kind, "homepage"),
+          eq(cmsDocuments.status, "published"),
+          sql`EXISTS (SELECT 1 FROM json_each(${cmsDocuments.contentJson}, '$.featuredCatalogItemIds') WHERE value = ${id})`,
+        ),
+      )
+      .limit(1);
+    if (homepageDependency.length > 0) {
+      await recordBundleRejectedAttempt(actor, auditAction, id, "published_cms_dependency");
+      return { kind: "published_cms_dependency" as const };
     }
     await recordBundleRejectedAttempt(actor, auditAction, id, "invalid_lifecycle");
     return { kind: "invalid_lifecycle" as const };

@@ -5,9 +5,12 @@ import {
   PublicGroupingSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type AnnouncementDocument,
   type CommerceSettings,
+  type HomepageDocument,
   type LocationsDocument,
   type NavigationDocument,
+  type OrderingNoticesDocument,
   type PersonalizationDefinition,
   type PoliciesDocument,
   type StoreDefinition,
@@ -36,11 +39,17 @@ type StoreShellLink = {
 
 export type StoreShell = {
   readonly identity: StorefrontIdentityDocument | undefined;
+  readonly announcement: AnnouncementDocument | undefined;
   readonly primary: readonly StoreShellLink[];
   readonly footer: readonly { readonly label: string; readonly items: readonly StoreShellLink[] }[];
   readonly locations: LocationsDocument | undefined;
   readonly policies: PoliciesDocument | undefined;
   readonly commerceSettings: CommerceSettings | undefined;
+};
+
+type HomeCmsContent = {
+  readonly homepage: HomepageDocument | undefined;
+  readonly announcement: AnnouncementDocument | undefined;
 };
 
 export type StorefrontReader = {
@@ -51,6 +60,10 @@ export type StorefrontReader = {
   readonly readPolicies: () => Promise<PoliciesDocument | undefined>;
   readonly readCommerceSettings: () => Promise<CommerceSettings | undefined>;
   readonly readShell: () => Promise<StoreShell>;
+  readonly readHomeCmsContent: (status?: "draft" | "published") => Promise<HomeCmsContent>;
+  readonly readOrderingNotices: (
+    status?: "draft" | "published",
+  ) => Promise<OrderingNoticesDocument | undefined>;
   readonly listPublishedCatalogItems: () => Promise<readonly PublicCatalogItemSummary[]>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
@@ -111,16 +124,25 @@ const publicListing = async (
 const readStoreShell = async (
   capabilities: StoreDefinition["profile"]["capabilities"],
 ): Promise<StoreShell> => {
-  const [identity, navigation, locations, policies, commerceSettings, catalogItems, groupings] =
-    await Promise.all([
-      cmsQueries.read("storefront_identity", "published"),
-      cmsQueries.read("navigation", "published"),
-      cmsQueries.read("locations", "published"),
-      cmsQueries.read("policies", "published"),
-      cmsQueries.readSettings(),
-      catalogQueries.listPublishedCatalogItems(),
-      groupingQueries.listPublicGroupings(),
-    ]);
+  const [
+    identity,
+    announcement,
+    navigation,
+    locations,
+    policies,
+    commerceSettings,
+    catalogItems,
+    groupings,
+  ] = await Promise.all([
+    cmsQueries.read("storefront_identity", "published"),
+    cmsQueries.read("announcement", "published"),
+    cmsQueries.read("navigation", "published"),
+    cmsQueries.read("locations", "published"),
+    cmsQueries.read("policies", "published"),
+    cmsQueries.readSettings(),
+    catalogQueries.listPublishedCatalogItems(),
+    groupingQueries.listPublicGroupings(),
+  ]);
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
   const categoryById = new Map(groupings.categories.map((group) => [group.id, group]));
   const collectionById = new Map(groupings.collections.map((group) => [group.id, group]));
@@ -196,6 +218,7 @@ const readStoreShell = async (
     })) ?? [];
   return {
     identity: identity?.kind === "storefront_identity" ? identity.content : undefined,
+    announcement: announcement?.kind === "announcement" ? announcement.content : undefined,
     primary,
     footer,
     locations: locationDocument
@@ -213,6 +236,29 @@ const readStoreShell = async (
     policies: policyDocument,
     commerceSettings,
   };
+};
+
+const readCmsWithPublishedFallback = async (
+  kind: "homepage" | "announcement" | "ordering_notices",
+  status: "draft" | "published",
+) =>
+  (await cmsQueries.read(kind, status)) ??
+  (status === "draft" ? await cmsQueries.read(kind, "published") : undefined);
+
+const readHomeCmsContent = async (status: "draft" | "published") => {
+  const [homepage, announcement] = await Promise.all([
+    readCmsWithPublishedFallback("homepage", status),
+    readCmsWithPublishedFallback("announcement", status),
+  ]);
+  return {
+    homepage: homepage?.kind === "homepage" ? homepage.content : undefined,
+    announcement: announcement?.kind === "announcement" ? announcement.content : undefined,
+  };
+};
+
+const readOrderingNotices = async (status: "draft" | "published") => {
+  const document = await readCmsWithPublishedFallback("ordering_notices", status);
+  return document?.kind === "ordering_notices" ? document.content : undefined;
 };
 
 export const createStorefrontReader = (
@@ -244,6 +290,8 @@ export const createStorefrontReader = (
   },
   readCommerceSettings: () => cmsQueries.readSettings(),
   readShell: () => readStoreShell(capabilities),
+  readHomeCmsContent: (status = "published") => readHomeCmsContent(status),
+  readOrderingNotices: (status = "published") => readOrderingNotices(status),
   listPublishedCatalogItems: () => catalogQueries.listPublishedCatalogItems(),
   listPublishedProducts,
   readPublishedProduct: async (slug) => {

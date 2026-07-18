@@ -1,0 +1,81 @@
+---
+import { parseCmsPreviewDocument } from "@ecom/api";
+import HomeContent from "../../components/HomeContent.astro";
+import OrderingNotices from "../../components/OrderingNotices.astro";
+import StoreShell from "../../components/StoreShell.astro";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "private, no-store");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+
+const previewKind = Astro.url.searchParams.get("kind");
+const supportedPreviewKinds = new Set(["homepage", "announcement", "ordering_notices"]);
+let localDocument: ReturnType<typeof parseCmsPreviewDocument>;
+let validationMessage: string | undefined;
+if (Astro.request.method === "POST") {
+  try {
+    const formData = await Astro.request.formData();
+    const serialized = formData.get("document");
+    const parsed = parseCmsPreviewDocument(
+      typeof serialized === "string" ? JSON.parse(serialized) : undefined,
+    );
+    if (parsed) {
+      localDocument = parsed;
+    } else {
+      Astro.response.status = 422;
+      validationMessage = "Preview-д хатуу схемтэй агуулгын баримт шаардлагатай.";
+    }
+  } catch {
+    Astro.response.status = 422;
+    validationMessage = "Preview агуулгыг уншиж чадсангүй. Засварлагч руу буцаж шалгана уу.";
+  }
+} else if (!previewKind || !supportedPreviewKinds.has(previewKind)) {
+  Astro.response.status = 422;
+  validationMessage = "Preview хийх агуулгын төрөл буруу байна.";
+}
+
+const preview = validationMessage
+  ? undefined
+  : await (async () => {
+      const [summary, shell, draftContent, orderingNotices, catalogItems, groupings] =
+        await Promise.all([
+          storefront.readSummary(),
+          storefront.readShell(),
+          storefront.readHomeCmsContent("draft"),
+          storefront.readOrderingNotices("draft"),
+          storefront.listPublishedCatalogItems(),
+          storefront.listPublishedGroupings(),
+        ]);
+      return {
+        summary,
+        shell,
+        catalogItems,
+        groupings,
+        homeContent: {
+          homepage:
+            localDocument?.kind === "homepage"
+              ? localDocument.content
+              : draftContent.homepage,
+          announcement:
+            localDocument?.kind === "announcement"
+              ? localDocument.content
+              : draftContent.announcement,
+        },
+        orderingNotices:
+          localDocument?.kind === "ordering_notices"
+            ? localDocument.content
+            : orderingNotices,
+      };
+    })();
+---
+<StoreLayout title="Агуулгын preview · Өрнүүн 48" description="Нэвтэрсэн ажилтны хувийн агуулгын preview" noindex>
+  <div class="preview-ribbon"><strong>Хувийн preview</strong><span>{localDocument ? "Одоогийн хадгалаагүй утга" : "Сервер ноорог"}</span><a href="/admin">Засварлагч руу буцах</a></div>
+  {validationMessage || !preview
+    ? <main id="content" class="preview-error"><h1>Preview нээж чадсангүй</h1><p role="alert">{validationMessage}</p><a href="/admin">Засварлагч руу буцах</a></main>
+    : <StoreShell shell={{ ...preview.shell, announcement: preview.homeContent.announcement }} currentPath="/" fallbackName={preview.summary.storeName}>
+        <HomeContent homepage={preview.homeContent.homepage} shell={preview.shell} catalogItems={preview.catalogItems} groupings={preview.groupings} />
+        <OrderingNotices document={preview.orderingNotices} />
+      </StoreShell>}
+</StoreLayout>

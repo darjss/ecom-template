@@ -62,6 +62,7 @@ const bundleError = (failure: BundleOperationFailure, status: Status) => {
     duplicate_component: "A Variant may occur only once in a Bundle",
     immutable_components: "Published Bundle component identities and quantities are locked",
     slug_locked: "A Published Bundle slug cannot change",
+    published_cms_dependency: "Published Homepage content depends on this Bundle",
     invalid_personalization: "Personalization definitions are invalid",
     infrastructure_unavailable: "Bundle infrastructure is unavailable",
   };

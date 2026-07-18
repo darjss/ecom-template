@@ -111,6 +111,9 @@ importers:
       '@ecom/ui':
         specifier: workspace:*
         version: link:../ui
+      '@solid-primitives/storage':
+        specifier: 4.4.0
+        version: 4.4.0(solid-js@1.9.13)
       '@tanstack/solid-form':
         specifier: 1.33.2
         version: 1.33.2(solid-js@1.9.13)

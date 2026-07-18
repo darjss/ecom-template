@@ -30,6 +30,7 @@ export type BundleOperationFailure = {
     | "duplicate_component"
     | "immutable_components"
     | "slug_locked"
+    | "published_cms_dependency"
     | "invalid_personalization"
     | "infrastructure_unavailable";
 };

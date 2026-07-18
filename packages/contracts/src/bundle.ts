@@ -226,6 +226,7 @@ export const BundleFailureReasonSchema = v.picklist([
   "immutable_components",
   "slug_locked",
   "published_bundle_dependency",
+  "published_cms_dependency",
   "invalid_personalization",
   "committed_but_not_purged",
 ]);

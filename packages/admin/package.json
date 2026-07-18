@@ -10,6 +10,7 @@
     "@ecom/client": "workspace:*",
     "@ecom/contracts": "workspace:*",
     "@ecom/ui": "workspace:*",
+    "@solid-primitives/storage": "4.4.0",
     "@tanstack/solid-form": "1.33.2",
     "@tanstack/solid-query": "5.101.2",
     "solid-js": "1.9.13",

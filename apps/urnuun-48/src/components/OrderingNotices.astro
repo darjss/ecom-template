@@ -1,0 +1,20 @@
+---
+import type { StoreBackend } from "@ecom/api";
+import { renderPolicyMarkdown } from "@ecom/storefront/policy";
+
+type Storefront = StoreBackend["storefront"];
+type Document = Awaited<ReturnType<Storefront["readOrderingNotices"]>>;
+type Placement = NonNullable<Document>["notices"][number]["placements"][number];
+interface Props {
+  document: Document;
+  placement?: Placement;
+}
+const { document, placement } = Astro.props;
+const notices =
+  document?.notices
+    .filter(
+      (notice) => notice.enabled && (placement === undefined || notice.placements.includes(placement)),
+    )
+    .map((notice) => ({ ...notice, html: renderPolicyMarkdown(notice.contentMarkdown) })) ?? [];
+---
+{notices.length > 0 && <section class="ordering-notices" aria-labelledby="ordering-notices-title"><div><h2 id="ordering-notices-title">Захиалгын мэдээлэл</h2><p>Үнэ, үлдэгдэл, хүргэлт болон төлбөрийн эцсийн нөхцөлийг захиалгын үед дахин шалгана.</p></div><div>{notices.map((notice) => <article><h3>{notice.title}</h3><div class="notice-prose" set:html={notice.html} /></article>)}</div></section>}
