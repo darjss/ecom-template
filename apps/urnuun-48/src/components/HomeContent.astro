@@ -1,16 +1,16 @@
 ---
 import type { StoreBackend } from "@ecom/api";
-import type { HomepageDocument, OrderingNoticesDocument } from "@ecom/contracts";
 import { CustomerAuthIsland } from "@ecom/storefront";
 import { renderPolicyMarkdown } from "@ecom/storefront/policy";
 
 type Storefront = StoreBackend["storefront"];
 type CatalogItems = Awaited<ReturnType<Storefront["listPublishedCatalogItems"]>>;
 type Groupings = Awaited<ReturnType<Storefront["listPublishedGroupings"]>>;
+type HomeCmsContent = Awaited<ReturnType<Storefront["readHomeCmsContent"]>>;
 type Shell = Awaited<ReturnType<Storefront["readShell"]>>;
 interface Props {
-  homepage: HomepageDocument | undefined;
-  orderingNotices: OrderingNoticesDocument | undefined;
+  homepage: HomeCmsContent["homepage"];
+  orderingNotices: HomeCmsContent["orderingNotices"];
   shell: Shell;
   catalogItems: CatalogItems;
   groupings: Groupings;
