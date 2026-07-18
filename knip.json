@@ -23,7 +23,6 @@
     "culori",
     "date-fns",
     "dismatch",
-    "es-toolkit",
-    "micromark"
+    "es-toolkit"
   ]
 }

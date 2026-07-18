@@ -10,8 +10,8 @@ import {
 import { unwrapRequestResult } from "../request";
 import type { CommerceSettings } from "@ecom/contracts";
 
-export const cmsQueryKey = ["cms", "documents"] as const;
-export const commerceSettingsQueryKey = ["commerce-settings"] as const;
+const cmsQueryKey = ["cms", "documents"] as const;
+const commerceSettingsQueryKey = ["commerce-settings"] as const;
 type CmsResult = Awaited<ReturnType<typeof requestCmsDocuments>>;
 type CmsMutationResult = Awaited<ReturnType<typeof requestCmsMutation>>;
 type SettingsResult = Awaited<ReturnType<typeof requestCommerceSettings>>;
