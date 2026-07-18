@@ -1,4 +1,11 @@
 export { CartProvider, useCart } from "./cart/index";
+export {
+  requestBundleMutation,
+  requestBundles,
+  requestPersonalizationMutation,
+  requestPersonalizations,
+  type BundleMutation,
+} from "./bundle/request";
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export { createApiClient } from "./eden";
@@ -19,6 +26,12 @@ export {
   requestUpdateTag,
 } from "./grouping/request";
 export { createStoreQueryClient } from "./query/client";
+export {
+  bundleMutationOptions,
+  bundleQueryOptions,
+  personalizationMutationOptions,
+  personalizationQueryOptions,
+} from "./query/bundle";
 export { catalogImageMutationOptions } from "./query/catalog-media";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";

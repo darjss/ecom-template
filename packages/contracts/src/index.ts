@@ -2,6 +2,7 @@ import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
 import { ApiErrorCodeSchema, type ClientRequestError } from "./client-error";
 
+export * from "./bundle";
 export * from "./catalog";
 export * from "./client-error";
 export * from "./grouping";

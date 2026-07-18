@@ -1,0 +1,60 @@
+---
+import { PersonalizationControls } from "@ecom/storefront";
+import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+const bundle = await storefront.readPublishedBundle(Astro.params.slug ?? "");
+if (!bundle) {
+  return new Response("Bundle олдсонгүй", {
+    status: 404,
+    headers: { "cache-control": "private, no-store" },
+  });
+}
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${bundle.id}`]);
+const imageWidths = [320, 640, 960, 1280];
+const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
+  imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
+const money = new Intl.NumberFormat("mn-MN");
+---
+<StoreLayout title={`${bundle.name} · Өрнүүн 48`} description={bundle.description || bundle.name}>
+  <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
+  <header class="site-header">
+    <a class="wordmark" href="/" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
+    <nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
+    <a class="admin-link" href="/admin">Удирдлага</a>
+  </header>
+  <main id="content">
+    <article class="featured" aria-labelledby="bundle-title">
+      <div class="product-visual">
+        <span class="bay-number">Bundle</span>
+        {bundle.images.length === 0
+          ? <div class="grid aspect-square place-items-center bg-(--surface) p-6 text-center text-(--muted)">Зураг оруулаагүй байна</div>
+          : <div class="grid gap-3 sm:grid-cols-2">
+              {bundle.images.map((image, index) => (
+                <picture class={index === 0 ? "sm:col-span-2" : undefined}>
+                  <source type="image/avif" srcset={imageSrcset(image.mediaAssetId, "avif")} sizes="(max-width: 767px) 100vw, 50vw" />
+                  <img class="aspect-square w-full object-cover" src={`/media/${image.mediaAssetId}/960.webp`} srcset={imageSrcset(image.mediaAssetId, "webp")} sizes="(max-width: 767px) 100vw, 50vw" alt={image.altText} width="960" height="960" loading={index === 0 ? "eager" : "lazy"} fetchpriority={index === 0 ? "high" : "auto"} decoding="async" />
+                </picture>
+              ))}
+            </div>}
+      </div>
+      <div class="product-copy">
+        <p class="kicker">Тогтмол Bundle</p>
+        <h1 id="bundle-title">{bundle.name}</h1>
+        {bundle.description && <p>{bundle.description}</p>}
+        <p class="price"><strong>{money.format(bundle.priceMnt)} ₮</strong></p>
+        <section aria-labelledby="bundle-contents">
+          <h2 id="bundle-contents">Bundle-ийн бүрэлдэхүүн</h2>
+          <ul>
+            {bundle.components.map((component) => (
+              <li><strong>{component.productName}</strong> · {component.variantLabel} × {component.quantity}</li>
+            ))}
+          </ul>
+        </section>
+        <PersonalizationControls definitions={bundle.personalizations} />
+      </div>
+    </article>
+  </main>
+</StoreLayout>

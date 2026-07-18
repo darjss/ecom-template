@@ -9,7 +9,7 @@ import {
 } from "./cache-contract";
 import { catalogQueries } from "./persistence";
 
-const purgeCacheTags = async (tags: readonly string[]) => {
+export const purgeCacheTags = async (tags: readonly string[]) => {
   const configuration = parseCachePurgeEnvironment(env);
   if (!configuration.success) {
     return { kind: "failed" as const, requestId: null };

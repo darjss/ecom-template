@@ -524,6 +524,101 @@ export const variants = sqliteTable(
   ],
 );
 
+export const bundleComponents = sqliteTable(
+  "bundle_components",
+  {
+    bundleId: text("bundle_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "cascade" }),
+    variantId: text("variant_id")
+      .notNull()
+      .references(() => variants.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bundleId, table.variantId] }),
+    check("bundle_components_quantity_check", sql`${table.quantity} BETWEEN 1 AND 999`),
+    index("bundle_components_variant_idx").on(table.variantId, table.bundleId),
+  ],
+);
+
+export const personalizationDefinitions = sqliteTable(
+  "personalization_definitions",
+  {
+    id: text("id").primaryKey(),
+    catalogItemId: text("catalog_item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["text", "single_select", "checkbox"] }).notNull(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+    required: integer("required", { mode: "boolean" }).notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    maxLength: integer("max_length"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "personalization_definitions_id_check",
+      sql`length(${table.id}) = 42 AND substr(${table.id}, 1, 16) = 'personalization_' AND substr(${table.id}, 17, 1) GLOB '[0-7]' AND substr(${table.id}, 17) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check(
+      "personalization_definitions_kind_check",
+      sql`${table.kind} IN ('text', 'single_select', 'checkbox')`,
+    ),
+    check("personalization_definitions_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
+    check(
+      "personalization_definitions_label_check",
+      sql`length(trim(${table.label})) BETWEEN 1 AND 80`,
+    ),
+    check("personalization_definitions_position_check", sql`${table.position} BETWEEN 0 AND 11`),
+    check("personalization_definitions_required_check", sql`${table.required} IN (0, 1)`),
+    check("personalization_definitions_state_check", sql`${table.state} IN ('active', 'archived')`),
+    check(
+      "personalization_definitions_max_length_check",
+      sql`(${table.kind} = 'text' AND ${table.maxLength} BETWEEN 1 AND 240) OR (${table.kind} <> 'text' AND ${table.maxLength} IS NULL)`,
+    ),
+    uniqueIndex("personalization_definitions_item_key_idx").on(table.catalogItemId, table.key),
+    uniqueIndex("personalization_definitions_item_position_idx").on(
+      table.catalogItemId,
+      table.position,
+    ),
+  ],
+);
+
+export const personalizationValues = sqliteTable(
+  "personalization_values",
+  {
+    id: text("id").primaryKey(),
+    personalizationId: text("personalization_id")
+      .notNull()
+      .references(() => personalizationDefinitions.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "personalization_values_id_check",
+      sql`length(${table.id}) = 48 AND substr(${table.id}, 1, 22) = 'personalization_value_' AND substr(${table.id}, 23, 1) GLOB '[0-7]' AND substr(${table.id}, 23) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("personalization_values_key_check", sql`length(${table.key}) BETWEEN 1 AND 48`),
+    check("personalization_values_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 80`),
+    check("personalization_values_position_check", sql`${table.position} BETWEEN 0 AND 11`),
+    check("personalization_values_state_check", sql`${table.state} IN ('active', 'archived')`),
+    uniqueIndex("personalization_values_definition_key_idx").on(table.personalizationId, table.key),
+    uniqueIndex("personalization_values_definition_position_idx").on(
+      table.personalizationId,
+      table.position,
+    ),
+  ],
+);
+
 export const variantOptionValues = sqliteTable(
   "variant_option_values",
   {

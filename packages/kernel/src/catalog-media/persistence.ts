@@ -8,7 +8,6 @@ import {
   type CatalogItemId,
   type MediaAssetId,
   type MediaContentType,
-  type ProductId,
   type PublicCatalogImage,
 } from "@ecom/contracts";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
@@ -61,7 +60,7 @@ const imageSelection = {
 };
 
 export const catalogMediaQueries = {
-  async catalogItemExists(id: ProductId) {
+  async catalogItemExists(id: CatalogItemId) {
     const rows = await database()
       .select({ id: catalogItems.id })
       .from(catalogItems)
@@ -71,7 +70,7 @@ export const catalogMediaQueries = {
   },
 
   async attach(
-    catalogItemId: ProductId,
+    catalogItemId: CatalogItemId,
     mediaAssetId: MediaAssetId,
     objectKey: string,
     declaredContentType: MediaContentType,

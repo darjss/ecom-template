@@ -1,8 +1,12 @@
 import {
+  CatalogItemIdSchema,
+  PublicBundleDetailSchema,
   PublicGroupingListingSchema,
   PublicGroupingSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type PersonalizationDefinition,
+  type PublicBundleDetail,
   type PublicGrouping,
   type PublicGroupingListing,
   type PublicProductDetail,
@@ -10,6 +14,7 @@ import {
   type StorefrontSummary,
 } from "@ecom/contracts";
 import * as v from "valibot";
+import { bundleQueries, readPersonalizations } from "../bundles/persistence";
 import { catalogQueries } from "../catalog/persistence";
 import { readDatabaseHealth } from "../db/health";
 import { groupingQueries } from "../grouping/persistence";
@@ -18,6 +23,10 @@ export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
+  readonly readPublishedBundle: (slug: string) => Promise<PublicBundleDetail | undefined>;
+  readonly readPersonalizations: (
+    catalogItemId: string,
+  ) => Promise<readonly PersonalizationDefinition[]>;
   readonly listPublishedGroupings: () => Promise<{
     readonly categories: readonly PublicGrouping[];
     readonly collections: readonly PublicGrouping[];
@@ -80,6 +89,36 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);
     return row ? v.parse(PublicProductDetailSchema, row) : undefined;
+  },
+  readPublishedBundle: async (slug) => {
+    const bundle = await bundleQueries.findPublishedBySlug(slug);
+    if (!bundle) {
+      return undefined;
+    }
+    const {
+      state: _state,
+      cachePurgeDebt: _cachePurgeDebt,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...publicBundle
+    } = bundle;
+    return v.parse(PublicBundleDetailSchema, {
+      ...publicBundle,
+      images: bundle.images.map(({ mediaAsset, position, altText }) => ({
+        mediaAssetId: mediaAsset.id,
+        position,
+        altText,
+      })),
+      personalizations: bundle.personalizations.filter(({ state }) => state === "active"),
+    });
+  },
+  readPersonalizations: async (catalogItemId) => {
+    const parsedId = v.safeParse(CatalogItemIdSchema, catalogItemId);
+    if (!parsedId.success) {
+      return [];
+    }
+    const rows = await readPersonalizations([parsedId.output]);
+    return rows.at(0)?.definitions.filter(({ state }) => state === "active") ?? [];
   },
   listPublishedGroupings: async () => {
     const [groups, catalogItems] = await Promise.all([

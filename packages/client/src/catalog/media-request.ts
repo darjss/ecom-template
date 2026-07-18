@@ -1,8 +1,8 @@
 import {
   CatalogApiErrorSchema,
   MediaUploadResponseSchema,
+  type CatalogItemId,
   type MediaUploadFields,
-  type ProductId,
 } from "@ecom/contracts";
 import * as v from "valibot";
 import { createApiClient } from "../eden";
@@ -24,14 +24,14 @@ const MediaApiErrorSchema = v.union([
 ]);
 
 export type CatalogImageUpload = MediaUploadFields & {
-  readonly productId: ProductId;
+  readonly catalogItemId: CatalogItemId;
   readonly file: File;
 };
 
 export const requestCatalogImageUpload = (upload: CatalogImageUpload) =>
   requestResult(
     () =>
-      createApiClient().api.catalog.products({ id: upload.productId }).images.post({
+      createApiClient().api.catalog.items({ id: upload.catalogItemId }).images.post({
         file: upload.file,
         position: upload.position,
         altText: upload.altText,

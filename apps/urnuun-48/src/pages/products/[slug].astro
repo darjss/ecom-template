@@ -1,5 +1,5 @@
 ---
-import { ProductVariantSelector } from "@ecom/storefront";
+import { PersonalizationControls, ProductVariantSelector } from "@ecom/storefront";
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
@@ -12,6 +12,7 @@ if (!product) {
     headers: { "cache-control": "private, no-store" },
   });
 }
+const personalizations = await storefront.readPersonalizations(product.id);
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog", `product:${product.id}`]);
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
@@ -59,6 +60,7 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
         <h1 id="product-title">{product.name}</h1>
         {product.description && <p>{product.description}</p>}
         <ProductVariantSelector product={product} client:load />
+        <PersonalizationControls definitions={personalizations} />
       </div>
     </article>
   </main>

@@ -19,6 +19,7 @@ export type CatalogVariantFailure = {
     | "invalid_combination"
     | "invalid_publication"
     | "media_not_owned"
+    | "published_bundle_dependency"
     | "infrastructure_unavailable";
 };
 

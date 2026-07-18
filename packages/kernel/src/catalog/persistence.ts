@@ -12,6 +12,7 @@ import { and, count, eq, exists, gt, isNull, ne, notExists, or, sql } from "driz
 import { alias } from "drizzle-orm/sqlite-core";
 import {
   auditEvents,
+  bundleComponents,
   catalogCachePurgeDebts,
   catalogItems,
   inventoryEntries,
@@ -294,6 +295,7 @@ export const catalogQueries = {
 
     const db = database();
     const publicationVariant = alias(variants, "publication_variant");
+    const dependencyBundle = alias(catalogItems, "dependency_bundle");
     const publicationSku = alias(skus, "publication_sku");
     const publicationGroup = alias(optionGroups, "publication_group");
     const publicationMembership = alias(variantOptionValues, "publication_variant_option_value");
@@ -425,6 +427,18 @@ export const catalogQueries = {
           eq(publicationVariant.state, "active"),
         ),
       );
+    const publishedBundleDependency = db
+      .select({ id: bundleComponents.bundleId })
+      .from(bundleComponents)
+      .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
+      .innerJoin(dependencyBundle, eq(dependencyBundle.id, bundleComponents.bundleId))
+      .where(
+        and(
+          eq(variants.productId, catalogItems.id),
+          eq(dependencyBundle.kind, "bundle"),
+          eq(dependencyBundle.state, "published"),
+        ),
+      );
     const publicationIsValid = and(
       sql`${catalogItems.priceMnt} > 0`,
       notExists(invalidActiveVariant),
@@ -436,7 +450,11 @@ export const catalogQueries = {
     );
     const transitionPredicate =
       transition === "archive"
-        ? and(eq(catalogItems.id, id), eq(catalogItems.state, expected))
+        ? and(
+            eq(catalogItems.id, id),
+            eq(catalogItems.state, expected),
+            notExists(publishedBundleDependency),
+          )
         : and(eq(catalogItems.id, id), eq(catalogItems.state, expected), publicationIsValid);
     const now = new Date();
     const correlationId = crypto.randomUUID();
@@ -525,8 +543,28 @@ export const catalogQueries = {
     if (resolved?.state === next) {
       return { kind: "changed" as const, product: resolved };
     }
+    const dependency =
+      transition === "archive"
+        ? await db
+            .select({ id: bundleComponents.bundleId })
+            .from(bundleComponents)
+            .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
+            .innerJoin(dependencyBundle, eq(dependencyBundle.id, bundleComponents.bundleId))
+            .where(
+              and(
+                eq(variants.productId, id),
+                eq(dependencyBundle.kind, "bundle"),
+                eq(dependencyBundle.state, "published"),
+              ),
+            )
+            .limit(1)
+        : [];
     const kind =
-      resolved && resolved.state !== expected ? "invalid_lifecycle" : "invalid_publication";
+      dependency.length > 0
+        ? "published_bundle_dependency"
+        : resolved && resolved.state !== expected
+          ? "invalid_lifecycle"
+          : "invalid_publication";
     await recordRejectedAttempt(actor, action, "product", id, kind);
     return { kind };
   },

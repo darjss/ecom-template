@@ -1,15 +1,19 @@
 import {
+  BundleIdSchema,
   MediaUploadMaxBytes,
+  ProductIdSchema,
   createMediaAssetId,
   type CatalogImage,
+  type CatalogItemId,
   type MediaAssetId,
   type MediaContentType,
   type MediaFormat,
   type MediaWidth,
-  type ProductId,
 } from "@ecom/contracts";
 import { Result } from "better-result";
+import * as v from "valibot";
 import { env } from "cloudflare:workers";
+import { resolvePendingBundleCachePurge } from "../bundles/operations";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogQueries } from "../catalog/persistence";
@@ -88,7 +92,7 @@ const completedAttachment = (
 
 export const attachCatalogImage = async (
   actor: StaffActor,
-  catalogItemId: ProductId,
+  catalogItemId: CatalogItemId,
   input: AttachCatalogImageInput,
 ) => {
   if (!hasStaffCapability(actor.role, "catalog_cms")) {
@@ -155,9 +159,17 @@ export const attachCatalogImage = async (
   }
 
   try {
-    const product = await catalogQueries.findById(catalogItemId);
+    const productId = v.safeParse(ProductIdSchema, catalogItemId);
+    const product = productId.success ? await catalogQueries.findById(productId.output) : undefined;
     if (!product) {
-      return completedAttachment(attachment, "committed_but_not_purged", null);
+      const bundleId = v.safeParse(BundleIdSchema, catalogItemId);
+      if (!bundleId.success) {
+        return completedAttachment(attachment, "committed_but_not_purged", null);
+      }
+      const bundle = await resolvePendingBundleCachePurge(bundleId.output);
+      return bundle.isOk()
+        ? completedAttachment(attachment, bundle.value.cache, bundle.value.cachePurgeRequestId)
+        : completedAttachment(attachment, "committed_but_not_purged", null);
     }
     if (!product.cachePurgeDebt) {
       return completedAttachment(attachment, "not_required", null);

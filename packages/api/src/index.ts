@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   CatalogApiErrorSchema,
+  CatalogItemIdSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CreateProductInputSchema,
@@ -60,6 +61,7 @@ import {
 } from "@ecom/kernel";
 import { Elysia } from "elysia";
 import * as v from "valibot";
+import { createBundleRoutes } from "./bundle-routes";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
@@ -114,29 +116,31 @@ const catalogError = (
             ? "Published option and combination facts are immutable"
             : code === "media_not_owned"
               ? "Variant images must be attached to this Product"
-              : code === "invalid_publication"
-                ? "Product publication invariants are not satisfied"
-                : code === "invalid_lifecycle"
-                  ? "Product lifecycle transition is not valid"
-                  : code === "reservation_blocked"
-                    ? "Active reservations block this inventory adjustment"
-                    : code === "inventory_inconsistent"
-                      ? "Reserved inventory truth requires reconciliation"
-                      : code === "inventory_limit"
-                        ? "Inventory on-hand cannot exceed 1,000,000"
-                        : code === "unsupported_media_type"
-                          ? "The declared image type must match JPEG, PNG, or WebP bytes"
-                          : code === "invalid_media_bytes"
-                            ? "The upload is not a valid JPEG, PNG, or WebP image"
-                            : code === "media_too_large"
-                              ? "The image must be no larger than 8 MiB"
-                              : code === "not_found"
-                                ? "Product was not found"
-                                : code === "forbidden"
-                                  ? "Catalog authority is required"
-                                  : code === "conflict"
-                                    ? "Inventory changed concurrently"
-                                    : "Catalog infrastructure is unavailable";
+              : code === "published_bundle_dependency"
+                ? "A Published Bundle depends on this Product or Variant"
+                : code === "invalid_publication"
+                  ? "Product publication invariants are not satisfied"
+                  : code === "invalid_lifecycle"
+                    ? "Product lifecycle transition is not valid"
+                    : code === "reservation_blocked"
+                      ? "Active reservations block this inventory adjustment"
+                      : code === "inventory_inconsistent"
+                        ? "Reserved inventory truth requires reconciliation"
+                        : code === "inventory_limit"
+                          ? "Inventory on-hand cannot exceed 1,000,000"
+                          : code === "unsupported_media_type"
+                            ? "The declared image type must match JPEG, PNG, or WebP bytes"
+                            : code === "invalid_media_bytes"
+                              ? "The upload is not a valid JPEG, PNG, or WebP image"
+                              : code === "media_too_large"
+                                ? "The image must be no larger than 8 MiB"
+                                : code === "not_found"
+                                  ? "Requested catalog resource was not found"
+                                  : code === "forbidden"
+                                    ? "Catalog authority is required"
+                                    : code === "conflict"
+                                      ? "Inventory changed concurrently"
+                                      : "Catalog infrastructure is unavailable";
   const httpStatus =
     code === "forbidden"
       ? 403
@@ -485,8 +489,8 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
-    .post("/catalog/products/:id/images", async ({ body, params, request, status }) => {
-      const id = v.safeParse(ProductIdSchema, params.id);
+    .post("/catalog/items/:id/images", async ({ body, params, request, status }) => {
+      const id = v.safeParse(CatalogItemIdSchema, params.id);
       const multipart = v.safeParse(MediaUploadBodySchema, body);
       const fields = multipart.success
         ? v.safeParse(MediaUploadFieldsSchema, {
@@ -594,6 +598,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
+    .use(createBundleRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
     .get("/health", async ({ status }) => {
       const databaseHealth = await readDatabaseHealth();

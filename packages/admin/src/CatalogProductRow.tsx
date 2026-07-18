@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/solid-query";
 import { Show } from "solid-js";
 import { CatalogImageForm } from "./CatalogImageForm";
 import { InventoryAdjustmentForm } from "./InventoryAdjustmentForm";
+import { PersonalizationEditor } from "./PersonalizationEditor";
 import { ProductVariantsForm } from "./ProductVariantsForm";
 
 const money = new Intl.NumberFormat("mn-MN");
@@ -166,8 +167,9 @@ export const CatalogProductRow = (props: { product: Product }) => {
           </div>
         )}
       </Show>
-      <CatalogImageForm product={props.product} />
+      <CatalogImageForm item={props.product} />
       <ProductVariantsForm product={props.product} />
+      <PersonalizationEditor catalogItemId={props.product.id} />
       <InventoryAdjustmentForm product={props.product} />
     </li>
   );
