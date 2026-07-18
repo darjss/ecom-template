@@ -10,6 +10,7 @@ export * from "./client-error";
 export * from "./cms";
 export * from "./grouping";
 export * from "./search";
+export * from "./text";
 
 export const ApiErrorSchema = v.strictObject({
   error: v.strictObject({

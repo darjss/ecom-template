@@ -1,6 +1,7 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
 import type { ClientRequestError } from "./client-error";
+import { NormalizedTextSchema } from "./text";
 
 const typeIdSchema = (prefix: string, label: string) =>
   v.pipe(
@@ -27,9 +28,15 @@ export const StockItemIdSchema = typeIdSchema("stock_item", "Stock Item ID");
 export const InventoryEntryIdSchema = typeIdSchema("inventory_entry", "Inventory Entry ID");
 export const InventoryReservationIdSchema = typeIdSchema("reservation", "Reservation ID");
 export const ProductStateSchema = v.picklist(["draft", "published", "archived"]);
-export const CatalogNameSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(120));
+export const CatalogNameSchema = v.pipe(
+  NormalizedTextSchema,
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(120),
+);
+export const CatalogDescriptionSchema = v.pipe(NormalizedTextSchema, v.maxLength(5_000));
 export const CatalogSlugSchema = v.pipe(
-  v.string(),
+  NormalizedTextSchema,
   v.trim(),
   v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   v.maxLength(100),
@@ -99,7 +106,12 @@ export const OptionKeySchema = v.pipe(
   v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   v.maxLength(48),
 );
-export const OptionLabelSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
+export const OptionLabelSchema = v.pipe(
+  NormalizedTextSchema,
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(80),
+);
 export const OptionPositionSchema = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(99));
 export const OptionValueSchema = v.strictObject({
   id: OptionValueIdSchema,
@@ -140,7 +152,7 @@ export const ProductSchema = v.strictObject({
   slug: CatalogSlugSchema,
   state: ProductStateSchema,
   name: CatalogNameSchema,
-  description: v.pipe(v.string(), v.maxLength(5_000)),
+  description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
   onHandQuantity: InventoryQuantitySchema,
@@ -163,7 +175,7 @@ export const CatalogProductResponseSchema = v.strictObject({
 export const CreateProductInputSchema = v.strictObject({
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
-  description: v.optional(v.pipe(v.string(), v.maxLength(5_000)), ""),
+  description: v.optional(CatalogDescriptionSchema, ""),
   priceMnt: PriceMntSchema,
   openingQuantity: InventoryQuantitySchema,
   inventoryReason: InventoryReasonSchema,
@@ -171,7 +183,7 @@ export const CreateProductInputSchema = v.strictObject({
 export const UpdateProductInputSchema = v.strictObject({
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,
-  description: v.pipe(v.string(), v.maxLength(5_000)),
+  description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
 });
 export const InventoryAdjustmentInputSchema = v.strictObject({

@@ -1,3 +1,5 @@
+import { normalizeText } from "@ecom/contracts";
+
 export const catalogSearchDocumentVersion = "krilleer-cyr-lat-v1" as const;
 
 export const krilleerCyrillicToLatin = [
@@ -40,7 +42,7 @@ export const krilleerCyrillicToLatin = [
 
 const transliteration = new Map<string, string>(krilleerCyrillicToLatin);
 
-export const normalizeSearchText = (value: string) => value.normalize("NFKC");
+export const normalizeSearchText = normalizeText;
 
 export const searchTokens = (value: string) =>
   normalizeSearchText(value)
