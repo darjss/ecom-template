@@ -1,9 +1,10 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { dispatchCachedStoreRequest, fetch } from "./fetch";
+import { dispatchStoreEntrypointRequest, fetch } from "./fetch";
 
 export class StorefrontCache extends WorkerEntrypoint<Env> {
-  override fetch(request: Request) {
-    return dispatchCachedStoreRequest(request, this.env, this.ctx);
+  override fetch(request: Request): Promise<Response> {
+    const mode = request.method === "GET" || request.method === "HEAD" ? "cache" : "mutation";
+    return dispatchStoreEntrypointRequest(request, this.env, this.ctx, mode);
   }
 }
 

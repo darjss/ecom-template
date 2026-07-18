@@ -190,14 +190,27 @@ const isAnonymousCacheCandidate = (request: Request) => {
   );
 };
 
-export const dispatchCachedStoreRequest = (
+export const dispatchStoreEntrypointRequest = (
   request: Request,
   environment: Env,
   context: ExecutionContext,
+  mode: "cache" | "mutation",
 ) =>
-  isPublicMediaPath(new URL(request.url).pathname)
+  mode === "cache" && isPublicMediaPath(new URL(request.url).pathname)
     ? servePublicMedia(request)
     : dispatchStoreRequest(request, environment, context);
+
+const isCacheMutationRequest = (request: Request) => {
+  const pathname = new URL(request.url).pathname;
+  return (
+    request.method !== "GET" &&
+    request.method !== "HEAD" &&
+    (pathname === "/api/catalog" ||
+      pathname.startsWith("/api/catalog/") ||
+      pathname === "/api/cms" ||
+      pathname.startsWith("/api/cms/"))
+  );
+};
 
 export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environment, context) => {
   const origin = resolveStoreRequestOrigin(request, storeDefinition.profile.slug);
@@ -210,7 +223,10 @@ export const fetch: ExportedHandlerFetchHandler<Env> = async (request, environme
     return redirect;
   }
 
-  return isAnonymousCacheCandidate(request)
+  if (isAnonymousCacheCandidate(request)) {
+    return context.exports.StorefrontCache.fetch(request);
+  }
+  return isCacheMutationRequest(request)
     ? context.exports.StorefrontCache.fetch(request)
     : dispatchStoreRequest(request, environment, context);
 };

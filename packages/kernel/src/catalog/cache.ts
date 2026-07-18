@@ -1,5 +1,5 @@
 import type { Product } from "@ecom/contracts";
-import { env } from "cloudflare:workers";
+import { cache, env } from "cloudflare:workers";
 import { createLogger } from "evlog";
 import ky from "ky";
 import {
@@ -31,7 +31,11 @@ const purgeCacheTags = async (tags: readonly string[]) => {
     const requestId = parseCachePurgeRequestId(
       response.headers.get("cf-ray") ?? response.headers.get("cf-request-id"),
     );
-    return response.ok && body.success && body.output.success
+    if (!response.ok || !body.success || !body.output.success) {
+      return { kind: "failed" as const, requestId };
+    }
+    const workerPurge = await cache.purge({ tags: [...tags] });
+    return workerPurge.success
       ? { kind: "purged" as const, requestId }
       : { kind: "failed" as const, requestId };
   } catch {
