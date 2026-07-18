@@ -28,7 +28,9 @@ const headlineParts = headline.split(" ");
 const headlineLead = headlineParts.slice(0, -1).join(" ") || headline;
 const headlineAccent = headlineParts.length > 1 ? headlineParts.at(-1) : undefined;
 const summary =
-  homepage?.summary ?? "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.";
+  homepage?.summary ??
+  shell.identity?.tagline ??
+  "Хүнс, цэвэрлэгээ, жижиг бэлгийг нэг тавиураас ойлгомжтой сонгоорой.";
 ---
 <main id="content">
   <section class="pantry" aria-labelledby="pantry-title">
