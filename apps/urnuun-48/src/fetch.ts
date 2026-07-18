@@ -207,7 +207,8 @@ const isCacheMutationRequest = (request: Request) => {
     (pathname === "/api/catalog" ||
       pathname.startsWith("/api/catalog/") ||
       pathname === "/api/cms" ||
-      pathname.startsWith("/api/cms/"))
+      pathname.startsWith("/api/cms/") ||
+      pathname === "/api/commerce-settings")
   );
 };
 
