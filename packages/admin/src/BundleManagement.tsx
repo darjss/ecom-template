@@ -107,6 +107,106 @@ const CreateBundleForm = () => {
   );
 };
 
+const BundleEditForm = (props: { bundle: Bundle }) => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(() => bundleMutationOptions(queryClient));
+  const form = createForm(() => ({
+    defaultValues: {
+      name: props.bundle.name,
+      slug: props.bundle.slug,
+      description: props.bundle.description,
+      priceMnt: props.bundle.priceMnt,
+    },
+    onSubmit: async ({ value }) => {
+      await mutation.mutateAsync({
+        kind: "update",
+        id: props.bundle.id,
+        name: value.name.trim(),
+        slug: value.slug.trim(),
+        description: value.description,
+        priceMnt: value.priceMnt,
+      });
+    },
+  }));
+  return (
+    <form
+      class="grid grid-cols-1 items-end gap-3 md:grid-cols-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitBundleForm(event.currentTarget, form.handleSubmit);
+      }}
+    >
+      <form.Field name="name">
+        {(field) => (
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+            <span>Bundle нэр</span>
+            <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 text-(--ink)"
+              required
+              maxlength={120}
+              value={field().state.value}
+              onInput={(event) => field().handleChange(event.currentTarget.value)}
+            />
+          </label>
+        )}
+      </form.Field>
+      <form.Field name="slug">
+        {(field) => (
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+            <span>URL slug</span>
+            <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 text-(--ink)"
+              required
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              value={field().state.value}
+              onInput={(event) => field().handleChange(event.currentTarget.value)}
+            />
+          </label>
+        )}
+      </form.Field>
+      <form.Field name="priceMnt">
+        {(field) => (
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+            <span>Нэг үнэ (₮)</span>
+            <input
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 text-(--ink)"
+              type="number"
+              min="1"
+              step="1"
+              required
+              value={field().state.value}
+              onInput={(event) => field().handleChange(event.currentTarget.valueAsNumber)}
+            />
+          </label>
+        )}
+      </form.Field>
+      <form.Field name="description">
+        {(field) => (
+          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
+            <span>Тайлбар</span>
+            <textarea
+              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 text-(--ink)"
+              maxlength={5000}
+              value={field().state.value}
+              onInput={(event) => field().handleChange(event.currentTarget.value)}
+            />
+          </label>
+        )}
+      </form.Field>
+      <Button type="submit" variant="secondary" disabled={mutation.isPending}>
+        Bundle мэдээлэл хадгалах
+      </Button>
+      <Show when={mutation.error} keyed>
+        {(error) => (
+          <p role="alert" tabindex="-1" class="md:col-span-4">
+            {errorMessage(error)}
+          </p>
+        )}
+      </Show>
+    </form>
+  );
+};
+
 const BundleRow = (props: { bundle: Bundle }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => bundleMutationOptions(queryClient));
@@ -177,6 +277,7 @@ const BundleRow = (props: { bundle: Bundle }) => {
               : "Дахин идэвхжүүлэх"}
         </Button>
       </div>
+      <BundleEditForm bundle={props.bundle} />
       <Show when={props.bundle.state === "draft"}>
         <form
           class="grid gap-2"

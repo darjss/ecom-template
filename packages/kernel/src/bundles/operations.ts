@@ -124,7 +124,7 @@ export const retryBundleCachePurge = async (actor: StaffActor, id: BundleId) => 
     return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
   }
   try {
-    return resolveBundle(id, true);
+    return await resolveBundle(id, true);
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
   }
@@ -136,16 +136,17 @@ export const updateBundle = async (actor: StaffActor, id: BundleId, input: Updat
   }
   try {
     const result = await bundleQueries.update(id, input);
-    return result.kind === "changed"
-      ? resolveBundle(id, true)
-      : Result.err<never, BundleOperationFailure>({
-          code:
-            result.kind === "not_found" ||
-            result.kind === "duplicate_slug" ||
-            result.kind === "slug_locked"
-              ? result.kind
-              : "infrastructure_unavailable",
-        });
+    if (result.kind === "changed") {
+      return await resolveBundle(id, true);
+    }
+    return Result.err<never, BundleOperationFailure>({
+      code:
+        result.kind === "not_found" ||
+        result.kind === "duplicate_slug" ||
+        result.kind === "slug_locked"
+          ? result.kind
+          : "infrastructure_unavailable",
+    });
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
   }
@@ -162,7 +163,7 @@ export const saveBundleComponents = async (
   try {
     const result = await bundleQueries.saveComponents(id, input);
     return result.kind === "changed"
-      ? resolveBundle(id, false)
+      ? await resolveBundle(id, false)
       : Result.err<never, BundleOperationFailure>({ code: result.kind });
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
@@ -180,7 +181,7 @@ export const transitionBundle = async (
   try {
     const result = await bundleQueries.transition(actor, id, action);
     return result.kind === "changed"
-      ? resolveBundle(id, true)
+      ? await resolveBundle(id, true)
       : Result.err<never, BundleOperationFailure>({ code: result.kind });
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
