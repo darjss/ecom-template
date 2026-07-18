@@ -1,0 +1,29 @@
+---
+import type { StoreBackend } from "@ecom/api";
+
+type Shell = Awaited<ReturnType<StoreBackend["storefront"]["readShell"]>>;
+interface Props {
+  shell: Shell;
+  currentPath: string;
+  fallbackName: string;
+}
+const { shell, currentPath, fallbackName } = Astro.props;
+const storeName = shell.identity?.displayName ?? fallbackName;
+const linkAttributes = (openInNewTab: boolean) =>
+  openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {};
+---
+<header class="site-header">
+  <a class="wordmark" href="/" aria-current={currentPath === "/" ? "page" : undefined} transition:name="wordmark"><b>48</b><span>{storeName}</span></a>
+  <nav aria-label="Үндсэн цэс">
+    {shell.primary.length === 0
+      ? <><a aria-current={currentPath === "/" ? "page" : undefined} href="/">Дэлгүүр</a><a aria-current={currentPath.startsWith("/locations") ? "page" : undefined} href="/locations">Байршил</a></>
+      : shell.primary.map((item) => <span class="relative"><a aria-current={item.href === currentPath ? "page" : undefined} href={item.href} {...linkAttributes(item.openInNewTab)}>{item.label}</a>{item.children.length > 0 && <ul class="m-0 flex list-none gap-3 p-0 pt-2">{item.children.map((child) => <li><a aria-current={child.href === currentPath ? "page" : undefined} href={child.href} {...linkAttributes(child.openInNewTab)}>{child.label}</a></li>)}</ul>}</span>) }
+  </nav>
+  <a class="admin-link" href="/admin">Удирдлага</a>
+</header>
+<slot />
+<footer>
+  <span>{storeName}</span>
+  {shell.footer.map((group) => <nav aria-label={group.label}>{group.items.map((item) => <a href={item.href} {...linkAttributes(item.openInNewTab)}>{item.label}</a>)}</nav>)}
+  <span>{shell.locations?.locations.find(({ active }) => active)?.address ?? "Улаанбаатар"}</span>
+</footer>

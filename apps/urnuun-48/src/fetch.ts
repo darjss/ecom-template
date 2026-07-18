@@ -11,13 +11,17 @@ import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
 import { api } from "./api";
 import { storeDefinition } from "./profile/definition";
 
-const publicStorefrontPaths = new Set(["/", "/story"]);
+const publicStorefrontPaths = new Set(["/", "/story", "/locations"]);
 const publicCatalogPath =
   /^\/(?:products|bundles|categories|collections)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const publicCmsPath =
+  /^\/(?:locations\/location_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}|policies\/(?:terms|privacy|delivery|returns_refunds|payment))$/;
 const privateCatalogImageUploadPath =
   /^\/api\/catalog\/items\/(?:product|bundle)_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}\/images$/;
 const isPublicStorefrontPath = (pathname: string) =>
-  publicStorefrontPaths.has(pathname) || publicCatalogPath.test(pathname);
+  publicStorefrontPaths.has(pathname) ||
+  publicCatalogPath.test(pathname) ||
+  publicCmsPath.test(pathname);
 
 const privateResponse = (response: Response) => {
   const headers = new Headers(response.headers);

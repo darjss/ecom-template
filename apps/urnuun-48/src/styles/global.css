@@ -432,6 +432,18 @@ footer {
     grid-template-columns: 1fr auto;
     gap: 1rem;
   }
+  .site-header .wordmark {
+    min-width: 0;
+    width: auto;
+  }
+  .site-header .wordmark b {
+    flex: none;
+  }
+  .site-header .wordmark span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .site-header nav {
     grid-row: 2;
     grid-column: 1 / -1;

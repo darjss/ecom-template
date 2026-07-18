@@ -18,6 +18,7 @@ import * as v from "valibot";
 import { resolveAdminSurface } from "./access";
 import { BundleManagement } from "./BundleManagement";
 import { CatalogManagement } from "./CatalogManagement";
+import { CmsManagement } from "./CmsManagement";
 import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
@@ -374,6 +375,7 @@ const Dashboard = (props: AdminAppProps) => (
           <HealthStatus />
         </div>
       </header>
+      <CmsManagement />
       <CatalogManagement />
       <BundleManagement />
       <GroupingManagement />

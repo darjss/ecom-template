@@ -1,0 +1,26 @@
+---
+import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import { renderPolicyMarkdown } from "@ecom/storefront/policy";
+import StoreShell from "../../components/StoreShell.astro";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+const allowedKinds = new Set(["terms", "privacy", "delivery", "returns_refunds", "payment"]);
+const kind = Astro.params.kind ?? "";
+const shell = await storefront.readShell();
+const policy = allowedKinds.has(kind) ? shell.policies?.policies.find((entry) => entry.kind === kind) : undefined;
+const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
+if (!policy) {
+  Astro.response.status = 404;
+}
+applyPublicHtmlCache(Astro.response.headers, ["store-shell", ...(policy ? [`policy:${policy.id}`] : [])]);
+const content = policy ? renderPolicyMarkdown(policy.contentMarkdown) : "";
+---
+<StoreLayout title={`${policy?.title ?? "Бодлого олдсонгүй"} · ${storeName}`} description={policy?.title ?? "Бодлого олдсонгүй"}>
+  <StoreShell shell={shell} currentPath={Astro.url.pathname} fallbackName={storeName}>
+  <main id="content" class="mx-auto max-w-3xl px-5 py-16 sm:px-10">
+    {policy ? <article><h1 class="text-4xl font-extrabold tracking-tight sm:text-6xl">{policy.title}</h1><div class="prose mt-10 max-w-none" set:html={content} /></article> : <><h1>Бодлого олдсонгүй</h1><a href="/">Нүүр хуудас руу буцах</a></>}
+  </main>
+  </StoreShell>
+</StoreLayout>

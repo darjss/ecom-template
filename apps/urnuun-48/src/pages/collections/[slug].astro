@@ -11,6 +11,7 @@ if (!listing) {
     headers: { "cache-control": "private, no-store" },
   });
 }
+const shell = await storefront.readShell();
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "catalog"]);
 ---
-<GroupingListing listing={listing} kindLabel="Цуглуулга" />
+<GroupingListing listing={listing} kindLabel="Цуглуулга" shell={shell} />

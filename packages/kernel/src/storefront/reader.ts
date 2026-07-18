@@ -5,8 +5,15 @@ import {
   PublicGroupingSchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  type CommerceSettings,
+  type LocationsDocument,
+  type NavigationDocument,
   type PersonalizationDefinition,
+  type PoliciesDocument,
+  type StoreDefinition,
+  type StorefrontIdentityDocument,
   type PublicBundleDetail,
+  type PublicCatalogItemSummary,
   type PublicGrouping,
   type PublicGroupingListing,
   type PublicProductDetail,
@@ -18,9 +25,33 @@ import { bundleQueries, readPersonalizations } from "../bundles/persistence";
 import { catalogQueries } from "../catalog/persistence";
 import { readDatabaseHealth } from "../db/health";
 import { groupingQueries } from "../grouping/persistence";
+import { cmsQueries } from "../cms/persistence";
+
+type StoreShellLink = {
+  readonly label: string;
+  readonly href: string;
+  readonly openInNewTab: boolean;
+  readonly children: readonly StoreShellLink[];
+};
+
+export type StoreShell = {
+  readonly identity: StorefrontIdentityDocument | undefined;
+  readonly primary: readonly StoreShellLink[];
+  readonly footer: readonly { readonly label: string; readonly items: readonly StoreShellLink[] }[];
+  readonly locations: LocationsDocument | undefined;
+  readonly policies: PoliciesDocument | undefined;
+  readonly commerceSettings: CommerceSettings | undefined;
+};
 
 export type StorefrontReader = {
   readonly readSummary: () => Promise<StorefrontSummary>;
+  readonly readIdentity: () => Promise<StorefrontIdentityDocument | undefined>;
+  readonly readNavigation: () => Promise<NavigationDocument | undefined>;
+  readonly readLocations: () => Promise<LocationsDocument | undefined>;
+  readonly readPolicies: () => Promise<PoliciesDocument | undefined>;
+  readonly readCommerceSettings: () => Promise<CommerceSettings | undefined>;
+  readonly readShell: () => Promise<StoreShell>;
+  readonly listPublishedCatalogItems: () => Promise<readonly PublicCatalogItemSummary[]>;
   readonly listPublishedProducts: () => Promise<readonly PublicProductSummary[]>;
   readonly readPublishedProduct: (slug: string) => Promise<PublicProductDetail | undefined>;
   readonly readPublishedBundle: (slug: string) => Promise<PublicBundleDetail | undefined>;
@@ -77,7 +108,117 @@ const publicListing = async (
   });
 };
 
-export const createStorefrontReader = (summary: StorefrontSummary): StorefrontReader => ({
+const readStoreShell = async (
+  capabilities: StoreDefinition["profile"]["capabilities"],
+): Promise<StoreShell> => {
+  const [identity, navigation, locations, policies, commerceSettings, catalogItems, groupings] =
+    await Promise.all([
+      cmsQueries.read("storefront_identity", "published"),
+      cmsQueries.read("navigation", "published"),
+      cmsQueries.read("locations", "published"),
+      cmsQueries.read("policies", "published"),
+      cmsQueries.readSettings(),
+      catalogQueries.listPublishedCatalogItems(),
+      groupingQueries.listPublicGroupings(),
+    ]);
+  const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+  const categoryById = new Map(groupings.categories.map((group) => [group.id, group]));
+  const collectionById = new Map(groupings.collections.map((group) => [group.id, group]));
+  const locationDocument = locations?.kind === "locations" ? locations.content : undefined;
+  const policyDocument = policies?.kind === "policies" ? policies.content : undefined;
+  const locationIds = new Set(
+    locationDocument?.locations.filter(({ active }) => active).map(({ id }) => id),
+  );
+  const policyById = new Map(policyDocument?.policies.map((policy) => [policy.id, policy]));
+  const resolveDestination = (
+    destination: NavigationDocument["primary"][number]["destination"],
+  ) => {
+    switch (destination.kind) {
+      case "home":
+        return { href: "/", openInNewTab: false };
+      case "category": {
+        const category = categoryById.get(destination.id);
+        return category ? { href: `/categories/${category.slug}`, openInNewTab: false } : undefined;
+      }
+      case "collection": {
+        const collection = collectionById.get(destination.id);
+        return collection
+          ? { href: `/collections/${collection.slug}`, openInNewTab: false }
+          : undefined;
+      }
+      case "catalog_item": {
+        const item = catalogById.get(destination.id);
+        return item
+          ? {
+              href: `/${item.kind === "bundle" ? "bundles" : "products"}/${item.slug}`,
+              openInNewTab: false,
+            }
+          : undefined;
+      }
+      case "location":
+        return locationIds.has(destination.id)
+          ? { href: `/locations/${destination.id}`, openInNewTab: false }
+          : undefined;
+      case "policy": {
+        const policy = policyById.get(destination.id);
+        return policy ? { href: `/policies/${policy.kind}`, openInNewTab: false } : undefined;
+      }
+      case "external":
+        return { href: destination.url, openInNewTab: destination.openInNewTab };
+    }
+  };
+  const navigationDocument = navigation?.kind === "navigation" ? navigation.content : undefined;
+  const primary =
+    navigationDocument?.primary.flatMap((item) => {
+      const target = item.enabled ? resolveDestination(item.destination) : undefined;
+      return target
+        ? [
+            {
+              label: item.label,
+              ...target,
+              children: item.children.flatMap((child) => {
+                const childTarget = child.enabled
+                  ? resolveDestination(child.destination)
+                  : undefined;
+                return childTarget ? [{ label: child.label, ...childTarget, children: [] }] : [];
+              }),
+            },
+          ]
+        : [];
+    }) ?? [];
+  const footer =
+    navigationDocument?.footer.map((group) => ({
+      label: group.label,
+      items: group.items.flatMap((item) => {
+        const target = item.enabled ? resolveDestination(item.destination) : undefined;
+        return target ? [{ label: item.label, ...target, children: [] }] : [];
+      }),
+    })) ?? [];
+  return {
+    identity: identity?.kind === "storefront_identity" ? identity.content : undefined,
+    primary,
+    footer,
+    locations: locationDocument
+      ? {
+          ...locationDocument,
+          locations: locationDocument.locations.map((location) => ({
+            ...location,
+            pickupEnabled:
+              location.pickupEnabled &&
+              capabilities.pickup &&
+              commerceSettings?.pickupEnabled === true,
+          })),
+        }
+      : undefined,
+    policies: policyDocument,
+    commerceSettings,
+  };
+};
+
+export const createStorefrontReader = (
+  summary: StorefrontSummary,
+  capabilities: StoreDefinition["profile"]["capabilities"],
+): StorefrontReader => ({
   readSummary: async () => {
     const health = await readDatabaseHealth();
     if (health.isErr()) {
@@ -85,6 +226,25 @@ export const createStorefrontReader = (summary: StorefrontSummary): StorefrontRe
     }
     return summary;
   },
+  readIdentity: async () => {
+    const document = await cmsQueries.read("storefront_identity", "published");
+    return document?.kind === "storefront_identity" ? document.content : undefined;
+  },
+  readNavigation: async () => {
+    const document = await cmsQueries.read("navigation", "published");
+    return document?.kind === "navigation" ? document.content : undefined;
+  },
+  readLocations: async () => {
+    const document = await cmsQueries.read("locations", "published");
+    return document?.kind === "locations" ? document.content : undefined;
+  },
+  readPolicies: async () => {
+    const document = await cmsQueries.read("policies", "published");
+    return document?.kind === "policies" ? document.content : undefined;
+  },
+  readCommerceSettings: () => cmsQueries.readSettings(),
+  readShell: () => readStoreShell(capabilities),
+  listPublishedCatalogItems: () => catalogQueries.listPublishedCatalogItems(),
   listPublishedProducts,
   readPublishedProduct: async (slug) => {
     const row = await catalogQueries.findPublishedBySlug(slug);

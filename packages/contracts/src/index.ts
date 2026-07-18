@@ -5,6 +5,7 @@ import { ApiErrorCodeSchema, type ClientRequestError } from "./client-error";
 export * from "./bundle";
 export * from "./catalog";
 export * from "./client-error";
+export * from "./cms";
 export * from "./grouping";
 
 export const ApiErrorSchema = v.strictObject({
@@ -209,6 +210,14 @@ export const StoreDefinitionSchema = v.strictObject({
     location: v.pipe(v.string(), v.minLength(1)),
     currency: v.literal("MNT"),
     locale: v.literal("mn-MN"),
+    capabilities: v.strictObject({
+      bankTransfer: v.boolean(),
+      cashOnDelivery: v.boolean(),
+      customerAccounts: v.boolean(),
+      telegram: v.boolean(),
+      pickup: v.boolean(),
+      delivery: v.boolean(),
+    }),
   }),
   providers: v.strictObject({
     payment: v.picklist(["byl", "qpay"]),

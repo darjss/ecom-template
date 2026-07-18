@@ -61,6 +61,16 @@ export {
   type CustomerAuthFailure,
   type CustomerSmsDelivery,
 } from "./customer/operations";
+export {
+  listCmsDocuments,
+  publishCmsDocument,
+  readCommerceSettings,
+  retryCmsCachePurge,
+  saveCmsDraft,
+  saveCommerceSettings,
+  type CmsMutationResult,
+  type CmsOperationFailure,
+} from "./cms/operations";
 export { readDatabaseHealth } from "./db/health";
 export {
   approveStaff,
