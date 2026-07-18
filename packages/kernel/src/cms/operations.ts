@@ -31,6 +31,7 @@ const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog
 
 const validateDocument = async (
   document: CmsDocument,
+  publication = false,
 ): Promise<CmsOperationFailure | undefined> => {
   const references = await cmsQueries.readReferenceState();
   if (document.kind === "storefront_identity") {
@@ -55,18 +56,62 @@ const validateDocument = async (
   }
   if (document.kind === "locations") {
     const ids = document.content.locations.map(({ id }) => id);
-    return new Set(ids).size === ids.length ? undefined : { code: "duplicate_identity" };
+    if (new Set(ids).size !== ids.length) {
+      return { code: "duplicate_identity" };
+    }
+    if (!publication) {
+      return undefined;
+    }
+    const [navigation, policies] = await Promise.all([
+      cmsQueries.read("navigation", "published"),
+      cmsQueries.read("policies", "published"),
+    ]);
+    return navigation?.kind === "navigation"
+      ? validateNavigation(navigation, document, policies, references)
+      : undefined;
   }
   if (document.kind === "policies") {
     const ids = document.content.policies.map(({ id }) => id);
     const kinds = document.content.policies.map(({ kind }) => kind);
-    return new Set(ids).size === ids.length && new Set(kinds).size === kinds.length
-      ? undefined
-      : { code: "duplicate_identity" };
+    if (new Set(ids).size !== ids.length || new Set(kinds).size !== kinds.length) {
+      return { code: "duplicate_identity" };
+    }
+    if (!publication) {
+      return undefined;
+    }
+    const [navigation, locations] = await Promise.all([
+      cmsQueries.read("navigation", "published"),
+      cmsQueries.read("locations", "published"),
+    ]);
+    return navigation?.kind === "navigation"
+      ? validateNavigation(navigation, locations, document, references)
+      : undefined;
   }
   if (document.kind !== "navigation") {
     return undefined;
   }
+  const status = publication ? "published" : "draft";
+  const [locations, policies] = await Promise.all([
+    cmsQueries
+      .read("locations", status)
+      .then(
+        (value) => value ?? (publication ? undefined : cmsQueries.read("locations", "published")),
+      ),
+    cmsQueries
+      .read("policies", status)
+      .then(
+        (value) => value ?? (publication ? undefined : cmsQueries.read("policies", "published")),
+      ),
+  ]);
+  return validateNavigation(document, locations, policies, references);
+};
+
+const validateNavigation = (
+  document: Extract<CmsDocument, { kind: "navigation" }>,
+  locations: CmsDocument | undefined,
+  policies: CmsDocument | undefined,
+  references: Awaited<ReturnType<typeof cmsQueries.readReferenceState>>,
+): CmsOperationFailure | undefined => {
   const allItems = [
     ...document.content.primary,
     ...document.content.primary.flatMap(({ children }) => children),
@@ -79,14 +124,6 @@ const validateDocument = async (
   if (document.content.primary.some(({ children }) => children.length > 12)) {
     return { code: "navigation_depth" };
   }
-  const [locations, policies] = await Promise.all([
-    cmsQueries
-      .read("locations", "draft")
-      .then((value) => value ?? cmsQueries.read("locations", "published")),
-    cmsQueries
-      .read("policies", "draft")
-      .then((value) => value ?? cmsQueries.read("policies", "published")),
-  ]);
   const activeLocations = new Set(
     locations?.kind === "locations"
       ? locations.content.locations.filter(({ active }) => active).map(({ id }) => id)
@@ -156,10 +193,10 @@ export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => 
   }
 };
 
-const resolvePurge = async (document: CmsDocument) => {
+const resolvePurge = async () => {
   const debt = await cmsQueries.readDebt();
   if (!debt) {
-    return { document, cache: "not_required" as const, cachePurgeRequestId: null };
+    return { cache: "not_required" as const, cachePurgeRequestId: null };
   }
   const purge = await purgeCacheTags(["store-shell", "homepage", "catalog", "policies"]);
   const recorded = await cmsQueries.recordPurge(
@@ -168,7 +205,6 @@ const resolvePurge = async (document: CmsDocument) => {
     purge.kind === "purged",
   );
   return {
-    document,
     cache:
       purge.kind === "purged" && recorded
         ? ("purged" as const)
@@ -186,13 +222,13 @@ export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKin
     if (!draft) {
       return Result.err<never, CmsOperationFailure>({ code: "not_found" });
     }
-    const failure = await validateDocument(draft);
+    const failure = await validateDocument(draft, true);
     if (failure) {
       return Result.err<never, CmsOperationFailure>(failure);
     }
     const published = await cmsQueries.publish(draft);
     return published
-      ? Result.ok<CmsMutationResult>(await resolvePurge(published))
+      ? Result.ok<CmsMutationResult>({ document: published, ...(await resolvePurge()) })
       : Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
@@ -204,10 +240,7 @@ export const retryCmsCachePurge = async (actor: StaffActor) => {
     return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
   }
   try {
-    const identity = await cmsQueries.read("storefront_identity", "published");
-    return identity
-      ? Result.ok<CmsMutationResult>(await resolvePurge(identity))
-      : Result.err<never, CmsOperationFailure>({ code: "not_found" });
+    return Result.ok(await resolvePurge());
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }

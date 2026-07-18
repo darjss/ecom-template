@@ -705,10 +705,13 @@ export const createStoreBackend = (input: StoreBackendInput): StoreBackend => {
   });
   return {
     api: createApi(definition, input.smsGateway),
-    storefront: createStorefrontReader({
-      storeName: definition.profile.name,
-      location: definition.profile.location,
-      status: "open",
-    }),
+    storefront: createStorefrontReader(
+      {
+        storeName: definition.profile.name,
+        location: definition.profile.location,
+        status: "open",
+      },
+      definition.profile.capabilities,
+    ),
   };
 };

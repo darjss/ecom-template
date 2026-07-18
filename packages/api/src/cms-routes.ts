@@ -1,5 +1,6 @@
 import {
   CmsApiErrorSchema,
+  CmsCachePurgeResponseSchema,
   CmsDocumentKindSchema,
   CmsDocumentListResponseSchema,
   CmsDocumentResponseSchema,
@@ -128,7 +129,7 @@ export const createCmsRoutes = (definition: StoreDefinition, authorize: Authoriz
       const result = await retryCmsCachePurge(authorization.actor);
       return result.isErr()
         ? error(result.error, status)
-        : v.parse(CmsDocumentResponseSchema, { data: result.value });
+        : v.parse(CmsCachePurgeResponseSchema, { data: result.value });
     })
     .get("/commerce-settings", async ({ request, status }) => {
       const authorization = await authorize(request, status);

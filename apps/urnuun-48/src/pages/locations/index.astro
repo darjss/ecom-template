@@ -1,17 +1,20 @@
 ---
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
+import StoreShell from "../../components/StoreShell.astro";
 import StoreLayout from "../../layouts/StoreLayout.astro";
 import { storefront } from "../../api";
 
 export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell"]);
-const [identity, document] = await Promise.all([storefront.readIdentity(), storefront.readLocations()]);
-const locations = document?.locations.filter(({ active }) => active) ?? [];
+const shell = await storefront.readShell();
+const locations = shell.locations?.locations.filter(({ active }) => active) ?? [];
+const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
 ---
-<StoreLayout title={`Байршил · ${identity?.displayName ?? "Өрнүүн 48"}`} description="Дэлгүүрийн салбар, хаяг болон ажиллах цаг">
-  <header class="site-header"><a class="wordmark" href="/"><b>48</b><span>{identity?.displayName ?? "Өрнүүн"}</span></a><nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a aria-current="page" href="/locations">Байршил</a></nav></header>
+<StoreLayout title={`Байршил · ${storeName}`} description="Дэлгүүрийн салбар, хаяг болон ажиллах цаг">
+  <StoreShell shell={shell} currentPath="/locations" fallbackName={storeName}>
   <main id="content" class="mx-auto max-w-5xl px-5 py-16 sm:px-10">
     <h1 class="text-4xl font-extrabold tracking-tight sm:text-6xl">Байршил</h1>
     {locations.length === 0 ? <p class="mt-8">Одоогоор нийтэд нээлттэй байршил алга.</p> : <ul class="mt-10 grid list-none gap-8 p-0 sm:grid-cols-2">{locations.map((location) => <li class="border-t border-black/20 pt-5"><h2 class="text-2xl font-bold">{location.name}</h2><p>{location.address}</p><p>{location.openingHours}</p><a class="font-bold" href={`/locations/${location.id}`}>Дэлгэрэнгүй</a></li>)}</ul>}
   </main>
+  </StoreShell>
 </StoreLayout>

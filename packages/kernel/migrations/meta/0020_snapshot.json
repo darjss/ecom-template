@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ad2979f4-74c1-4c53-9c82-5eb9c0da70e3",
+  "id": "1db4fd48-3c0f-49bc-baab-a4daacf49961",
   "prevId": "a6004b55-d67d-4596-8af7-33739f34b34d",
   "tables": {
     "audit_events": {
@@ -1034,6 +1034,10 @@
           "name": "cms_documents_version_check",
           "value": "\"cms_documents\".\"schema_version\" = 1"
         },
+        "cms_documents_json_check": {
+          "name": "cms_documents_json_check",
+          "value": "json_valid(\"cms_documents\".\"content_json\")"
+        },
         "cms_documents_lifecycle_check": {
           "name": "cms_documents_lifecycle_check",
           "value": "(\"cms_documents\".\"status\" = 'draft' AND \"cms_documents\".\"published_at\" IS NULL) OR (\"cms_documents\".\"status\" = 'published' AND \"cms_documents\".\"published_at\" IS NOT NULL)"
@@ -1228,6 +1232,10 @@
         "commerce_settings_key_check": {
           "name": "commerce_settings_key_check",
           "value": "\"commerce_settings\".\"key\" = 'commerce'"
+        },
+        "commerce_settings_booleans_check": {
+          "name": "commerce_settings_booleans_check",
+          "value": "\"commerce_settings\".\"bank_transfer_enabled\" IN (0, 1) AND \"commerce_settings\".\"cash_on_delivery_enabled\" IN (0, 1) AND \"commerce_settings\".\"customer_accounts_enabled\" IN (0, 1) AND \"commerce_settings\".\"telegram_enabled\" IN (0, 1) AND \"commerce_settings\".\"pickup_enabled\" IN (0, 1) AND \"commerce_settings\".\"delivery_enabled\" IN (0, 1)"
         },
         "commerce_settings_delivery_fee_check": {
           "name": "commerce_settings_delivery_fee_check",

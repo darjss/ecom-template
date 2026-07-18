@@ -9,6 +9,7 @@ export {
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
+  requestCmsCachePurge,
   requestCmsDocuments,
   requestCmsMutation,
   requestCommerceSettings,
@@ -42,6 +43,7 @@ export {
 export { catalogImageMutationOptions } from "./query/catalog-media";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export {
+  cmsCachePurgeMutationOptions,
   cmsMutationOptions,
   cmsQueryOptions,
   commerceSettingsMutationOptions,

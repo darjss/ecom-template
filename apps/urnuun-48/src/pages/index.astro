@@ -1,52 +1,26 @@
 ---
 import { applyPublicHtmlCache } from "@ecom/storefront/cache";
 import { CustomerAuthIsland } from "@ecom/storefront";
+import StoreShell from "../components/StoreShell.astro";
 import StoreLayout from "../layouts/StoreLayout.astro";
 import { storefront } from "../api";
 
 export const prerender = false;
 applyPublicHtmlCache(Astro.response.headers, ["store-shell", "homepage", "catalog"]);
-const summary = await storefront.readSummary();
-const [identity, navigation, locations, policies, commerceSettings, catalogItems, groupings] = await Promise.all([
-  storefront.readIdentity(),
-  storefront.readNavigation(),
-  storefront.readLocations(),
-  storefront.readPolicies(),
-  storefront.readCommerceSettings(),
+const [summary, shell, catalogItems, groupings] = await Promise.all([
+  storefront.readSummary(),
+  storefront.readShell(),
   storefront.listPublishedCatalogItems(),
   storefront.listPublishedGroupings(),
 ]);
-const storeName = identity?.displayName ?? summary.storeName;
-const locationById = new Map(locations?.locations.map((location) => [location.id, location]));
-const policyById = new Map(policies?.policies.map((policy) => [policy.id, policy]));
-const categoryById = new Map(groupings.categories.map((category) => [category.id, category]));
-const collectionById = new Map(groupings.collections.map((collection) => [collection.id, collection]));
-const catalogItemById = new Map(catalogItems.map((catalogItem) => [catalogItem.id, catalogItem]));
+const identity = shell.identity;
+const commerceSettings = shell.commerceSettings;
 const products = catalogItems.filter(({ kind }) => kind === "product");
-const destinationHref = (destination: typeof navigation extends undefined ? never : NonNullable<typeof navigation>["primary"][number]["destination"]) => {
-  switch (destination.kind) {
-    case "home": return "/";
-    case "category": return categoryById.get(destination.id) ? `/categories/${categoryById.get(destination.id)?.slug}` : undefined;
-    case "collection": return collectionById.get(destination.id) ? `/collections/${collectionById.get(destination.id)?.slug}` : undefined;
-    case "catalog_item": {
-      const catalogItem = catalogItemById.get(destination.id);
-      return catalogItem
-        ? `/${catalogItem.kind === "bundle" ? "bundles" : "products"}/${catalogItem.slug}`
-        : undefined;
-    }
-    case "location": return locationById.has(destination.id) ? `/locations/${destination.id}` : undefined;
-    case "policy": return policyById.get(destination.id) ? `/policies/${policyById.get(destination.id)?.kind}` : undefined;
-    case "external": return destination.url;
-  }
-};
+const storeName = identity?.displayName ?? summary.storeName;
 ---
 <StoreLayout title={`${storeName} · Өдөр бүрийн хэрэгцээ`} description={identity?.summary ?? "Өрнүүн 48-ийн өдөр тутмын хүнс, гэр ахуй, жижиг бэлгийн сонголт"}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
-  <header class="site-header">
-    <a class="wordmark" href="/" aria-current="page" transition:name="wordmark"><b>48</b><span>{storeName}</span></a>
-    <nav aria-label="Үндсэн цэс">{navigation?.primary.filter((item) => item.enabled).map((item) => { const href = destinationHref(item.destination); return href ? <a aria-current={item.destination.kind === "home" ? "page" : undefined} href={href}>{item.label}</a> : null; }) ?? <><a aria-current="page" href="/">Дэлгүүр</a><a href="/locations">Байршил</a></>}</nav>
-    <a class="admin-link" href="/admin">Удирдлага</a>
-  </header>
+  <StoreShell shell={shell} currentPath="/" fallbackName={summary.storeName}>
   <main id="content">
     <section class="pantry" aria-labelledby="pantry-title">
       <div class="pantry-beam">
@@ -98,5 +72,5 @@ const destinationHref = (destination: typeof navigation extends undefined ? neve
       <CustomerAuthIsland client:only="solid-js" />
     </section>
   </main>
-  <footer><span>{storeName}</span>{navigation?.footer.map((group) => <nav aria-label={group.label}>{group.items.filter((item) => item.enabled).map((item) => { const href = destinationHref(item.destination); return href ? <a href={href}>{item.label}</a> : null; })}</nav>)}<span>{locations?.locations.find((location) => location.active)?.address ?? summary.location}</span></footer>
+  </StoreShell>
 </StoreLayout>

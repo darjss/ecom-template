@@ -22,6 +22,7 @@ CREATE TABLE `cms_documents` (
 	CONSTRAINT "cms_documents_kind_check" CHECK("cms_documents"."kind" IN ('storefront_identity', 'homepage', 'navigation', 'locations', 'policies', 'announcement', 'ordering_notices')),
 	CONSTRAINT "cms_documents_status_check" CHECK("cms_documents"."status" IN ('draft', 'published')),
 	CONSTRAINT "cms_documents_version_check" CHECK("cms_documents"."schema_version" = 1),
+	CONSTRAINT "cms_documents_json_check" CHECK(json_valid("cms_documents"."content_json")),
 	CONSTRAINT "cms_documents_lifecycle_check" CHECK(("cms_documents"."status" = 'draft' AND "cms_documents"."published_at" IS NULL) OR ("cms_documents"."status" = 'published' AND "cms_documents"."published_at" IS NOT NULL))
 );
 --> statement-breakpoint
@@ -37,6 +38,7 @@ CREATE TABLE `commerce_settings` (
 	`free_delivery_threshold_mnt` integer,
 	`updated_at` integer NOT NULL,
 	CONSTRAINT "commerce_settings_key_check" CHECK("commerce_settings"."key" = 'commerce'),
+	CONSTRAINT "commerce_settings_booleans_check" CHECK("commerce_settings"."bank_transfer_enabled" IN (0, 1) AND "commerce_settings"."cash_on_delivery_enabled" IN (0, 1) AND "commerce_settings"."customer_accounts_enabled" IN (0, 1) AND "commerce_settings"."telegram_enabled" IN (0, 1) AND "commerce_settings"."pickup_enabled" IN (0, 1) AND "commerce_settings"."delivery_enabled" IN (0, 1)),
 	CONSTRAINT "commerce_settings_delivery_fee_check" CHECK("commerce_settings"."delivery_fee_mnt" BETWEEN 0 AND 10000000),
 	CONSTRAINT "commerce_settings_free_threshold_check" CHECK("commerce_settings"."free_delivery_threshold_mnt" IS NULL OR "commerce_settings"."free_delivery_threshold_mnt" BETWEEN 0 AND 1000000000)
 );

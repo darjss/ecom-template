@@ -1,4 +1,5 @@
 import {
+  cmsCachePurgeMutationOptions,
   cmsMutationOptions,
   cmsQueryOptions,
   commerceSettingsMutationOptions,
@@ -7,6 +8,9 @@ import {
 import {
   createLocationId,
   createPolicyId,
+  LocationsDocumentSchema,
+  NavigationDocumentSchema,
+  PoliciesDocumentSchema,
   type CmsDocument,
   type CmsDocumentKind,
 } from "@ecom/contracts";
@@ -14,6 +18,7 @@ import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
+import * as v from "valibot";
 
 const fieldClass =
   "min-h-11 w-full rounded-lg border border-black/25 bg-(--paper) px-3 text-base text-(--ink) focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600";
@@ -24,19 +29,27 @@ const CmsActions = (props: { document: () => CmsDocument }) => {
   const mutation = useMutation(() => cmsMutationOptions(queryClient));
   const [message, setMessage] = createSignal("");
   const save = async () => {
-    await mutation.mutateAsync({ kind: "save-draft", document: props.document() });
-    setMessage("Ноорог хадгалагдлаа.");
+    try {
+      await mutation.mutateAsync({ kind: "save-draft", document: props.document() });
+      setMessage("Ноорог хадгалагдлаа.");
+    } catch {
+      setMessage("Document JSON болон талбарын утгуудыг шалгана уу.");
+    }
   };
   const publish = async () => {
-    const result = await mutation.mutateAsync({
-      kind: "publish",
-      documentKind: props.document().kind,
-    });
-    setMessage(
-      result.data.cache === "purged"
-        ? "Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ."
-        : "Нийтлэгдсэн боловч кэш цэвэрлэгдээгүй. Дахин оролдоно уу.",
-    );
+    try {
+      const result = await mutation.mutateAsync({
+        kind: "publish",
+        documentKind: props.document().kind,
+      });
+      setMessage(
+        result.data.cache === "purged"
+          ? "Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ."
+          : "Нийтлэгдсэн боловч кэш цэвэрлэгдээгүй. Дахин оролдоно уу.",
+      );
+    } catch {
+      setMessage("Нийтлэхийн өмнө document JSON болон талбарын утгуудыг шалгана уу.");
+    }
   };
   return (
     <div class="flex flex-wrap items-center gap-3">
@@ -154,235 +167,39 @@ const IdentityForm = (props: {
   );
 };
 
-const NavigationForm = (props: {
-  initial: Extract<CmsDocument, { kind: "navigation" }> | undefined;
+const FullCmsDocumentForm = (props: {
+  document: Extract<CmsDocument, { kind: "navigation" | "locations" | "policies" }>;
+  label: string;
 }) => {
-  const initialLabel = props.initial?.content.primary.at(0)?.label ?? "Дэлгүүр";
-  const newPrimaryId = crypto.randomUUID();
-  const form = createForm(() => ({ defaultValues: { label: initialLabel } }));
-  const document = () => ({
-    kind: "navigation" as const,
-    content: props.initial
-      ? {
-          ...props.initial.content,
-          primary:
-            props.initial.content.primary.length === 0
-              ? [
-                  {
-                    id: newPrimaryId,
-                    label: form.state.values.label,
-                    enabled: true,
-                    destination: { kind: "home" as const },
-                    children: [],
-                  },
-                ]
-              : props.initial.content.primary.map((item, index) =>
-                  index === 0 ? { ...item, label: form.state.values.label } : item,
-                ),
-        }
-      : {
-          version: 1 as const,
-          primary: [
-            {
-              id: newPrimaryId,
-              label: form.state.values.label,
-              enabled: true,
-              destination: { kind: "home" as const },
-              children: [],
-            },
-          ],
-          footer: [],
-        },
-  });
-  return (
-    <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
-      <form.Field name="label">
-        {(field) => (
-          <label class={labelClass}>
-            Эхний цэсийн нэр
-            <input
-              class={fieldClass}
-              maxlength="60"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <p class="m-0 text-sm text-(--muted)">
-        Цэс хоёр түвшнээс хэтрэхгүй бөгөөд дотоод холбоос нийтлэгдсэн контент руу л заана.
-      </p>
-      <CmsActions document={document} />
-    </form>
-  );
-};
-
-const LocationsForm = (props: {
-  initial: Extract<CmsDocument, { kind: "locations" }> | undefined;
-}) => {
-  const existing = props.initial?.content.locations.at(0);
   const form = createForm(() => ({
-    defaultValues: {
-      id: existing?.id ?? createLocationId(),
-      name: existing?.name ?? "Өрнүүн 48 салбар",
-      address: existing?.address ?? "Улаанбаатар хот",
-      openingHours: existing?.openingHours ?? "Өдөр бүр 09:00–21:00",
-      phone: existing?.phone ?? null,
-      active: existing?.active ?? true,
-      pickupEnabled: existing?.pickupEnabled ?? true,
-    },
+    defaultValues: { contentJson: JSON.stringify(props.document.content, null, 2) },
   }));
-  const document = () => ({
-    kind: "locations" as const,
-    content: props.initial
-      ? {
-          ...props.initial.content,
-          locations: props.initial.content.locations.map((location, index) =>
-            index === 0 ? { ...location, ...form.state.values } : location,
-          ),
-        }
-      : {
-          version: 1 as const,
-          locations: [{ ...form.state.values, directionsUrl: null }],
-        },
-  });
+  const document = (): CmsDocument => {
+    const content: unknown = JSON.parse(form.state.values.contentJson);
+    switch (props.document.kind) {
+      case "navigation":
+        return { kind: props.document.kind, content: v.parse(NavigationDocumentSchema, content) };
+      case "locations":
+        return { kind: props.document.kind, content: v.parse(LocationsDocumentSchema, content) };
+      case "policies":
+        return { kind: props.document.kind, content: v.parse(PoliciesDocumentSchema, content) };
+    }
+  };
   return (
-    <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
-      <form.Field name="name">
+    <form class="grid max-w-3xl gap-4" onSubmit={(event) => event.preventDefault()}>
+      <form.Field name="contentJson">
         {(field) => (
           <label class={labelClass}>
-            Байршлын нэр
-            <input
-              class={fieldClass}
-              maxlength="80"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="address">
-        {(field) => (
-          <label class={labelClass}>
-            Хаяг
+            {props.label}
             <textarea
-              class={`${fieldClass} min-h-20 py-3`}
-              maxlength="240"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="openingHours">
-        {(field) => (
-          <label class={labelClass}>
-            Ажиллах цаг
-            <input
-              class={fieldClass}
-              maxlength="240"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <div class="flex flex-wrap gap-6">
-        <form.Field name="active">
-          {(field) => (
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={field().state.value}
-                onChange={(event) => field().handleChange(event.currentTarget.checked)}
-              />
-              Нийтэд харагдана
-            </label>
-          )}
-        </form.Field>
-        <form.Field name="pickupEnabled">
-          {(field) => (
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={field().state.value}
-                onChange={(event) => field().handleChange(event.currentTarget.checked)}
-              />
-              Очиж авах боломжтой
-            </label>
-          )}
-        </form.Field>
-      </div>
-      <CmsActions document={document} />
-    </form>
-  );
-};
-
-const PoliciesForm = (props: {
-  initial: Extract<CmsDocument, { kind: "policies" }> | undefined;
-}) => {
-  const existing = props.initial?.content.policies.find(({ kind }) => kind === "delivery");
-  const form = createForm(() => ({
-    defaultValues: {
-      id: existing?.id ?? createPolicyId(),
-      title: existing?.title ?? "Хүргэлтийн бодлого",
-      contentMarkdown:
-        existing?.contentMarkdown ?? "## Хүргэлт\n\nЗахиалгын хүргэлтийн нөхцөлийг энд бичнэ.",
-    },
-  }));
-  const document = () => ({
-    kind: "policies" as const,
-    content: props.initial
-      ? {
-          ...props.initial.content,
-          policies: existing
-            ? props.initial.content.policies.map((policy) =>
-                policy.kind === "delivery"
-                  ? {
-                      ...policy,
-                      title: form.state.values.title,
-                      contentMarkdown: form.state.values.contentMarkdown,
-                    }
-                  : policy,
-              )
-            : [
-                ...props.initial.content.policies,
-                { ...form.state.values, kind: "delivery" as const },
-              ],
-        }
-      : {
-          version: 1 as const,
-          policies: [{ ...form.state.values, kind: "delivery" as const }],
-        },
-  });
-  return (
-    <form class="grid max-w-2xl gap-4" onSubmit={(event) => event.preventDefault()}>
-      <form.Field name="title">
-        {(field) => (
-          <label class={labelClass}>
-            Бодлогын гарчиг
-            <input
-              class={fieldClass}
-              maxlength="100"
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="contentMarkdown">
-        {(field) => (
-          <label class={labelClass}>
-            Агуулга (Markdown)
-            <textarea
-              class={`${fieldClass} min-h-56 py-3 font-mono`}
-              maxlength="20000"
+              class={`${fieldClass} min-h-96 py-3 font-mono text-sm`}
+              spellcheck={false}
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.value)}
             />
             <span class="font-normal text-(--muted)">
-              Гарчиг, жагсаалт, тод, налуу, эшлэл болон аюулгүй холбоос дэмжинэ. HTML болон зураг
-              хориглоно.
+              Энэ нь нэг бүтэн, хатуу схемтэй document. ID, бүх түвшний цэс, footer, чиглүүлэх
+              холбоос, Location болон Policy бүрийг хамтад нь хадгална.
             </span>
           </label>
         )}
@@ -406,7 +223,23 @@ const SettingsForm = () => {
   const query = useQuery(() => commerceSettingsQueryOptions());
   const mutation = useMutation(() => commerceSettingsMutationOptions(queryClient));
   return (
-    <Show when={query.data?.data} fallback={<p role="status">Тохиргоо ачаалж байна…</p>}>
+    <Show
+      when={query.data?.data}
+      fallback={
+        query.isError ? (
+          <div class="grid justify-items-start gap-3">
+            <p class="m-0 text-red-800" role="alert">
+              Худалдааны тохиргоог ачаалж чадсангүй.
+            </p>
+            <Button type="button" variant="secondary" onClick={() => query.refetch()}>
+              Дахин ачаалах
+            </Button>
+          </div>
+        ) : (
+          <p role="status">Тохиргоо ачаалж байна…</p>
+        )
+      }
+    >
       {(settings) => {
         const form = createForm(() => ({ defaultValues: settings() }));
         return (
@@ -504,6 +337,7 @@ const sections: readonly { kind: CmsDocumentKind | "settings"; label: string }[]
 ];
 export const CmsManagement = () => {
   const query = useQuery(() => cmsQueryOptions());
+  const cachePurge = useMutation(() => cmsCachePurgeMutationOptions());
   const [active, setActive] =
     createSignal<(typeof sections)[number]["kind"]>("storefront_identity");
   const document = (kind: CmsDocumentKind) => query.data?.data.find((entry) => entry.kind === kind);
@@ -523,6 +357,54 @@ export const CmsManagement = () => {
     const value = document("policies");
     return value?.kind === "policies" ? value : undefined;
   };
+  const emptyNavigation: Extract<CmsDocument, { kind: "navigation" }> = {
+    kind: "navigation",
+    content: {
+      version: 1,
+      primary: [
+        {
+          id: crypto.randomUUID(),
+          label: "Дэлгүүр",
+          enabled: true,
+          destination: { kind: "home" },
+          children: [],
+        },
+      ],
+      footer: [],
+    },
+  };
+  const emptyLocations: Extract<CmsDocument, { kind: "locations" }> = {
+    kind: "locations",
+    content: {
+      version: 1,
+      locations: [
+        {
+          id: createLocationId(),
+          name: "Өрнүүн 48 салбар",
+          address: "Улаанбаатар хот",
+          phone: null,
+          openingHours: "Өдөр бүр 09:00–21:00",
+          directionsUrl: null,
+          active: true,
+          pickupEnabled: true,
+        },
+      ],
+    },
+  };
+  const emptyPolicies: Extract<CmsDocument, { kind: "policies" }> = {
+    kind: "policies",
+    content: {
+      version: 1,
+      policies: [
+        {
+          id: createPolicyId(),
+          kind: "delivery",
+          title: "Хүргэлтийн бодлого",
+          contentMarkdown: "## Хүргэлт\n\nЗахиалгын хүргэлтийн нөхцөлийг энд бичнэ.",
+        },
+      ],
+    },
+  };
   return (
     <section class="border-t border-black/15 py-10" aria-labelledby="cms-title">
       <h2 id="cms-title" class="m-0 text-2xl font-bold">
@@ -531,6 +413,32 @@ export const CmsManagement = () => {
       <p class="mt-2 max-w-prose text-(--muted)">
         Ноорог нь нийтэд харагдахгүй. Нийтэлсний дараа Store-ийн SSR хуудас шууд шинэчлэгдэнэ.
       </p>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={cachePurge.isPending}
+          onClick={() => cachePurge.mutate()}
+        >
+          {cachePurge.isPending ? "Кэш цэвэрлэж байна…" : "Кэш цэвэрлэгээг дахин оролдох"}
+        </Button>
+        <Show when={cachePurge.data}>
+          {(result) => (
+            <p class="m-0 text-sm" role="status">
+              {result().data.cache === "purged"
+                ? "Дэлгүүрийн кэш шинэчлэгдлээ."
+                : result().data.cache === "not_required"
+                  ? "Хүлээгдэж буй кэш цэвэрлэгээ алга."
+                  : "Кэш цэвэрлэгдээгүй. Дахин оролдоно уу."}
+            </p>
+          )}
+        </Show>
+        <Show when={cachePurge.error}>
+          <p class="m-0 text-sm text-red-800" role="alert">
+            Кэш цэвэрлэгээг дахин эхлүүлж чадсангүй.
+          </p>
+        </Show>
+      </div>
       <div
         class="my-6 flex max-w-full gap-2 overflow-x-auto pb-2"
         role="tablist"
@@ -556,9 +464,14 @@ export const CmsManagement = () => {
           query.isPending ? (
             <p role="status">Агуулга ачаалж байна…</p>
           ) : (
-            <p class="text-red-800" role="alert">
-              Агуулгыг ачаалж чадсангүй. Өгөгдөл сэргээгдэх хүртэл засварлах боломжгүй.
-            </p>
+            <div class="grid justify-items-start gap-3">
+              <p class="m-0 text-red-800" role="alert">
+                Агуулгыг ачаалж чадсангүй. Өгөгдөл сэргээгдэх хүртэл засварлах боломжгүй.
+              </p>
+              <Button type="button" variant="secondary" onClick={() => query.refetch()}>
+                Дахин ачаалах
+              </Button>
+            </div>
           )
         }
       >
@@ -566,13 +479,22 @@ export const CmsManagement = () => {
           <IdentityForm initial={identity()} />
         </Show>
         <Show when={active() === "navigation"}>
-          <NavigationForm initial={navigation()} />
+          <FullCmsDocumentForm
+            document={navigation() ?? emptyNavigation}
+            label="Бүрэн Navigation document"
+          />
         </Show>
         <Show when={active() === "locations"}>
-          <LocationsForm initial={locations()} />
+          <FullCmsDocumentForm
+            document={locations() ?? emptyLocations}
+            label="Бүрэн Locations document"
+          />
         </Show>
         <Show when={active() === "policies"}>
-          <PoliciesForm initial={policies()} />
+          <FullCmsDocumentForm
+            document={policies() ?? emptyPolicies}
+            label="Бүрэн Policies document"
+          />
         </Show>
         <Show when={active() === "settings"}>
           <SettingsForm />

@@ -1,5 +1,6 @@
 ---
 import type { StoreBackend } from "@ecom/api";
+import StoreShell from "./StoreShell.astro";
 import StoreLayout from "../layouts/StoreLayout.astro";
 
 type PublicGroupingListing = NonNullable<
@@ -8,20 +9,18 @@ type PublicGroupingListing = NonNullable<
 interface Props {
   listing: PublicGroupingListing;
   kindLabel: string;
+  shell: Awaited<ReturnType<StoreBackend["storefront"]["readShell"]>>;
 }
-const { listing, kindLabel } = Astro.props;
+const { listing, kindLabel, shell } = Astro.props;
+const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
 const money = new Intl.NumberFormat("mn-MN");
 const imageWidths = [320, 640, 960, 1280];
 const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
   imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
 ---
-<StoreLayout title={`${listing.grouping.name} · Өрнүүн 48`} description={listing.grouping.description || `${listing.grouping.name} бүтээгдэхүүн`}>
+<StoreLayout title={`${listing.grouping.name} · ${storeName}`} description={listing.grouping.description || `${listing.grouping.name} бүтээгдэхүүн`}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
-  <header class="site-header">
-    <a class="wordmark" href="/" transition:name="wordmark"><b>48</b><span>Өрнүүн</span></a>
-    <nav aria-label="Үндсэн цэс"><a href="/">Дэлгүүр</a><a href="/story">Бидний тухай</a></nav>
-    <a class="admin-link" href="/admin">Удирдлага</a>
-  </header>
+  <StoreShell shell={shell} currentPath={Astro.url.pathname} fallbackName={storeName}>
   <main id="content" class="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8 sm:py-20">
     <header class="border-b border-black/15 pb-8">
       <p class="mb-3 text-sm font-bold text-(--muted)">{kindLabel}</p>
@@ -62,4 +61,5 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
       })}
     </ul>
   </main>
+  </StoreShell>
 </StoreLayout>

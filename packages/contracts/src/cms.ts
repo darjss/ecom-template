@@ -123,15 +123,34 @@ export const LocationsDocumentSchema = v.strictObject({
   ),
 });
 
+const acceptedInlineMarkdown = (source: string) => {
+  let remainder = source;
+  remainder = remainder.replaceAll(/\[([^]\n]+)\]\((https:\/\/[^\s)]+)\)/g, "$1");
+  remainder = remainder.replaceAll(/\*\*([^*\n]+)\*\*/g, "$1");
+  remainder = remainder.replaceAll(/\*([^*\n]+)\*/g, "$1");
+  return !/(?:\[|\]|\(|\)|\*|_|`|<|>|\||\\)/.test(remainder);
+};
+
+const acceptedPolicyMarkdown = (value: string) =>
+  value.split("\n").every((line) => {
+    if (line === "") {
+      return true;
+    }
+    if (/^###?\s/.test(line)) {
+      return acceptedInlineMarkdown(line.replace(/^###?\s/, ""));
+    }
+    if (/^-\s/.test(line)) {
+      return acceptedInlineMarkdown(line.slice(2));
+    }
+    if (/^(?:#|>|\+\s|\*\s|\d+[.)]\s|\s{4}|-{3,}|_{3,}|\*{3,})/.test(line)) {
+      return false;
+    }
+    return acceptedInlineMarkdown(line);
+  });
+
 const markdown = v.pipe(
   boundedText(20_000),
-  v.check(
-    (value) =>
-      !/<[a-z!/][^>]*>/i.test(value) &&
-      !/!\[[^\]]*\]\([^)]*\)/.test(value) &&
-      !/^\s*\|.*\|\s*$/m.test(value),
-    "Policy content contains unsupported Markdown",
-  ),
+  v.check(acceptedPolicyMarkdown, "Policy content contains unsupported Markdown"),
 );
 export const PoliciesDocumentSchema = v.strictObject({
   version: VersionSchema,
@@ -201,10 +220,17 @@ export const CmsDocumentRecordSchema = v.strictObject({
   publishedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
 });
 export const CmsDocumentListResponseSchema = v.strictObject({ data: v.array(CmsDocumentSchema) });
+const CmsCacheOutcomeSchema = v.picklist(["not_required", "purged", "committed_but_not_purged"]);
 export const CmsDocumentResponseSchema = v.strictObject({
   data: v.strictObject({
     document: CmsDocumentSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
+    cache: CmsCacheOutcomeSchema,
+    cachePurgeRequestId: v.nullable(v.string()),
+  }),
+});
+export const CmsCachePurgeResponseSchema = v.strictObject({
+  data: v.strictObject({
+    cache: CmsCacheOutcomeSchema,
     cachePurgeRequestId: v.nullable(v.string()),
   }),
 });

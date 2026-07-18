@@ -185,6 +185,7 @@ export const cmsDocuments = sqliteTable(
     ),
     check("cms_documents_status_check", sql`${table.status} IN ('draft', 'published')`),
     check("cms_documents_version_check", sql`${table.schemaVersion} = 1`),
+    check("cms_documents_json_check", sql`json_valid(${table.contentJson})`),
     check(
       "cms_documents_lifecycle_check",
       sql`(${table.status} = 'draft' AND ${table.publishedAt} IS NULL) OR (${table.status} = 'published' AND ${table.publishedAt} IS NOT NULL)`,
@@ -225,6 +226,10 @@ export const commerceSettings = sqliteTable(
   },
   (table) => [
     check("commerce_settings_key_check", sql`${table.key} = 'commerce'`),
+    check(
+      "commerce_settings_booleans_check",
+      sql`${table.bankTransferEnabled} IN (0, 1) AND ${table.cashOnDeliveryEnabled} IN (0, 1) AND ${table.customerAccountsEnabled} IN (0, 1) AND ${table.telegramEnabled} IN (0, 1) AND ${table.pickupEnabled} IN (0, 1) AND ${table.deliveryEnabled} IN (0, 1)`,
+    ),
     check(
       "commerce_settings_delivery_fee_check",
       sql`${table.deliveryFeeMnt} BETWEEN 0 AND 10000000`,
