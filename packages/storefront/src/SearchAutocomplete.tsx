@@ -64,6 +64,7 @@ const SearchAutocompleteList = (props: Props) => {
       event.preventDefault();
       setActiveIndex((index) => (index <= 0 ? count - 1 : index - 1));
     } else if (event.key === "Escape") {
+      event.preventDefault();
       close();
     } else if (event.key === "Enter" && activeIndex() >= 0) {
       const choice = choices()[activeIndex()];
