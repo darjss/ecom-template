@@ -17,5 +17,6 @@ export const catalogSku = (slug: string, ownerKind: CatalogSkuOwnerKind, ownerId
 
 export const compactSku = (value: string) =>
   value
+    .normalize("NFKC")
     .replaceAll(/[A-Z]/g, (character) => String.fromCharCode(character.charCodeAt(0) + 32))
     .replaceAll(/[-/\p{White_Space}]/gu, "");
