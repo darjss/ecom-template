@@ -113,7 +113,7 @@ export const catalogQueries = {
   async create(actor: StaffActor, input: CreateProductInput) {
     const id = createProductId();
     const variantId = createVariantId();
-    const sku = catalogSku(input.slug, variantId);
+    const sku = catalogSku(input.slug, "variant", variantId);
     const stockItemId = createStockItemId();
     const correlationId = crypto.randomUUID();
     const now = new Date();

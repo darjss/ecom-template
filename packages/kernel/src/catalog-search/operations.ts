@@ -1,13 +1,7 @@
 import { Result } from "better-result";
-import { catalogSearchQueries } from "./persistence";
+import { catalogSearchQueries, type CatalogSearchInput } from "./persistence";
 
-export type CatalogSearchInput = {
-  readonly query: string;
-  readonly category?: string;
-  readonly collection?: string;
-  readonly page: number;
-  readonly limit: number;
-};
+export type { CatalogSearchInput } from "./persistence";
 export type CatalogSearchFailure = { readonly code: "infrastructure_unavailable" };
 
 export const searchCatalog = async (input: CatalogSearchInput) =>

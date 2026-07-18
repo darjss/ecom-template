@@ -555,7 +555,7 @@ export const catalogVariantQueries = {
         ),
       );
       const insertSkus = newVariants.map((variant) => {
-        const sku = catalogSku(product.slug, variant.id);
+        const sku = catalogSku(product.slug, "variant", variant.id);
         return db.insert(skus).select(
           db
             .select({

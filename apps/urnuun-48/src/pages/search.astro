@@ -11,21 +11,21 @@ const parameters = parseCatalogSearchParameters(Astro.url.searchParams, {
   allowEmptyQuery: true,
   allowLimit: false,
 });
-if (!parameters.success) {
-  const canonical = new URL("/search", Astro.url.origin);
-  if (parameters.value.query) {
-    canonical.searchParams.set("q", parameters.value.query);
-  }
-  if (parameters.value.category) {
-    canonical.searchParams.set("category", parameters.value.category);
-  }
-  if (parameters.value.collection) {
-    canonical.searchParams.set("collection", parameters.value.collection);
-  }
-  if (parameters.value.page > 1) {
-    canonical.searchParams.set("page", String(parameters.value.page));
-  }
-  return Astro.redirect(canonical.pathname + canonical.search, 308);
+const canonical = new URL("/search", Astro.url.origin);
+if (parameters.value.query) {
+  canonical.searchParams.set("q", parameters.value.query);
+}
+if (parameters.value.category) {
+  canonical.searchParams.set("category", parameters.value.category);
+}
+if (parameters.value.collection) {
+  canonical.searchParams.set("collection", parameters.value.collection);
+}
+if (parameters.value.page > 1) {
+  canonical.searchParams.set("page", String(parameters.value.page));
+}
+if (!parameters.success || Astro.url.search !== canonical.search) {
+  return Astro.redirect(canonical.pathname + canonical.search, 307);
 }
 const { query, category, collection, page } = parameters.value;
 const [summary, shell, groupings] = await Promise.all([
@@ -77,7 +77,23 @@ const sourceLabels = {
         <h1 class="m-0 text-balance text-4xl font-extrabold tracking-[-0.035em] text-[var(--ink)] sm:text-6xl">Хэрэгтэй зүйлээ хурдан олоорой</h1>
       </header>
       <form action="/search" method="get" class="relative z-10 mb-10 flex flex-col gap-3 rounded-xl bg-[var(--wood)] p-4 sm:flex-row sm:items-end">
-        <SearchAutocomplete client:only="solid-js" initialQuery={query} />
+        <div class="relative flex-1">
+          <label class="sr-only" for="catalog-search-input">Каталогоос хайх</label>
+          <input
+            id="catalog-search-input"
+            name="q"
+            type="search"
+            role="combobox"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="catalog-search-suggestions"
+            aria-expanded="false"
+            value={query}
+            placeholder="Нэр эсвэл SKU"
+            class="h-12 w-full rounded-lg border border-[var(--line)] bg-white px-4 text-base text-[var(--ink)] outline-none placeholder:text-stone-600 focus-visible:ring-3 focus-visible:ring-blue-600"
+          />
+          <SearchAutocomplete client:only="solid-js" inputId="catalog-search-input" initialQuery={query} />
+        </div>
         <label class="grid gap-1 text-sm font-bold text-[var(--ink)]">
           Ангилал
           <select name="category" class="h-12 min-w-40 rounded-lg border border-[var(--line)] bg-white px-3" onchange="this.form.requestSubmit()">

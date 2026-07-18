@@ -21,68 +21,24 @@ import {
   skus,
   variants,
 } from "../db/schema";
+import { catalogSearchDocumentVersion, searchTokens, transliterateSearchText } from "./document";
 
-const normalizationVersion = "krilleer-cyr-lat-v1" as const;
-const cyrillicToLatin = new Map([
-  ["щ", "shch"],
-  ["ш", "sh"],
-  ["ч", "ch"],
-  ["ц", "c"],
-  ["ё", "yo"],
-  ["ю", "yu"],
-  ["я", "ya"],
-  ["е", "ye"],
-  ["ж", "j"],
-  ["х", "h"],
-  ["а", "a"],
-  ["б", "b"],
-  ["в", "v"],
-  ["г", "g"],
-  ["д", "d"],
-  ["э", "e"],
-  ["з", "z"],
-  ["и", "i"],
-  ["й", "yy"],
-  ["к", "k"],
-  ["л", "l"],
-  ["м", "m"],
-  ["н", "n"],
-  ["о", "o"],
-  ["п", "p"],
-  ["р", "r"],
-  ["с", "s"],
-  ["т", "t"],
-  ["у", "u"],
-  ["ф", "f"],
-  ["ө", "q"],
-  ["ү", "w"],
-  ["ы", "y"],
-  ["ь", "ь"],
-  ["ъ", "'"],
-]);
+const nativePlans = [
+  { column: "title", field: "title", priority: 0 },
+  { column: "slug", field: "slug", priority: 1 },
+  { column: "facets", field: "category_tags", priority: 2 },
+  { column: "description", field: "description", priority: 3 },
+] as const;
+const transliterationPlans = [
+  { column: "latin_title", field: "title", priority: 0 },
+  { column: "latin_slug", field: "slug", priority: 1 },
+  { column: "latin_facets", field: "category_tags", priority: 2 },
+  { column: "latin_description", field: "description", priority: 3 },
+] as const;
+type SearchPlan = (typeof nativePlans)[number] | (typeof transliterationPlans)[number];
 
-const normalizeSearchText = (value: string) =>
-  value
-    .normalize("NFKC")
-    .toLocaleLowerCase("mn")
-    .replaceAll(/[\p{White_Space}\p{P}\p{S}]+/gu, " ")
-    .trim()
-    .replaceAll(/\s+/g, " ");
-
-const transliterate = (value: string) =>
-  [...normalizeSearchText(value)]
-    .map((character) => cyrillicToLatin.get(character) ?? character)
-    .join("");
-
-const matchExpression = (value: string, columns: readonly string[]) =>
-  value
-    .split(" ")
-    .filter(Boolean)
-    .map((token) => {
-      const term = `"${token.replaceAll('"', '""')}"*`;
-      return `(${columns.map((column) => `${column} : ${term}`).join(" OR ")})`;
-    })
-    .join(" AND ");
+const matchExpression = (tokens: readonly string[], column: SearchPlan["column"]) =>
+  tokens.map((token) => `${column} : "${token.replaceAll('"', '""')}"*`).join(" AND ");
 
 const SearchRowSchema = v.strictObject({
   item_id: v.string(),
@@ -90,21 +46,31 @@ const SearchRowSchema = v.strictObject({
   slug: v.string(),
   title: v.string(),
   description: v.string(),
-  facets: v.string(),
   price_mnt: v.number(),
+  matched_field: v.picklist(["slug", "title", "category_tags", "description"]),
   rank: v.number(),
 });
 type SearchRow = v.InferOutput<typeof SearchRowSchema>;
 
 const searchRows = async (
-  match: string,
+  tokens: readonly string[],
+  plans: readonly SearchPlan[],
   category: string | undefined,
   collection: string | undefined,
   limit: number,
   offset: number,
 ) => {
-  const filters = ["catalog_search MATCH ?", "item.state = 'published'"];
-  const bindings: (string | number)[] = [match];
+  const fieldMatches = plans
+    .map(
+      ({ field, priority }) => `
+        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 1, 2, 3, 6, 1, 2) AS rank,
+          '${field}' AS matched_field, ${priority} AS field_priority
+        FROM catalog_search
+        WHERE catalog_search MATCH ?`,
+    )
+    .join(" UNION ALL ");
+  const filters = ["best.field_rank = 1", "item.state = 'published'"];
+  const bindings: (string | number)[] = plans.map(({ column }) => matchExpression(tokens, column));
   if (category) {
     filters.push(
       "EXISTS (SELECT 1 FROM catalog_item_categories membership JOIN categories category ON category.id = membership.category_id WHERE membership.catalog_item_id = item.id AND category.state = 'active' AND category.slug = ?)",
@@ -119,12 +85,19 @@ const searchRows = async (
   }
   bindings.push(limit, offset);
   const result = await env.DB.prepare(`
-    SELECT catalog_search.item_id, catalog_search.kind, item.slug, item.name AS title,
-      item.description, catalog_search.facets, item.price_mnt, bm25(catalog_search, 0, 0, 1, 4, 1.5, 2, 1) AS rank
-    FROM catalog_search
-    JOIN catalog_items item ON item.id = catalog_search.item_id
+    WITH field_matches AS (${fieldMatches}),
+    best AS (
+      SELECT *, row_number() OVER (
+        PARTITION BY item_id ORDER BY rank ASC, field_priority ASC
+      ) AS field_rank
+      FROM field_matches
+    )
+    SELECT best.item_id, best.kind, item.slug, item.name AS title, item.description,
+      item.price_mnt, best.matched_field, best.rank
+    FROM best
+    JOIN catalog_items item ON item.id = best.item_id
     WHERE ${filters.join(" AND ")}
-    ORDER BY rank ASC, item.name COLLATE NOCASE ASC, item.id ASC
+    ORDER BY best.rank ASC, best.field_priority ASC, item.name COLLATE NOCASE ASC, item.id ASC
     LIMIT ? OFFSET ?
   `)
     .bind(...bindings)
@@ -149,7 +122,16 @@ const exactSku = async (query: string, category?: string, collection?: string) =
       catalogItems,
       or(eq(catalogItems.id, variants.productId), eq(catalogItems.id, skus.bundleId)),
     )
-    .where(and(eq(skus.skuCompact, compactSku(query)), eq(catalogItems.state, "published")))
+    .where(
+      and(
+        eq(skus.skuCompact, compactSku(query)),
+        eq(catalogItems.state, "published"),
+        or(
+          eq(skus.ownerKind, "bundle"),
+          and(eq(skus.ownerKind, "variant"), eq(variants.state, "active")),
+        ),
+      ),
+    )
     .limit(1);
   const row = rows.at(0);
   if (!row) {
@@ -203,31 +185,9 @@ const imagesByItem = async (ids: readonly string[]) => {
   );
 };
 
-const fieldFor = (
-  row: SearchRow,
-  normalized: string,
-  source: "native" | "krilleer_transliteration",
-) => {
-  const first = normalized.split(" ")[0] ?? normalized;
-  const comparable = (value: string) =>
-    source === "native" ? normalizeSearchText(value) : transliterate(value);
-  if (comparable(row.slug).includes(first)) {
-    return "slug" as const;
-  }
-  if (comparable(row.title).includes(first)) {
-    return "title" as const;
-  }
-  if (comparable(row.facets).includes(first)) {
-    return "category_tags" as const;
-  }
-  return "description" as const;
-};
-
 const projectRows = async (
   rows: readonly SearchRow[],
   source: "native" | "krilleer_transliteration",
-  normalized: string,
-  ambiguous: boolean,
 ) => {
   const images = await imagesByItem(rows.map(({ item_id }) => item_id));
   return rows.map((row) =>
@@ -243,8 +203,8 @@ const projectRows = async (
       priceMnt: row.price_mnt,
       images: images.get(v.parse(CatalogItemIdSchema, row.item_id)) ?? [],
       matchedSource: source,
-      matchedField: fieldFor(row, normalized, source),
-      confidence: source === "native" ? "high" : ambiguous ? "low" : "medium",
+      matchedField: row.matched_field,
+      confidence: source === "native" ? "high" : "medium",
     }),
   );
 };
@@ -262,11 +222,15 @@ const shortcutLists = async (query: string) => {
       .where(eq(collections.state, "active"))
       .orderBy(asc(collections.name), asc(collections.id)),
   ]);
-  const native = normalizeSearchText(query);
-  const latin = transliterate(query);
+  const nativeTokens = searchTokens(query);
+  const latinTokens = searchTokens(transliterateSearchText(query));
   const matches = ({ name }: { readonly name: string }) => {
-    const normalizedName = normalizeSearchText(name);
-    return normalizedName.includes(native) || transliterate(normalizedName).includes(latin);
+    const nativeName = name.toLowerCase();
+    const latinName = transliterateSearchText(name);
+    return (
+      nativeTokens.every((token) => nativeName.includes(token)) ||
+      latinTokens.every((token) => latinName.includes(token))
+    );
   };
   return {
     categories: categoryRows
@@ -300,14 +264,30 @@ export type CatalogSearchInput = {
   readonly limit: number;
 };
 
+const diagnostics = async () => {
+  const result = await env.DB.prepare(
+    "SELECT canonical_count, projection_count, missing_count, orphan_count, duplicate_count, mismatched_count FROM catalog_search_diagnostics",
+  ).first();
+  return v.parse(
+    v.strictObject({
+      canonical_count: v.number(),
+      projection_count: v.number(),
+      missing_count: v.number(),
+      orphan_count: v.number(),
+      duplicate_count: v.number(),
+      mismatched_count: v.number(),
+    }),
+    result,
+  );
+};
+
 export const catalogSearchQueries = {
   async search(input: CatalogSearchInput): Promise<CatalogSearchResponse> {
-    const normalized = normalizeSearchText(input.query);
+    const nativeTokens = searchTokens(input.query);
     const offset = (input.page - 1) * input.limit;
     const sku = await exactSku(input.query, input.category, input.collection);
     let items: CatalogItemSearchResult[] = [];
     let hasNext = false;
-    let ambiguity: CatalogSearchResponse["ambiguity"] = null;
     if (sku && input.page === 1) {
       const images = await imagesByItem([sku.itemId]);
       items = [
@@ -325,9 +305,9 @@ export const catalogSearchQueries = {
         }),
       ];
     } else if (!sku) {
-      const nativeMatch = matchExpression(normalized, ["slug", "title", "description", "facets"]);
       let rows = await searchRows(
-        nativeMatch,
+        nativeTokens,
+        nativePlans,
         input.category,
         input.collection,
         input.limit + 1,
@@ -336,14 +316,14 @@ export const catalogSearchQueries = {
       const nativeExists =
         rows.length > 0 ||
         (input.page > 1 &&
-          (await searchRows(nativeMatch, input.category, input.collection, 1, 0)).length > 0);
+          (await searchRows(nativeTokens, nativePlans, input.category, input.collection, 1, 0))
+            .length > 0);
       let source: "native" | "krilleer_transliteration" = "native";
-      let matched = normalized;
       if (!nativeExists) {
         source = "krilleer_transliteration";
-        matched = transliterate(normalized);
         rows = await searchRows(
-          matchExpression(matched, ["latin"]),
+          searchTokens(transliterateSearchText(input.query)),
+          transliterationPlans,
           input.category,
           input.collection,
           input.limit + 1,
@@ -351,58 +331,26 @@ export const catalogSearchQueries = {
         );
       }
       hasNext = rows.length > input.limit;
-      const pageRows = rows.slice(0, input.limit);
-      const ambiguityRows =
-        source === "krilleer_transliteration" && input.page > 1
-          ? await searchRows(
-              matchExpression(matched, ["latin"]),
-              input.category,
-              input.collection,
-              8,
-              0,
-            )
-          : rows.slice(0, 8);
-      const ambiguous = source === "krilleer_transliteration" && ambiguityRows.length > 1;
-      items = await projectRows(pageRows, source, matched, ambiguous);
-      ambiguity = ambiguous
-        ? {
-            confidence: "low",
-            candidateIds: ambiguityRows.map(({ item_id }) => v.parse(CatalogItemIdSchema, item_id)),
-          }
-        : null;
+      items = await projectRows(rows.slice(0, input.limit), source);
     }
     return {
       query: input.query,
-      normalizationVersion,
+      normalizationVersion: catalogSearchDocumentVersion,
       results: { items, page: input.page, pageSize: input.limit, hasNext },
-      ambiguity,
+      ambiguity: null,
       shortcuts: await shortcutLists(input.query),
     };
   },
 
-  async diagnostics() {
-    const result = await env.DB.prepare(
-      "SELECT canonical_count, projection_count, missing_count, orphan_count, duplicate_count FROM catalog_search_diagnostics",
-    ).first();
-    return v.parse(
-      v.strictObject({
-        canonical_count: v.number(),
-        projection_count: v.number(),
-        missing_count: v.number(),
-        orphan_count: v.number(),
-        duplicate_count: v.number(),
-      }),
-      result,
-    );
-  },
+  diagnostics,
 
   async repair() {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM catalog_search"),
       env.DB.prepare(
-        "INSERT INTO catalog_search(item_id, kind, slug, title, description, facets, latin) SELECT item_id, kind, slug, title, description, facets, latin FROM catalog_search_documents",
+        "INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets FROM catalog_search_documents",
       ),
     ]);
-    return this.diagnostics();
+    return diagnostics();
   },
 };

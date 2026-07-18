@@ -260,7 +260,7 @@ export const bundleQueries = {
   async create(input: CreateBundleInput) {
     const db = database();
     const id = createBundleId();
-    const sku = catalogSku(input.slug, id);
+    const sku = catalogSku(input.slug, "bundle", id);
     const now = new Date();
     try {
       await db.batch([
