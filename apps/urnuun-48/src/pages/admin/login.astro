@@ -1,8 +1,13 @@
 ---
 import { AdminHealthStatus, StaffLoginForm } from "@ecom/admin";
+import { resolveStoreRequestOrigin } from "@ecom/api";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import { storeDefinition } from "../../profile/definition";
 
 Astro.response.headers.set("Cache-Control", "private, no-store");
+const requestOrigin = resolveStoreRequestOrigin(Astro.request, storeDefinition.profile.slug);
+const showLocalLogin =
+  requestOrigin !== undefined && new URL(requestOrigin).hostname.endsWith(".localhost");
 ---
 <AdminLayout title="Ажилтны нэвтрэх · Өрнүүн 48">
   <main id="admin-content" class="grid min-h-screen place-items-center p-6">
@@ -20,6 +25,34 @@ Astro.response.headers.set("Cache-Control", "private, no-store");
         Зөвшөөрөгдсөн Google хаягаар нэвтэрсний дараа удирдлагын хэсэг нээгдэнэ.
       </p>
       <StaffLoginForm client:only="solid-js" />
+      {showLocalLogin && (
+        <form
+          class="mt-6 border-t border-black/10 pt-6"
+          method="post"
+          action="/api/auth/staff/dev-login"
+        >
+          <label class="block text-sm font-bold" for="local-owner-email">
+            Local development Owner
+          </label>
+          <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+            <input
+              class="min-h-12 min-w-0 flex-1 rounded-lg border border-black/20 bg-white px-4 outline-0 focus-visible:ring-3 focus-visible:ring-(--focus)"
+              id="local-owner-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+              placeholder="owner@example.com"
+            />
+            <button
+              class="min-h-12 rounded-lg bg-(--ink) px-5 font-bold text-(--paper) focus-visible:ring-3 focus-visible:ring-(--focus) focus-visible:ring-offset-3"
+              type="submit"
+            >
+              Local-аар нэвтрэх
+            </button>
+          </div>
+        </form>
+      )}
       <div class="mt-8 flex items-center justify-between gap-4 border-t border-black/10 pt-5 text-sm">
         <span>Системийн төлөв</span>
         <AdminHealthStatus client:only="solid-js" />

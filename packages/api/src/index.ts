@@ -37,6 +37,7 @@ import {
   approveStaff,
   attachCatalogImage,
   changeStaffRole,
+  createLocalOwnerSession,
   createProduct,
   createStaff,
   createStaffAuth,
@@ -102,6 +103,10 @@ const apiError = (
   v.parse(StaffLifecycleApiErrorSchema, {
     error: { code, message, ...(reason ? { reason } : {}) },
   });
+
+const LocalStaffLoginBodySchema = v.strictObject({
+  email: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+});
 
 const MediaUploadBodySchema = v.strictObject({
   file: v.instance(File),
@@ -279,6 +284,40 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )
+    .post("/auth/staff/dev-login", async ({ body, request }) => {
+      const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
+      if (!origin || !new URL(origin).hostname.endsWith(".localhost")) {
+        return new Response(null, { status: 404 });
+      }
+      const input = v.safeParse(LocalStaffLoginBodySchema, body);
+      if (!input.success) {
+        return Response.json(
+          v.parse(ApiErrorSchema, {
+            error: { code: "validation", message: "A valid email is required" },
+          }),
+          { status: 422 },
+        );
+      }
+      const result = await createLocalOwnerSession(input.output.email, origin);
+      if (result.isErr()) {
+        return Response.json(
+          v.parse(ApiErrorSchema, {
+            error: {
+              code: result.error.code === "linked_identity" ? "conflict" : "unavailable",
+              message:
+                result.error.code === "linked_identity"
+                  ? "The email is linked to another Staff identity"
+                  : "Local Staff login is unavailable",
+            },
+          }),
+          { status: result.error.code === "linked_identity" ? 409 : 503 },
+        );
+      }
+      return new Response(null, {
+        status: 303,
+        headers: { location: "/admin", "set-cookie": result.value.cookie },
+      });
+    })
     .all("/auth/staff/*", async ({ body, request }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
       if (!origin) {

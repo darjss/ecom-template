@@ -9,6 +9,7 @@
   "dependencies": {
     "@ecom/contracts": "workspace:*",
     "better-auth": "1.6.23",
+    "better-call": "1.3.7",
     "better-result": "2.9.2",
     "drizzle-orm": "0.45.2",
     "es-toolkit": "1.49.0",
