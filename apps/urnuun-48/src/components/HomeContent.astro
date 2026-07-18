@@ -1,7 +1,8 @@
 ---
 import type { StoreBackend } from "@ecom/api";
 import type { HomepageDocument, OrderingNoticesDocument } from "@ecom/contracts";
-import { CustomerAuthIsland, renderPolicyMarkdown } from "@ecom/storefront";
+import { CustomerAuthIsland } from "@ecom/storefront";
+import { renderPolicyMarkdown } from "@ecom/storefront/policy";
 
 type Storefront = StoreBackend["storefront"];
 type CatalogItems = Awaited<ReturnType<Storefront["listPublishedCatalogItems"]>>;
