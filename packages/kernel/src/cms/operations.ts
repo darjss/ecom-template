@@ -5,6 +5,7 @@ import {
   type StoreDefinition,
 } from "@ecom/contracts";
 import { Result } from "better-result";
+import { uniq } from "es-toolkit";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { purgeCmsCache } from "../catalog/cache";
 import { cmsQueries } from "./persistence";
@@ -56,7 +57,7 @@ const validateDocument = async (
   }
   if (document.kind === "locations") {
     const ids = document.content.locations.map(({ id }) => id);
-    if (new Set(ids).size !== ids.length) {
+    if (uniq(ids).length !== ids.length) {
       return { code: "duplicate_identity" };
     }
     if (!publication) {
@@ -73,7 +74,7 @@ const validateDocument = async (
   if (document.kind === "policies") {
     const ids = document.content.policies.map(({ id }) => id);
     const kinds = document.content.policies.map(({ kind }) => kind);
-    if (new Set(ids).size !== ids.length || new Set(kinds).size !== kinds.length) {
+    if (uniq(ids).length !== ids.length || uniq(kinds).length !== kinds.length) {
       return { code: "duplicate_identity" };
     }
     if (!publication) {
@@ -118,7 +119,7 @@ const validateNavigation = (
     ...document.content.footer.flatMap(({ items }) => items),
   ];
   const allIds = [...document.content.footer.map(({ id }) => id), ...allItems.map(({ id }) => id)];
-  if (new Set(allIds).size !== allIds.length) {
+  if (uniq(allIds).length !== allIds.length) {
     return { code: "navigation_cycle" };
   }
   if (document.content.primary.some(({ children }) => children.length > 12)) {

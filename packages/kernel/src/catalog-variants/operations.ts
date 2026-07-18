@@ -10,18 +10,19 @@ import { findCatalogProductById } from "../catalog-reader/persistence";
 import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogVariantQueries } from "./persistence";
 
+type CatalogVariantFailureCode =
+  | "forbidden"
+  | "not_found"
+  | "immutable_configuration"
+  | "duplicate_combination"
+  | "invalid_combination"
+  | "invalid_publication"
+  | "media_not_owned"
+  | "published_bundle_dependency"
+  | "infrastructure_unavailable";
 export type CatalogVariantFailure = {
-  readonly code:
-    | "forbidden"
-    | "not_found"
-    | "immutable_configuration"
-    | "duplicate_combination"
-    | "invalid_combination"
-    | "invalid_publication"
-    | "media_not_owned"
-    | "published_bundle_dependency"
-    | "infrastructure_unavailable";
-};
+  [Code in CatalogVariantFailureCode]: { readonly code: Code };
+}[CatalogVariantFailureCode];
 
 const authorized = (actor: StaffActor) =>
   hasStaffCapability(actor.role, "catalog_cms") &&

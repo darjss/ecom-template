@@ -15,6 +15,7 @@ import {
   type UpdateBundleInput,
 } from "@ecom/contracts";
 import { and, asc, desc, eq, exists, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import type { StaffActor } from "../staff/operations";
@@ -33,7 +34,6 @@ import {
 } from "../db/schema";
 
 const skuFromBundleId = (id: BundleId) => `BUNDLE-${id.slice("bundle_".length).toUpperCase()}`;
-const distinct = (values: readonly string[]) => new Set(values).size === values.length;
 
 const acceptedBundleAuditSelection = (
   actor: StaffActor,
@@ -371,7 +371,9 @@ export const bundleQueries = {
         : { kind: "infrastructure" as const };
   },
   async saveComponents(id: BundleId, input: SaveBundleComponentsInput) {
-    if (!distinct(input.components.map(({ variantId }) => variantId))) {
+    if (
+      uniq(input.components.map(({ variantId }) => variantId)).length !== input.components.length
+    ) {
       return { kind: "duplicate_component" as const };
     }
     if (
@@ -465,13 +467,14 @@ export const bundleQueries = {
       })),
     );
     if (
-      !distinct(definitions.map(({ id: definitionId }) => definitionId)) ||
-      !distinct(definitions.map(({ key }) => key)) ||
-      !distinct(definitions.map(({ position }) => String(position))) ||
+      uniq(definitions.map(({ id: definitionId }) => definitionId)).length !== definitions.length ||
+      uniq(definitions.map(({ key }) => key)).length !== definitions.length ||
+      uniq(definitions.map(({ position }) => position)).length !== definitions.length ||
       definitions.some(
         (definition) =>
-          !distinct(definition.values.map(({ key }) => key)) ||
-          !distinct(definition.values.map(({ position }) => String(position))),
+          uniq(definition.values.map(({ key }) => key)).length !== definition.values.length ||
+          uniq(definition.values.map(({ position }) => position)).length !==
+            definition.values.length,
       )
     ) {
       return { kind: "invalid_personalization" as const };

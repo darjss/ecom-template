@@ -14,26 +14,28 @@ import {
   type UpdateBundleInput,
 } from "@ecom/contracts";
 import { Result } from "better-result";
+import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { purgeCatalogItemCache } from "../catalog/cache";
 import { bundleQueries, readPersonalizations } from "./persistence";
 
+type BundleOperationFailureCode =
+  | "forbidden"
+  | "not_found"
+  | "duplicate_slug"
+  | "invalid_lifecycle"
+  | "invalid_publication"
+  | "invalid_component"
+  | "duplicate_component"
+  | "immutable_components"
+  | "slug_locked"
+  | "published_cms_dependency"
+  | "invalid_personalization"
+  | "infrastructure_unavailable";
 export type BundleOperationFailure = {
-  readonly code:
-    | "forbidden"
-    | "not_found"
-    | "duplicate_slug"
-    | "invalid_lifecycle"
-    | "invalid_publication"
-    | "invalid_component"
-    | "duplicate_component"
-    | "immutable_components"
-    | "slug_locked"
-    | "published_cms_dependency"
-    | "invalid_personalization"
-    | "infrastructure_unavailable";
-};
+  [Code in BundleOperationFailureCode]: { readonly code: Code };
+}[BundleOperationFailureCode];
 
 export type BundleMutationResult = {
   readonly bundle: Bundle;
@@ -282,7 +284,7 @@ export const validatePersonalizationAnswers = (
     return Result.err<never, BundleOperationFailure>({ code: "invalid_personalization" });
   }
   const answers = parsed.output;
-  if (new Set(answers.map(({ key }) => key)).size !== answers.length) {
+  if (uniq(answers.map(({ key }) => key)).length !== answers.length) {
     return Result.err<never, BundleOperationFailure>({ code: "invalid_personalization" });
   }
   const active = definitions.filter(({ state }) => state === "active");

@@ -59,6 +59,7 @@ import {
   type StaffOperationFailure,
   type StorefrontReader,
 } from "@ecom/kernel";
+import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createBundleRoutes } from "./bundle-routes";
@@ -102,21 +103,23 @@ const MediaUploadBodySchema = v.strictObject({
   altText: v.string(),
 });
 
-type CatalogFailureCode = (
-  | CatalogOperationFailure
-  | CatalogMediaFailure
-  | CatalogVariantFailure
-)["code"];
-
-const catalogConflict = (message: string) =>
-  ({ status: 409, envelopeCode: "conflict", message }) as const;
-const catalogFailures = {
-  forbidden: { status: 403, envelopeCode: "forbidden", message: "Catalog authority is required" },
-  not_found: {
-    status: 404,
-    envelopeCode: "not_found",
-    message: "Requested catalog resource was not found",
-  },
+type CatalogFailure = CatalogOperationFailure | CatalogMediaFailure | CatalogVariantFailure;
+type CatalogFailureMapping = {
+  status: number;
+  envelopeCode: "forbidden" | "not_found" | "validation" | "conflict" | "unavailable";
+  message: string;
+};
+const catalogMapping = (
+  status: number,
+  envelopeCode: CatalogFailureMapping["envelopeCode"],
+  message: string,
+): CatalogFailureMapping => ({ status, envelopeCode, message });
+const catalogConflict = (message: string) => () => catalogMapping(409, "conflict", message);
+const catalogFailureMapping = createPipeHandlers<CatalogFailure>(
+  "code",
+).match<CatalogFailureMapping>({
+  forbidden: () => catalogMapping(403, "forbidden", "Catalog authority is required"),
+  not_found: () => catalogMapping(404, "not_found", "Requested catalog resource was not found"),
   duplicate_slug: catalogConflict("Product slug is already in use"),
   duplicate_combination: catalogConflict("Each Variant combination must be unique"),
   invalid_combination: catalogConflict("Variant choices must belong to this Product"),
@@ -134,40 +137,25 @@ const catalogFailures = {
   inventory_inconsistent: catalogConflict("Reserved inventory truth requires reconciliation"),
   inventory_limit: catalogConflict("Inventory on-hand cannot exceed 1,000,000"),
   conflict: catalogConflict("Inventory changed concurrently"),
-  unsupported_media_type: {
-    status: 422,
-    envelopeCode: "validation",
-    message: "The declared image type must match JPEG, PNG, or WebP bytes",
-  },
-  invalid_media_bytes: {
-    status: 422,
-    envelopeCode: "validation",
-    message: "The upload is not a valid JPEG, PNG, or WebP image",
-  },
-  media_too_large: {
-    status: 422,
-    envelopeCode: "validation",
-    message: "The image must be no larger than 8 MiB",
-  },
-  infrastructure_unavailable: {
-    status: 503,
-    envelopeCode: "unavailable",
-    message: "Catalog infrastructure is unavailable",
-  },
-} as const satisfies Record<
-  CatalogFailureCode,
-  {
-    status: number;
-    envelopeCode: "forbidden" | "not_found" | "validation" | "conflict" | "unavailable";
-    message: string;
-  }
->;
+  unsupported_media_type: () =>
+    catalogMapping(
+      422,
+      "validation",
+      "The declared image type must match JPEG, PNG, or WebP bytes",
+    ),
+  invalid_media_bytes: () =>
+    catalogMapping(422, "validation", "The upload is not a valid JPEG, PNG, or WebP image"),
+  media_too_large: () =>
+    catalogMapping(422, "validation", "The image must be no larger than 8 MiB"),
+  infrastructure_unavailable: () =>
+    catalogMapping(503, "unavailable", "Catalog infrastructure is unavailable"),
+});
 
 const catalogError = (
   failure: CatalogOperationFailure | CatalogMediaFailure | CatalogVariantFailure,
   status: (code: number, body: unknown) => unknown,
 ) => {
-  const mapped = catalogFailures[failure.code];
+  const mapped = catalogFailureMapping(failure);
   return status(
     mapped.status,
     v.parse(CatalogApiErrorSchema, {

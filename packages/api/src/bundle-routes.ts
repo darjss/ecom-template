@@ -23,6 +23,7 @@ import {
   type BundleOperationFailure,
   type StaffActor,
 } from "@ecom/kernel";
+import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 
@@ -43,15 +44,22 @@ const validationError = (status: Status, message: string) =>
     }),
   );
 
-const bundleConflict = (message: string) =>
-  ({ status: 409, envelopeCode: "conflict", message }) as const;
-const bundleFailures = {
-  forbidden: { status: 403, envelopeCode: "forbidden", message: "Catalog authority is required" },
-  not_found: {
-    status: 404,
-    envelopeCode: "not_found",
-    message: "Bundle or Catalog Item was not found",
-  },
+type BundleFailureMapping = {
+  status: number;
+  envelopeCode: "forbidden" | "not_found" | "conflict" | "unavailable";
+  message: string;
+};
+const bundleMapping = (
+  status: number,
+  envelopeCode: BundleFailureMapping["envelopeCode"],
+  message: string,
+): BundleFailureMapping => ({ status, envelopeCode, message });
+const bundleConflict = (message: string) => () => bundleMapping(409, "conflict", message);
+const bundleFailureMapping = createPipeHandlers<BundleOperationFailure>(
+  "code",
+).match<BundleFailureMapping>({
+  forbidden: () => bundleMapping(403, "forbidden", "Catalog authority is required"),
+  not_found: () => bundleMapping(404, "not_found", "Bundle or Catalog Item was not found"),
   duplicate_slug: bundleConflict("Catalog slug is already in use"),
   invalid_lifecycle: bundleConflict("Bundle lifecycle transition is not valid"),
   invalid_publication: bundleConflict(
@@ -65,22 +73,12 @@ const bundleFailures = {
   slug_locked: bundleConflict("A Published Bundle slug cannot change"),
   published_cms_dependency: bundleConflict("Published Homepage content depends on this Bundle"),
   invalid_personalization: bundleConflict("Personalization definitions are invalid"),
-  infrastructure_unavailable: {
-    status: 503,
-    envelopeCode: "unavailable",
-    message: "Bundle infrastructure is unavailable",
-  },
-} as const satisfies Record<
-  BundleOperationFailure["code"],
-  {
-    status: number;
-    envelopeCode: "forbidden" | "not_found" | "conflict" | "unavailable";
-    message: string;
-  }
->;
+  infrastructure_unavailable: () =>
+    bundleMapping(503, "unavailable", "Bundle infrastructure is unavailable"),
+});
 
 const bundleError = (failure: BundleOperationFailure, status: Status) => {
-  const mapped = bundleFailures[failure.code];
+  const mapped = bundleFailureMapping(failure);
   return status(
     mapped.status,
     v.parse(BundleApiErrorSchema, {

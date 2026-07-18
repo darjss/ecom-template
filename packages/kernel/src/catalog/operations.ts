@@ -11,26 +11,29 @@ import { resolvePendingCatalogCachePurge } from "./cache";
 import { inventoryQueries } from "../inventory/persistence";
 import { catalogQueries } from "./persistence";
 
+type CatalogOperationFailureCode =
+  | "forbidden"
+  | "not_found"
+  | "duplicate_slug"
+  | "invalid_lifecycle"
+  | "invalid_publication"
+  | "published_bundle_dependency"
+  | "published_cms_dependency"
+  | "reservation_blocked"
+  | "inventory_inconsistent"
+  | "inventory_limit"
+  | "conflict"
+  | "infrastructure_unavailable";
 export type CatalogOperationFailure = {
-  readonly code:
-    | "forbidden"
-    | "not_found"
-    | "duplicate_slug"
-    | "invalid_lifecycle"
-    | "invalid_publication"
-    | "published_bundle_dependency"
-    | "published_cms_dependency"
-    | "reservation_blocked"
-    | "inventory_inconsistent"
-    | "inventory_limit"
-    | "conflict"
-    | "infrastructure_unavailable";
-  readonly blockers?: readonly {
-    readonly reservationId: string;
-    readonly orderReference: string;
-    readonly quantity: number;
-  }[];
-};
+  [Code in CatalogOperationFailureCode]: {
+    readonly code: Code;
+    readonly blockers?: readonly {
+      readonly reservationId: string;
+      readonly orderReference: string;
+      readonly quantity: number;
+    }[];
+  };
+}[CatalogOperationFailureCode];
 
 export type CatalogMutationResult = {
   readonly product: Product;
@@ -49,11 +52,9 @@ const execute = async <Value>(
   if (!authorized(actor)) {
     return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
   }
-  try {
-    return await operation();
-  } catch {
-    return Result.err<never, CatalogOperationFailure>({ code: "infrastructure_unavailable" });
-  }
+  return (await Result.tryPromise(operation))
+    .mapError((): CatalogOperationFailure => ({ code: "infrastructure_unavailable" }))
+    .andThen((result) => result);
 };
 
 const unchangedCache = (product: Product): CatalogMutationResult => ({

@@ -9,6 +9,7 @@ import type {
   TagInput,
 } from "@ecom/contracts";
 import { Result } from "better-result";
+import { uniq } from "es-toolkit";
 import { createLogger } from "evlog";
 import { purgeCatalogListingCache } from "../catalog/cache";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
@@ -112,7 +113,7 @@ const completeMutation = async (result: PersistenceMutationResult) => {
 };
 
 const duplicateMembership = (input: GroupingMembershipInput) =>
-  new Set(input.catalogItemIds).size !== input.catalogItemIds.length;
+  uniq(input.catalogItemIds).length !== input.catalogItemIds.length;
 
 const runAuthorizedMutation = async (
   actor: StaffActor,
