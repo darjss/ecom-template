@@ -58,54 +58,42 @@ export const PersonalizationSelectValueSchema = v.strictObject({
   position: PersonalizationPositionSchema,
   state: v.picklist(["active", "archived"]),
 });
-const personalizationDefinitionSchemas = <
-  Id extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  State extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  SelectValue extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
->(
-  id: Id,
-  state: State,
-  selectValue: SelectValue,
-) => {
-  const fields = {
-    id,
-    key: PersonalizationKeySchema,
-    label: PersonalizationLabelSchema,
-    position: PersonalizationPositionSchema,
-    required: v.boolean(),
-    state,
-  };
-  return [
-    v.strictObject({
-      ...fields,
-      kind: v.literal("text"),
-      maxLength: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(240)),
-      values: v.tuple([]),
-    }),
-    v.strictObject({
-      ...fields,
-      kind: v.literal("single_select"),
-      maxLength: v.null(),
-      values: v.pipe(v.array(selectValue), v.minLength(1), v.maxLength(12)),
-    }),
-    v.strictObject({
-      ...fields,
-      kind: v.literal("checkbox"),
-      maxLength: v.null(),
-      values: v.tuple([]),
-    }),
-  ] as const;
+const PersonalizationStateSchema = v.picklist(["active", "archived"]);
+const PersonalizationFields = {
+  key: PersonalizationKeySchema,
+  label: PersonalizationLabelSchema,
+  position: PersonalizationPositionSchema,
+  required: v.boolean(),
+};
+const PersonalizationDefinitionFields = {
+  ...PersonalizationFields,
+  id: PersonalizationIdSchema,
+  state: PersonalizationStateSchema,
+};
+const PersonalizationDraftFields = {
+  ...PersonalizationFields,
+  id: v.optional(PersonalizationIdSchema),
+  state: v.optional(PersonalizationStateSchema, "active"),
+};
+const PersonalizationKindFields = {
+  text: {
+    kind: v.literal("text"),
+    maxLength: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(240)),
+    values: v.tuple([]),
+  },
+  singleSelect: { kind: v.literal("single_select"), maxLength: v.null() },
+  checkbox: { kind: v.literal("checkbox"), maxLength: v.null(), values: v.tuple([]) },
 };
 
-const PersonalizationStateSchema = v.picklist(["active", "archived"]);
-export const PersonalizationDefinitionSchema = v.variant(
-  "kind",
-  personalizationDefinitionSchemas(
-    PersonalizationIdSchema,
-    PersonalizationStateSchema,
-    PersonalizationSelectValueSchema,
-  ),
-);
+export const PersonalizationDefinitionSchema = v.variant("kind", [
+  v.strictObject({ ...PersonalizationDefinitionFields, ...PersonalizationKindFields.text }),
+  v.strictObject({
+    ...PersonalizationDefinitionFields,
+    ...PersonalizationKindFields.singleSelect,
+    values: v.pipe(v.array(PersonalizationSelectValueSchema), v.minLength(1), v.maxLength(12)),
+  }),
+  v.strictObject({ ...PersonalizationDefinitionFields, ...PersonalizationKindFields.checkbox }),
+]);
 export const PersonalizationDefinitionsSchema = v.pipe(
   v.array(PersonalizationDefinitionSchema),
   v.maxLength(12),
@@ -118,14 +106,15 @@ const PersonalizationValueDraftSchema = v.strictObject({
   position: PersonalizationPositionSchema,
   state: v.optional(PersonalizationStateSchema, "active"),
 });
-export const PersonalizationDefinitionDraftSchema = v.variant(
-  "kind",
-  personalizationDefinitionSchemas(
-    v.optional(PersonalizationIdSchema),
-    v.optional(PersonalizationStateSchema, "active"),
-    PersonalizationValueDraftSchema,
-  ),
-);
+export const PersonalizationDefinitionDraftSchema = v.variant("kind", [
+  v.strictObject({ ...PersonalizationDraftFields, ...PersonalizationKindFields.text }),
+  v.strictObject({
+    ...PersonalizationDraftFields,
+    ...PersonalizationKindFields.singleSelect,
+    values: v.pipe(v.array(PersonalizationValueDraftSchema), v.minLength(1), v.maxLength(12)),
+  }),
+  v.strictObject({ ...PersonalizationDraftFields, ...PersonalizationKindFields.checkbox }),
+]);
 export const SavePersonalizationsInputSchema = v.strictObject({
   definitions: v.pipe(
     v.array(PersonalizationDefinitionDraftSchema),
