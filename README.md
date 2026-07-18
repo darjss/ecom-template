@@ -35,7 +35,7 @@ curl --cookie .delivery/proof/urnuun-48/cookies.txt https://urnuun-48.shop.local
 pnpm store:proof:auth --cleanup --store urnuun-48 --vars /absolute/path/to/.dev.vars
 ```
 
-Pass `--persist-to <absolute-path>` and `--origin <https-origin>` together when another worktree must use the Store process owner's exact Wrangler state and origin. The ignored mode-0700 `.delivery/proof/<store>/` directory contains a mode-0600 curl jar, browser state, and non-secret handoff. Commands print paths and identity only.
+Pass `--persist-to <absolute-path>` and `--origin <https-origin>` together when another worktree must use the Store process owner's exact Wrangler state and origin. Explicit origins must be a running Portless route for `<worktree?>.<store>.shop.localhost`; other HTTPS hosts are refused before session creation. The ignored mode-0700 `.delivery/proof/<store>/` directory contains a mode-0600 curl jar, browser state, and non-secret handoff. Commands print paths and identity only.
 
 ## Delivery shells
 

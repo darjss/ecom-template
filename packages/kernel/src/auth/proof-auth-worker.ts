@@ -61,6 +61,10 @@ const createProofSession = async (email: string, origin: string) => {
   if (!user.emailVerified) {
     user = await adapter.updateUser(user.id, { emailVerified: true });
   }
+  const existingSessions = await adapter.listSessions(user.id, { onlyActiveSessions: true });
+  if (existingSessions.length > 0) {
+    return json({ error: "active_session_exists" }, { status: 409 });
+  }
   const session = await adapter.createSession(user.id);
   if (!session) {
     return json({ error: "session_unavailable" }, { status: 503 });
@@ -84,12 +88,18 @@ const createProofSession = async (email: string, origin: string) => {
     await adapter.deleteSession(session.token);
     return json({ error: "session_verification_failed" }, { status: 503 });
   }
+  const activeSessions = await adapter.listSessions(user.id, { onlyActiveSessions: true });
+  if (activeSessions.length !== 1 || activeSessions[0]?.token !== session.token) {
+    await adapter.deleteSession(session.token);
+    return json({ error: "session_count_invalid" }, { status: 503 });
+  }
   return json(
     {
       email: verified.user.email,
       expiresAt: verified.session.expiresAt.toISOString(),
       role: verified.session.role,
       staffId: verified.session.staffId,
+      activeSessionCount: activeSessions.length,
     },
     { headers: { "set-cookie": serialized } },
   );
@@ -102,13 +112,17 @@ const revokeProofSession = async (cookie: string, origin: string) => {
   }
   const headers = new Headers({ cookie });
   const session = await auth.api.getSession({ headers });
+  const adapter = (await auth.$context).internalAdapter;
   if (session) {
-    await (await auth.$context).internalAdapter.deleteSession(session.session.token);
+    await adapter.deleteSession(session.session.token);
   }
   const remaining = await auth.api.getSession({ headers });
-  return remaining
+  const activeSessions = session
+    ? await adapter.listSessions(session.user.id, { onlyActiveSessions: true })
+    : [];
+  return remaining || activeSessions.length > 0
     ? json({ error: "session_revocation_failed" }, { status: 503 })
-    : json({ revoked: true });
+    : json({ revoked: true, activeSessionCount: 0 });
 };
 
 export default {

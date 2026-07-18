@@ -10,7 +10,16 @@ const PortlessOriginSchema = v.pipe(
   v.url(),
   v.check((value) => {
     const url = new URL(value);
-    return url.protocol === "https:" && url.port === "" && url.hostname.endsWith(".localhost");
+    return (
+      url.protocol === "https:" &&
+      url.port === "" &&
+      url.hostname.endsWith(".localhost") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === ""
+    );
   }),
 );
 const WorkerIdentitySchema = v.pipe(v.string(), v.trim(), v.minLength(1));
@@ -49,6 +58,34 @@ const readWorktreeIdentity = async () => {
 };
 
 export const parsePortlessOrigin = (input: unknown) => v.parse(PortlessOriginSchema, input);
+
+export const parseStorePortlessOrigin = (input: unknown, slugInput: string) => {
+  const origin = parsePortlessOrigin(input);
+  const slug = v.parse(StoreSlugSchema, slugInput);
+  const labels = new URL(origin).hostname.split(".");
+  const expectedSuffix = [slug, "shop", "localhost"];
+  const suffix = labels.slice(-expectedSuffix.length);
+  const prefix = labels.slice(0, -expectedSuffix.length);
+  if (
+    suffix.join(".") !== expectedSuffix.join(".") ||
+    prefix.length > 1 ||
+    (prefix.length === 1 && !v.safeParse(HostnameLabelSchema, prefix[0]).success)
+  ) {
+    throw new Error(`Origin must belong to local Store ${slug}`);
+  }
+  return origin;
+};
+
+export const requirePortlessRoute = async (origin: string) => {
+  const { stdout } = await execFileOutput("portless", ["list"]);
+  const routeLine = stdout.split("\n").find((line) => line.split(/\s+/).includes(origin));
+  const pid = routeLine?.match(/\(pid (\d+)\)/)?.at(1);
+  if (!pid) {
+    throw new Error(`No running Portless process owns ${origin}`);
+  }
+  process.kill(Number(pid), 0);
+  return Number(pid);
+};
 
 export const readCommitIdentity = async () => {
   const { stdout } = await execFileOutput("git", ["rev-parse", "HEAD"]);
