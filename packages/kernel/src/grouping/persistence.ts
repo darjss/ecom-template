@@ -100,10 +100,10 @@ const tagDto = (row: typeof tags.$inferSelect, catalogItemIds: string[]) => ({
   label: row.label,
 });
 
-const catalogItemIds = (rows: PromiseLike<{ id: string }[]>) =>
+const selectCatalogItemIds = (rows: PromiseLike<{ id: string }[]>) =>
   rows.then((values) => values.map((row) => row.id));
 const categoryCatalogItemIds = (id: string) =>
-  catalogItemIds(
+  selectCatalogItemIds(
     database()
       .select({ id: catalogItemCategories.catalogItemId })
       .from(catalogItemCategories)
@@ -111,7 +111,7 @@ const categoryCatalogItemIds = (id: string) =>
       .orderBy(asc(catalogItemCategories.catalogItemId)),
   );
 const collectionCatalogItemIds = (id: string) =>
-  catalogItemIds(
+  selectCatalogItemIds(
     database()
       .select({ id: catalogItemCollections.catalogItemId })
       .from(catalogItemCollections)
@@ -119,7 +119,7 @@ const collectionCatalogItemIds = (id: string) =>
       .orderBy(asc(catalogItemCollections.position)),
   );
 const tagCatalogItemIds = (id: string) =>
-  catalogItemIds(
+  selectCatalogItemIds(
     database()
       .select({ id: catalogItemTags.catalogItemId })
       .from(catalogItemTags)
