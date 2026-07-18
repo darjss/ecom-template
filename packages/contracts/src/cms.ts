@@ -124,8 +124,11 @@ export const LocationsDocumentSchema = v.strictObject({
 });
 
 const acceptedInlineMarkdown = (source: string) => {
+  if (source.includes("![")) {
+    return false;
+  }
   let remainder = source;
-  remainder = remainder.replaceAll(/\[([^]\n]+)\]\((https:\/\/[^\s)]+)\)/g, "$1");
+  remainder = remainder.replaceAll(/\[([^\n]+?)\]\((https:\/\/[^\s)]+)\)/g, "$1");
   remainder = remainder.replaceAll(/\*\*([^*\n]+)\*\*/g, "$1");
   remainder = remainder.replaceAll(/\*([^*\n]+)\*/g, "$1");
   return !/(?:\[|\]|\(|\)|\*|_|`|<|>|\||\\)/.test(remainder);
