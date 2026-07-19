@@ -13,7 +13,7 @@ import {
 } from "@tanstack/solid-query";
 import { createSignal, onCleanup, Show } from "solid-js";
 
-const CustomerAuthForm = () => {
+export const CustomerAuthPanel = () => {
   const queryClient = useQueryClient();
   const session = createQuery(() => customerSessionQueryOptions());
   const mutation = createMutation(() => customerAuthMutationOptions(queryClient));
@@ -169,7 +169,7 @@ export const CustomerAuthIsland = () => {
   const queryClient = createStoreQueryClient();
   return (
     <QueryClientProvider client={queryClient}>
-      <CustomerAuthForm />
+      <CustomerAuthPanel />
     </QueryClientProvider>
   );
 };

@@ -4,10 +4,10 @@ import {
   MongolianPhoneSchema,
   type MongolianPhone,
 } from "@ecom/contracts";
-import { and, eq, gt, lte, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { customerOtpChallenges, customers } from "../db/schema";
+import { customerOtpChallenges, customers, orders } from "../db/schema";
 
 const ReturnedRequestSchema = v.object({ requestId: v.string() });
 const ReturnedCustomerSchema = v.object({
@@ -86,19 +86,27 @@ const consumeChallenge = async (phone: MongolianPhone, digest: string, now: numb
   return row ? v.parse(ReturnedRequestSchema, row) : undefined;
 };
 
-const establish = async (phone: MongolianPhone) => {
+const establishAndLinkOrders = async (phone: MongolianPhone) => {
   const db = database();
   const customerId = createCustomerId();
-  const [, rows] = await db.batch([
+  const now = new Date();
+  const [, , rows] = await db.batch([
     db
       .insert(customers)
       .values({
         id: customerId,
         normalizedPhone: phone,
         authUserId: customerId,
-        createdAt: new Date(),
+        createdAt: now,
       })
       .onConflictDoNothing({ target: customers.normalizedPhone }),
+    db
+      .update(orders)
+      .set({
+        customerId: sql`(SELECT ${customers.id} FROM ${customers} WHERE ${customers.normalizedPhone} = ${phone})`,
+        customerLinkedAt: now,
+      })
+      .where(and(eq(orders.recipientPhone, phone), isNull(orders.customerId))),
     db
       .select(customerSelection)
       .from(customers)
@@ -121,6 +129,6 @@ const findByAuthUserId = async (authUserId: string) => {
 export const customerQueries = {
   replaceChallenge,
   consumeChallenge,
-  establish,
+  establishAndLinkOrders,
   findByAuthUserId,
 };

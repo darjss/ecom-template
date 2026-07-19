@@ -13,6 +13,7 @@ import {
   createPaymentId,
   createReservationId,
   type CatalogItemId,
+  type CustomerId,
   type CheckoutQuote,
   type CheckoutQuoteInput,
   type PlaceOrderInput,
@@ -22,6 +23,7 @@ import { and, asc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import { database } from "../db/database";
+import type { OrderStatusAccess } from "../order";
 import type { CommercialFacts } from "./commercial";
 import {
   auditEvents,
@@ -310,6 +312,8 @@ export const commitPlacement = async (
   commercial: CommercialFacts,
   intentDigest: string,
   destination: PlacementDestination,
+  customerId: CustomerId | null,
+  statusAccess: OrderStatusAccess,
 ): Promise<PlaceOrderResult | undefined> => {
   const db = database();
   const orderId = createOrderId();
@@ -535,6 +539,11 @@ export const commitPlacement = async (
             "order_number",
           ),
         state: sql<"placed">`'placed'`.as("state"),
+        customerId: sql<string | null>`${customerId}`.as("customer_id"),
+        customerLinkedAt: sql<Date | null>`${customerId === null ? null : now.getTime()}`.as(
+          "customer_linked_at",
+        ),
+        statusTokenHash: sql<string>`${statusAccess.statusTokenHash}`.as("status_token_hash"),
         recipientName: sql<string>`${input.contact.recipientName}`.as("recipient_name"),
         recipientPhone: sql<string>`${input.contact.recipientPhone}`.as("recipient_phone"),
         currency: sql<"MNT">`'MNT'`.as("currency"),
@@ -891,6 +900,7 @@ export const commitPlacement = async (
             'orderId', ${orders.id},
             'orderNumber', ${orders.orderNumber},
             'orderState', 'placed',
+            'statusPath', ${statusAccess.statusPath},
             'totalMnt', ${orders.grandTotalMnt},
             'payment', ${paymentResult},
             'fulfillment', json_object('id', ${fulfillmentId}, 'mode', ${destination.kind}, 'state', 'unfulfilled'),

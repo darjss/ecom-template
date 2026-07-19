@@ -203,7 +203,7 @@ export const verifyCustomerOtp = async (
     if (!consumed) {
       return Result.err({ code: "invalid_otp" });
     }
-    const customer = await customerQueries.establish(phone.output);
+    const customer = await customerQueries.establishAndLinkOrders(phone.output);
     const response = await establishCustomerAuthSession(request, origin, customer.id, phone.output);
     return response
       ? Result.ok({ phone: phone.output, responseHeaders: response.headers })
@@ -223,6 +223,7 @@ export const readCustomerSession = async (request: Request, origin: string) => {
     return customer
       ? {
           kind: "active" as const,
+          customerId: customer.id,
           phone: customer.normalizedPhone,
           responseHeaders: session.responseHeaders,
         }

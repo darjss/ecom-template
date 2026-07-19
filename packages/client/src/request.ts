@@ -8,20 +8,13 @@ import { Result, type InferOk, type Result as ResultType } from "better-result";
 import * as v from "valibot";
 import { createApiClient } from "./eden";
 
-type EdenResponse<Data, ApiErrorEnvelope> = {
+type EdenResponse<Data> = {
   readonly data: Data | null;
-  readonly error: { readonly value: ApiErrorEnvelope } | null;
+  readonly error: { readonly value: unknown } | null;
 };
 
-export const requestResult = async <
-  ResponseData,
-  ResponseError,
-  DataInput,
-  Data,
-  ErrorInput,
-  ApiError,
->(
-  request: () => Promise<EdenResponse<ResponseData, ResponseError>>,
+export const requestResult = async <ResponseData, DataInput, Data, ErrorInput, ApiError>(
+  request: () => Promise<EdenResponse<ResponseData>>,
   dataSchema: v.GenericSchema<DataInput, Data>,
   errorSchema: v.GenericSchema<ErrorInput, { readonly error: ApiError }>,
   invalidDataMessage: string,

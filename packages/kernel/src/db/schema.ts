@@ -876,6 +876,9 @@ export const orders = sqliteTable(
     id: text("id").primaryKey(),
     orderNumber: integer("order_number").notNull().unique(),
     state: text("state", { enum: ["placed", "completed", "cancelled"] }).notNull(),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "restrict" }),
+    customerLinkedAt: integer("customer_linked_at", { mode: "timestamp_ms" }),
+    statusTokenHash: text("status_token_hash").unique(),
     recipientName: text("recipient_name").notNull(),
     recipientPhone: text("recipient_phone").notNull(),
     currency: text("currency", { enum: ["MNT"] }).notNull(),
@@ -911,11 +914,22 @@ export const orders = sqliteTable(
     ),
     check("orders_fingerprint_check", sql`length(${table.commercialFingerprint}) = 64`),
     check(
+      "orders_customer_link_check",
+      sql`(${table.customerId} IS NULL AND ${table.customerLinkedAt} IS NULL) OR (${table.customerId} IS NOT NULL AND ${table.customerLinkedAt} IS NOT NULL)`,
+    ),
+    check(
+      "orders_status_token_check",
+      sql`${table.statusTokenHash} IS NULL OR (length(${table.statusTokenHash}) = 64 AND ${table.statusTokenHash} NOT GLOB '*[^0123456789abcdef]*')`,
+    ),
+    check(
       "orders_free_delivery_check",
       sql`${table.freeDeliveryApplied} IN (0, 1) AND (${table.freeDeliveryThresholdMnt} IS NULL OR ${table.freeDeliveryThresholdMnt} >= 0)`,
     ),
     index("orders_state_created_idx").on(table.state, table.createdAt),
-    index("orders_phone_created_idx").on(table.recipientPhone, table.createdAt),
+    index("orders_customer_created_idx").on(table.customerId, table.createdAt),
+    index("orders_phone_created_idx")
+      .on(table.recipientPhone, table.createdAt)
+      .where(sql`${table.customerId} IS NULL`),
   ],
 );
 

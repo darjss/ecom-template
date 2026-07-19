@@ -6,6 +6,7 @@ import {
   type CustomerAuthMutation,
 } from "../customer/request";
 import { unwrapRequestResult } from "../request";
+import { customerOrdersQueryKey } from "./order";
 
 const customerSessionKey = ["customer", "session"] as const;
 
@@ -28,7 +29,10 @@ export const customerAuthMutationOptions = (queryClient: QueryClient) =>
       unwrapRequestResult(await requestCustomerAuthMutation(mutation)),
     onSuccess: async (_result, mutation) => {
       if (mutation.kind !== "request_otp") {
-        await queryClient.invalidateQueries({ queryKey: customerSessionKey });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: customerSessionKey }),
+          queryClient.invalidateQueries({ queryKey: customerOrdersQueryKey }),
+        ]);
       }
     },
   });

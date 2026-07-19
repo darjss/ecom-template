@@ -5,11 +5,19 @@ import {
   CheckoutQuoteResponseSchema,
   PlaceOrderInputSchema,
   PlaceOrderResponseSchema,
+  type StoreDefinition,
 } from "@ecom/contracts";
-import { placeOrder, quoteCheckout, readCheckoutOptions, type CheckoutFailure } from "@ecom/kernel";
+import {
+  placeOrder,
+  quoteCheckout,
+  readCheckoutOptions,
+  readCustomerSession,
+  type CheckoutFailure,
+} from "@ecom/kernel";
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
+import { resolveStoreRequestOrigin } from "./request-origin";
 
 type CheckoutFailureMapping = {
   status: number;
@@ -69,7 +77,7 @@ const mapping = createPipeHandlers<CheckoutFailure>("code").match<CheckoutFailur
   }),
 });
 
-export const createCheckoutRoutes = () =>
+export const createCheckoutRoutes = (definition: StoreDefinition) =>
   new Elysia({ aot: false })
     .get("/checkout/options", async ({ status }) => {
       const result = await readCheckoutOptions();
@@ -114,7 +122,7 @@ export const createCheckoutRoutes = () =>
         }),
       );
     })
-    .post("/checkout/place", async ({ body, status }) => {
+    .post("/checkout/place", async ({ body, request, status }) => {
       const input = v.safeParse(PlaceOrderInputSchema, body);
       if (!input.success) {
         return status(
@@ -127,7 +135,14 @@ export const createCheckoutRoutes = () =>
           }),
         );
       }
-      const result = await placeOrder(input.output);
+      const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
+      const session = origin
+        ? await readCustomerSession(request, origin)
+        : { kind: "anonymous" as const };
+      const result = await placeOrder(
+        input.output,
+        session.kind === "active" ? { id: session.customerId, phone: session.phone } : null,
+      );
       if (result.isOk()) {
         return v.parse(PlaceOrderResponseSchema, { data: result.value });
       }
