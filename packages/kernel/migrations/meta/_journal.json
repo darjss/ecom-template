@@ -169,6 +169,13 @@
       "when": 1784456806945,
       "tag": "0023_slimy_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1784459748156,
+      "tag": "0024_greedy_boomerang",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,33 @@
+---
+import { GuestTrackingIsland } from "@ecom/storefront";
+import StoreLayout from "../layouts/StoreLayout.astro";
+
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "private, no-store");
+Astro.response.headers.set("Referrer-Policy", "no-referrer");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+---
+<StoreLayout
+  title="Захиалгын явц · Өрнүүн 48"
+  description="Хувийн tracking холбоосоор нэг захиалгын явцыг шалгах"
+  noindex
+  noReferrer
+>
+  <script is:inline>
+    window.guestTrackingFragment = window.location.hash;
+    history.replaceState(null, "", "/tracking");
+  </script>
+  <header class="flex min-h-20 items-center border-b border-black/15 px-5 sm:px-10">
+    <a class="inline-flex items-center gap-3 font-extrabold no-underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-blue-600" href="/">
+      <b class="grid size-10 place-items-center bg-(--accent) text-white">48</b>
+      <span>Өрнүүн 48</span>
+    </a>
+  </header>
+  <main id="content" class="min-h-[calc(100vh-5rem)] bg-(--paper) px-4 py-10 sm:px-6 sm:py-16">
+    <div class="mx-auto mb-7 max-w-3xl">
+      <p class="m-0 max-w-prose text-sm font-bold text-black/65">Хувийн захиалгын мэдээлэл</p>
+      <h1 class="mt-2 mb-0 text-2xl leading-tight font-extrabold text-balance sm:text-4xl">Захиалгын явц</h1>
+    </div>
+    <GuestTrackingIsland client:only="solid-js" />
+  </main>
+</StoreLayout>

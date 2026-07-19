@@ -13,6 +13,7 @@ export * from "./discount";
 export * from "./grouping";
 export * from "./search";
 export * from "./text";
+export * from "./tracking";
 
 export const ApiErrorSchema = v.strictObject({
   error: v.strictObject({

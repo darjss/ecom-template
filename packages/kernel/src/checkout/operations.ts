@@ -10,6 +10,8 @@ import {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
+import { guestTrackingQueries } from "../guest-tracking/persistence";
+import { mintGuestTrackingCapability } from "../guest-tracking/operations";
 import { commercialFacts } from "./commercial";
 import { checkoutQueries, commitPlacement, readPlacement } from "./persistence";
 
@@ -397,13 +399,24 @@ export const placeOrder = async (
           : "pickup_unavailable",
       );
     }
+    const trackingCapability = await mintGuestTrackingCapability();
     const committed = await commitPlacement(
       input,
       current.value.quote,
       current.value.commercial,
       intentDigest,
       destination,
+      trackingCapability,
     );
+    if (
+      committed &&
+      (await guestTrackingQueries.hasHash(committed.orderId, trackingCapability.tokenHash))
+    ) {
+      return Result.ok({
+        ...committed,
+        trackingUrl: `/tracking#${committed.orderId}.${trackingCapability.token}`,
+      });
+    }
     if (committed) {
       return Result.ok(committed);
     }

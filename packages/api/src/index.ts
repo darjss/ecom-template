@@ -75,6 +75,7 @@ import { createDiscountRoutes } from "./discount-routes";
 import { createGroupingRoutes } from "./grouping-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 import { parseCatalogSearchParameters } from "./search-parameters";
+import { createTrackingRoutes } from "./tracking-routes";
 
 export { MediaUploadMultipartMaxBytes };
 export { parseCmsPreviewDocument } from "./cms-routes";
@@ -283,6 +284,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     })
     .use(createAvailabilityRoutes())
     .use(createCustomerAuthRoutes(definition, smsGateway))
+    .use(createTrackingRoutes())
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )

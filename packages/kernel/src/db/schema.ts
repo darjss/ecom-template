@@ -895,6 +895,7 @@ export const orders = sqliteTable(
     pickupAddress: text("pickup_address"),
     commercialFingerprint: text("commercial_fingerprint").notNull(),
     placedAt: integer("placed_at", { mode: "timestamp_ms" }).notNull(),
+    terminalAt: integer("terminal_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
@@ -910,6 +911,10 @@ export const orders = sqliteTable(
       sql`(${table.fulfillmentMode} = 'delivery' AND ${table.deliveryAddress} IS NOT NULL AND ${table.pickupLocationId} IS NULL AND ${table.pickupName} IS NULL AND ${table.pickupAddress} IS NULL) OR (${table.fulfillmentMode} = 'pickup' AND ${table.deliveryAddress} IS NULL AND ${table.pickupLocationId} IS NOT NULL AND ${table.pickupName} IS NOT NULL AND ${table.pickupAddress} IS NOT NULL)`,
     ),
     check("orders_fingerprint_check", sql`length(${table.commercialFingerprint}) = 64`),
+    check(
+      "orders_terminal_check",
+      sql`(${table.state} = 'placed' AND ${table.terminalAt} IS NULL) OR (${table.state} IN ('completed', 'cancelled') AND ${table.terminalAt} IS NOT NULL AND ${table.placedAt} <= ${table.terminalAt})`,
+    ),
     check(
       "orders_free_delivery_check",
       sql`${table.freeDeliveryApplied} IN (0, 1) AND (${table.freeDeliveryThresholdMnt} IS NULL OR ${table.freeDeliveryThresholdMnt} >= 0)`,
@@ -1177,6 +1182,34 @@ export const fulfillments = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("fulfillments_state_idx").on(table.state, table.createdAt)],
+);
+
+export const guestTrackingLinks = sqliteTable(
+  "guest_tracking_links",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .unique()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "guest_tracking_links_id_check",
+      sql`length(${table.id}) = 40 AND substr(${table.id}, 1, 14) = 'tracking_link_' AND substr(${table.id}, 15, 1) GLOB '[0-7]' AND substr(${table.id}, 15) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
+    ),
+    check("guest_tracking_links_hash_check", sql`length(${table.tokenHash}) = 64`),
+    check("guest_tracking_links_expiry_check", sql`${table.createdAt} < ${table.expiresAt}`),
+    check(
+      "guest_tracking_links_revocation_check",
+      sql`${table.revokedAt} IS NULL OR ${table.createdAt} <= ${table.revokedAt}`,
+    ),
+    index("guest_tracking_links_expiry_idx").on(table.expiresAt),
+  ],
 );
 
 export const placementIdempotency = sqliteTable(

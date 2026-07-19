@@ -69,6 +69,7 @@ export {
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export { discountMutationOptions, discountQueryOptions } from "./query/discount";
 export { healthQueryOptions } from "./query/health";
+export { guestTrackingQueryOptions } from "./query/tracking";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
 export { catalogSearchQueryOptions } from "./query/search";
 export { staffMutationOptions, staffQueryOptions } from "./query/staff";
@@ -85,6 +86,7 @@ export {
   type CustomerAuthMutationResult,
 } from "./customer/request";
 export { requestHealth } from "./request";
+export { requestGuestTracking } from "./tracking/request";
 export {
   requestCatalogSearch,
   type CatalogSearchData,

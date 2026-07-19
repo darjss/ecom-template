@@ -37,6 +37,10 @@ export const PaymentIdSchema = typeIdSchema("payment");
 export const PaymentEntryIdSchema = typeIdSchema("payment_entry");
 export const FulfillmentIdSchema = typeIdSchema("fulfillment");
 export const ReservationIdSchema = typeIdSchema("reservation");
+export const GuestTrackingUrlSchema = v.pipe(
+  v.string(),
+  v.regex(/^\/tracking#order_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}\.[A-Za-z0-9_-]{43}$/),
+);
 
 export const CheckoutAmountMntSchema = v.pipe(
   v.number(),
@@ -213,6 +217,7 @@ export const PlaceOrderResultSchema = v.strictObject({
     id: ReservationIdSchema,
     state: v.picklist(["active", "consumed"]),
   }),
+  trackingUrl: v.optional(GuestTrackingUrlSchema),
 });
 export const PlaceOrderResponseSchema = v.strictObject({ data: PlaceOrderResultSchema });
 export const CheckoutApiErrorSchema = v.strictObject({

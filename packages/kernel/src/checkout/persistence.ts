@@ -36,6 +36,7 @@ import {
   discountRedemptionEntries,
   discountRules,
   fulfillments,
+  guestTrackingLinks,
   inventoryEntries,
   inventoryReservationItems,
   inventoryReservations,
@@ -310,6 +311,12 @@ export const commitPlacement = async (
   commercial: CommercialFacts,
   intentDigest: string,
   destination: PlacementDestination,
+  trackingCapability: {
+    id: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdAt: Date;
+  },
 ): Promise<PlaceOrderResult | undefined> => {
   const db = database();
   const orderId = createOrderId();
@@ -574,6 +581,7 @@ export const commitPlacement = async (
           "commercial_fingerprint",
         ),
         placedAt: sql<Date>`${now.getTime()}`.as("placed_at"),
+        terminalAt: sql<Date | null>`NULL`.as("terminal_at"),
         createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
       })
       .from(commerceSettings)
@@ -847,6 +855,19 @@ export const commitPlacement = async (
     );
   }
   statements.push(
+    db.insert(guestTrackingLinks).select(
+      db
+        .select({
+          id: sql<string>`${trackingCapability.id}`.as("id"),
+          orderId: orders.id,
+          tokenHash: sql<string>`${trackingCapability.tokenHash}`.as("token_hash"),
+          expiresAt: sql<Date>`${trackingCapability.expiresAt.getTime()}`.as("expires_at"),
+          revokedAt: sql<Date | null>`NULL`.as("revoked_at"),
+          createdAt: sql<Date>`${trackingCapability.createdAt.getTime()}`.as("created_at"),
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId)),
+    ),
     db.insert(fulfillments).select(
       db
         .select({
