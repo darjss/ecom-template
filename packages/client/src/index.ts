@@ -67,6 +67,11 @@ export {
   commerceSettingsQueryOptions,
 } from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
+export {
+  customerOrdersQueryKey,
+  customerOrdersQueryOptions,
+  orderStatusQueryOptions,
+} from "./query/order";
 export { discountMutationOptions, discountQueryOptions } from "./query/discount";
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
@@ -84,6 +89,7 @@ export {
   type CustomerAuthMutation,
   type CustomerAuthMutationResult,
 } from "./customer/request";
+export { requestCustomerOrders, requestOrderStatus } from "./order/request";
 export { requestHealth } from "./request";
 export {
   requestCatalogSearch,

@@ -5,11 +5,14 @@ import {
   type CheckoutQuote,
   type CheckoutQuoteInput,
   type CheckoutQuoteLine,
+  type CustomerId,
+  type MongolianPhone,
   type PlaceOrderInput,
   type PlaceOrderResult,
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
+import { createOrderStatusAccess } from "../order";
 import { commercialFacts } from "./commercial";
 import { checkoutQueries, commitPlacement, readPlacement } from "./persistence";
 
@@ -343,8 +346,10 @@ const correctiveCheckout = async (input: CheckoutQuoteInput) => {
 
 export const placeOrder = async (
   input: PlaceOrderInput,
+  customer: { readonly id: CustomerId; readonly phone: MongolianPhone } | null,
 ): Promise<Result<PlaceOrderResult, CheckoutFailure>> => {
   const intentDigest = await digest(input);
+  const customerId = customer?.phone === input.contact.recipientPhone ? customer.id : null;
   try {
     const existing = await readPlacement(input.idempotencyKey);
     if (existing) {
@@ -403,6 +408,8 @@ export const placeOrder = async (
       current.value.commercial,
       intentDigest,
       destination,
+      customerId,
+      await createOrderStatusAccess(),
     );
     if (committed) {
       return Result.ok(committed);

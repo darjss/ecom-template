@@ -11,6 +11,8 @@ export * from "./client-error";
 export * from "./cms";
 export * from "./discount";
 export * from "./grouping";
+export * from "./money";
+export * from "./order";
 export * from "./search";
 export * from "./text";
 

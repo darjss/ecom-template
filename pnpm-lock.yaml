@@ -266,6 +266,9 @@ importers:
       '@tanstack/solid-query':
         specifier: 5.101.2
         version: 5.101.2(solid-js@1.9.13)
+      dismatch:
+        specifier: 2.6.0
+        version: 2.6.0
       micromark:
         specifier: 4.0.2
         version: 4.0.2

@@ -73,6 +73,7 @@ import { createCustomerAuthRoutes } from "./customer-routes";
 import { createCmsRoutes } from "./cms-routes";
 import { createDiscountRoutes } from "./discount-routes";
 import { createGroupingRoutes } from "./grouping-routes";
+import { createOrderRoutes } from "./order-routes";
 import { resolveStoreRequestOrigin } from "./request-origin";
 import { parseCatalogSearchParameters } from "./search-parameters";
 
@@ -283,6 +284,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     })
     .use(createAvailabilityRoutes())
     .use(createCustomerAuthRoutes(definition, smsGateway))
+    .use(createOrderRoutes(definition))
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )
@@ -637,7 +639,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     .use(createBundleRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createDiscountRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
-    .use(createCheckoutRoutes())
+    .use(createCheckoutRoutes(definition))
     .get("/catalog/search", async ({ request, status }) => {
       const parameters = parseCatalogSearchParameters(new URL(request.url).searchParams, {
         allowEmptyQuery: false,

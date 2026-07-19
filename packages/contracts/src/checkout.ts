@@ -16,6 +16,8 @@ import {
 import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import { LocationIdSchema } from "./cms";
 import { DiscountCodeSchema, DiscountRuleIdSchema } from "./discount";
+import { MoneyMntSchema } from "./money";
+import { OrderIdSchema, OrderStatusPathSchema } from "./order";
 
 const typeIdSchema = (prefix: string) =>
   v.pipe(
@@ -30,20 +32,12 @@ const typeIdSchema = (prefix: string) =>
     }, `Invalid ${prefix} ID`),
   );
 
-export const OrderIdSchema = typeIdSchema("order");
 export const OrderLineIdSchema = typeIdSchema("order_line");
 export const OrderDiscountIdSchema = typeIdSchema("order_discount");
 export const PaymentIdSchema = typeIdSchema("payment");
 export const PaymentEntryIdSchema = typeIdSchema("payment_entry");
 export const FulfillmentIdSchema = typeIdSchema("fulfillment");
 export const ReservationIdSchema = typeIdSchema("reservation");
-
-export const CheckoutAmountMntSchema = v.pipe(
-  v.number(),
-  v.integer(),
-  v.minValue(0),
-  v.maxValue(100_000_000_000_000),
-);
 export const CheckoutFulfillmentSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("delivery") }),
   v.strictObject({ kind: v.literal("pickup"), locationId: LocationIdSchema }),
@@ -106,10 +100,10 @@ export const CheckoutQuoteLineSchema = v.strictObject({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(120)),
   sku: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   quantity: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(999)),
-  unitPriceMnt: CheckoutAmountMntSchema,
-  merchandiseAmountMnt: CheckoutAmountMntSchema,
-  discountMnt: CheckoutAmountMntSchema,
-  totalMnt: CheckoutAmountMntSchema,
+  unitPriceMnt: MoneyMntSchema,
+  merchandiseAmountMnt: MoneyMntSchema,
+  discountMnt: MoneyMntSchema,
+  totalMnt: MoneyMntSchema,
   options: v.array(CheckoutOptionSnapshotSchema),
   personalizations: v.array(CheckoutPersonalizationSchema),
   bundleComponents: v.array(CheckoutBundleComponentSnapshotSchema),
@@ -125,7 +119,7 @@ export const CheckoutDiscountOutcomeSchema = v.variant("kind", [
     kind: v.literal("applied"),
     ruleId: DiscountRuleIdSchema,
     name: v.pipe(v.string(), v.minLength(1), v.maxLength(120)),
-    amountMnt: CheckoutAmountMntSchema,
+    amountMnt: MoneyMntSchema,
     submittedCode: v.nullable(DiscountCodeSchema),
     codeAccepted: v.boolean(),
   }),
@@ -133,19 +127,19 @@ export const CheckoutDiscountOutcomeSchema = v.variant("kind", [
 export const CheckoutQuoteSchema = v.strictObject({
   quotedAt: v.pipe(v.string(), v.isoTimestamp()),
   lines: v.array(CheckoutQuoteLineSchema),
-  subtotalMnt: CheckoutAmountMntSchema,
+  subtotalMnt: MoneyMntSchema,
   discount: CheckoutDiscountOutcomeSchema,
-  postDiscountMerchandiseMnt: CheckoutAmountMntSchema,
+  postDiscountMerchandiseMnt: MoneyMntSchema,
   fulfillment: CheckoutFulfillmentSchema,
-  deliveryFeeMnt: CheckoutAmountMntSchema,
+  deliveryFeeMnt: MoneyMntSchema,
   fees: v.array(
     v.strictObject({
       kind: v.literal("delivery"),
       label: v.string(),
-      amountMnt: CheckoutAmountMntSchema,
+      amountMnt: MoneyMntSchema,
     }),
   ),
-  totalMnt: CheckoutAmountMntSchema,
+  totalMnt: MoneyMntSchema,
   commercialFingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/)),
 });
 export const CheckoutQuoteResponseSchema = v.strictObject({ data: CheckoutQuoteSchema });
@@ -195,13 +189,14 @@ export const PlaceOrderResultSchema = v.strictObject({
   orderId: OrderIdSchema,
   orderNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
   orderState: v.literal("placed"),
-  totalMnt: CheckoutAmountMntSchema,
+  statusPath: OrderStatusPathSchema,
+  totalMnt: MoneyMntSchema,
   payment: v.nullable(
     v.strictObject({
       id: PaymentIdSchema,
       method: v.literal("bank_transfer"),
       state: v.literal("awaiting_confirmation"),
-      expectedAmountMnt: CheckoutAmountMntSchema,
+      expectedAmountMnt: MoneyMntSchema,
     }),
   ),
   fulfillment: v.strictObject({
@@ -251,9 +246,6 @@ export type CheckoutQuoteLine = v.InferOutput<typeof CheckoutQuoteLineSchema>;
 export type CheckoutClientError = v.InferOutput<typeof CheckoutClientErrorSchema>;
 export type PlaceOrderInput = v.InferOutput<typeof PlaceOrderInputSchema>;
 export type PlaceOrderResult = v.InferOutput<typeof PlaceOrderResultSchema>;
-export type OrderId = v.InferOutput<typeof OrderIdSchema>;
-
-export const createOrderId = () => typeidUnboxed("order");
 export const createOrderLineId = () => typeidUnboxed("order_line");
 export const createOrderDiscountId = () => typeidUnboxed("order_discount");
 export const createPaymentId = () => typeidUnboxed("payment");

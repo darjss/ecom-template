@@ -343,6 +343,12 @@ export const CheckoutQuote = () => {
                     {money.format(order.totalMnt)} ₮-ийн банкны шилжүүлэг баталгаажихыг хүлээж
                     байна. Шилжүүлгийн утгад захиалгын дугаараа бичнэ үү.
                   </p>
+                  <a
+                    class="mt-4 inline-flex min-h-11 items-center font-bold underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-(--focus)"
+                    href={order.statusPath}
+                  >
+                    Захиалгын төлөвийг нээх
+                  </a>
                 </div>
               )}
             </Show>

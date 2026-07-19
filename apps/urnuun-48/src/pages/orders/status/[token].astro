@@ -1,0 +1,33 @@
+---
+import { OrderStatusIsland } from "@ecom/storefront";
+import StoreShell from "../../../components/StoreShell.astro";
+import StoreLayout from "../../../layouts/StoreLayout.astro";
+import { storefront } from "../../../api";
+
+export const prerender = false;
+Astro.response.headers.set("cache-control", "private, no-store");
+Astro.response.headers.set("referrer-policy", "no-referrer");
+Astro.response.headers.set("x-robots-tag", "noindex, nofollow");
+const token = Astro.params.token ?? "";
+if (!/^[a-f0-9]{64}$/.test(token)) {
+  Astro.response.status = 404;
+}
+const [summary, shell, homeContent] = await Promise.all([
+  storefront.readSummary(),
+  storefront.readShell(),
+  storefront.readHomeCmsContent(),
+]);
+const storeName = shell.identity?.displayName ?? summary.storeName;
+---
+<StoreLayout title={`Захиалгын төлөв · ${storeName}`} description="Нэг захиалгын шууд төлөв" noindex>
+  <StoreShell shell={{ ...shell, announcement: homeContent.announcement }} currentPath="" fallbackName={summary.storeName}>
+    <main id="content" class="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+      <header class="mb-8 max-w-2xl">
+        <p class="m-0 text-sm font-bold text-(--muted)">Шууд төлөв</p>
+        <h1 class="m-0 mt-2 text-4xl font-bold">Захиалгын төлөв</h1>
+        <p class="mt-4 mb-0">Энэ холбоос зөвхөн нэг захиалгын төлөв, дүн, барааг харуулна.</p>
+      </header>
+      <OrderStatusIsland token={token} client:only="solid-js" />
+    </main>
+  </StoreShell>
+</StoreLayout>

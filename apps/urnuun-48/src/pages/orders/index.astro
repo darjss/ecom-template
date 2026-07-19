@@ -1,0 +1,28 @@
+---
+import { CustomerOrdersIsland } from "@ecom/storefront";
+import StoreShell from "../../components/StoreShell.astro";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+Astro.response.headers.set("cache-control", "private, no-store");
+Astro.response.headers.set("referrer-policy", "no-referrer");
+const [summary, shell, homeContent] = await Promise.all([
+  storefront.readSummary(),
+  storefront.readShell(),
+  storefront.readHomeCmsContent(),
+]);
+const storeName = shell.identity?.displayName ?? summary.storeName;
+---
+<StoreLayout title={`Миний захиалгууд · ${storeName}`} description="Утасны дугаараар баталгаажсан захиалгын түүх" noindex>
+  <StoreShell shell={{ ...shell, announcement: homeContent.announcement }} currentPath="/orders" fallbackName={summary.storeName}>
+    <main id="content" class="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
+      <header class="mb-8 max-w-2xl">
+        <p class="m-0 text-sm font-bold text-(--muted)">Customer Order history</p>
+        <h1 class="m-0 mt-2 text-4xl font-bold">Миний захиалгууд</h1>
+        <p class="mt-4 mb-0">Захиалга өгсөн утасны дугаараа нэг удаагийн кодоор баталгаажуулна уу.</p>
+      </header>
+      <CustomerOrdersIsland client:only="solid-js" />
+    </main>
+  </StoreShell>
+</StoreLayout>
