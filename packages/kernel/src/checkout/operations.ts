@@ -10,8 +10,7 @@ import {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
-import { commitPlacement, readPlacement } from "./placement-persistence";
-import { checkoutQueries } from "./persistence";
+import { checkoutQueries, commitPlacement, readPlacement } from "./persistence";
 
 type CheckoutFailureCode =
   | "catalog_unavailable"
