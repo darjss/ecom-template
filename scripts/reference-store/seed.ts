@@ -15,6 +15,7 @@ import {
 import { createPipeHandlers } from "dismatch";
 import * as v from "valibot";
 import { storeDefinition } from "../../apps/urnuun-48/src/profile/definition";
+import { encodeCmsDocument } from "../../packages/kernel/src/cms/codec";
 import { referenceStoreFixture } from "./fixture";
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../apps/urnuun-48");
@@ -265,7 +266,7 @@ const buildSeedSql = (cacheOwnedDifferences: ReadonlySet<string>) => {
 
       for (const document of referenceStoreFixture.cmsDocuments) {
         statements.push(
-          `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, JSON.stringify(document.content), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
+          `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, encodeCmsDocument(document), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
         );
       }
     }
@@ -370,11 +371,13 @@ const query = async (sql: string) => {
 };
 
 const CacheOwnedDifferenceSchema = v.object({ target: v.string() });
+const maxD1CompoundSelectTerms = 5;
 
 const readCacheOwnedDifferences = async () => {
   const statements = [
     `SELECT 'fixture' AS target WHERE NOT EXISTS (SELECT 1 FROM system_metadata WHERE key = 'reference_store_fixture' AND value = ${quote(fixtureVersion)})`,
     `SELECT 'storefront_cache' AS target WHERE EXISTS (SELECT 1 FROM cms_cache_purge_debt WHERE key = 'storefront')`,
+    `SELECT 'catalog_debt:' || product_id AS target FROM catalog_cache_purge_debts WHERE product_id IN (${list(catalogItemIds)})`,
     `SELECT 'commerce' AS target WHERE NOT EXISTS (SELECT 1 FROM commerce_settings WHERE key = 'commerce' AND bank_transfer_enabled = ${Number(commerceSettings.bankTransferEnabled)} AND cash_on_delivery_enabled = ${Number(commerceSettings.cashOnDeliveryEnabled)} AND customer_accounts_enabled = ${Number(commerceSettings.customerAccountsEnabled)} AND telegram_enabled = ${Number(commerceSettings.telegramEnabled)} AND pickup_enabled = ${Number(commerceSettings.pickupEnabled)} AND delivery_enabled = ${Number(commerceSettings.deliveryEnabled)} AND delivery_fee_mnt = ${commerceSettings.deliveryFeeMnt} AND free_delivery_threshold_mnt IS ${nullable(commerceSettings.freeDeliveryThresholdMnt)})`,
     ...catalogItems.map(
       (item) =>
@@ -382,14 +385,19 @@ const readCacheOwnedDifferences = async () => {
     ),
     ...referenceStoreFixture.cmsDocuments.map(
       (document) =>
-        `SELECT ${quote(document.kind)} AS target WHERE NOT EXISTS (SELECT 1 FROM cms_documents WHERE kind = ${quote(document.kind)} AND status = 'published' AND schema_version = 1 AND content_json = ${json(document.content)})`,
+        `SELECT ${quote(document.kind)} AS target WHERE NOT EXISTS (SELECT 1 FROM cms_documents WHERE kind = ${quote(document.kind)} AND status = 'published' AND schema_version = 1 AND content_json = ${quote(encodeCmsDocument(document))})`,
     ),
   ];
-  return new Set(
-    v
-      .parse(v.array(CacheOwnedDifferenceSchema), await query(statements.join(" UNION ALL ")))
-      .map(({ target }) => target),
-  );
+  const differences = new Set<string>();
+  for (let index = 0; index < statements.length; index += maxD1CompoundSelectTerms) {
+    const rows = await query(
+      statements.slice(index, index + maxD1CompoundSelectTerms).join(" UNION ALL "),
+    );
+    for (const { target } of v.parse(v.array(CacheOwnedDifferenceSchema), rows)) {
+      differences.add(target);
+    }
+  }
+  return differences;
 };
 
 const seedRemoteCacheOwnedContent = async (differences: ReadonlySet<string>) => {
@@ -431,6 +439,25 @@ const seedRemoteCacheOwnedContent = async (differences: ReadonlySet<string>) => 
     return value;
   };
 
+  type CatalogCacheRetryResult = Pick<
+    v.InferOutput<typeof CatalogProductResponseSchema>["data"],
+    "cache" | "cachePurgeRequestId"
+  >;
+  const retryCatalogCache = createPipeHandlers<(typeof catalogItems)[number]>("kind").match<
+    Promise<CatalogCacheRetryResult>
+  >({
+    product: async (item) =>
+      v.parse(
+        CatalogProductResponseSchema,
+        await request(`/api/catalog/products/${item.id}/cache-purge/retry`, "POST"),
+      ).data,
+    bundle: async (item) =>
+      v.parse(
+        BundleMutationResponseSchema,
+        await request(`/api/catalog/bundles/${item.id}/cache-purge/retry`, "POST"),
+      ).data,
+  });
+
   const purgeRequestIds: (string | null)[] = [];
   if (differences.has("storefront_cache")) {
     const result = v.parse(
@@ -443,19 +470,12 @@ const seedRemoteCacheOwnedContent = async (differences: ReadonlySet<string>) => 
     purgeRequestIds.push(result.cachePurgeRequestId);
   }
   for (const item of catalogItems) {
-    if (!differences.has(`catalog:${item.id}`)) {
+    const catalogChanged = differences.has(`catalog:${item.id}`);
+    const catalogDebt = differences.has(`catalog_debt:${item.id}`);
+    if (!catalogChanged && !catalogDebt) {
       continue;
     }
-    const result =
-      item.kind === "product"
-        ? v.parse(
-            CatalogProductResponseSchema,
-            await request(`/api/catalog/products/${item.id}/cache-purge/retry`, "POST"),
-          ).data
-        : v.parse(
-            BundleMutationResponseSchema,
-            await request(`/api/catalog/bundles/${item.id}/cache-purge/retry`, "POST"),
-          ).data;
+    const result = await retryCatalogCache(item);
     if (result.cache !== "purged") {
       throw new Error(`${item.id} cache purge was not completed`);
     }
