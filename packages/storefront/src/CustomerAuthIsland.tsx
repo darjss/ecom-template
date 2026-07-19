@@ -11,7 +11,7 @@ import {
   createQuery,
   useQueryClient,
 } from "@tanstack/solid-query";
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 
 export const CustomerAuthPanel = () => {
   const queryClient = useQueryClient();
@@ -19,8 +19,10 @@ export const CustomerAuthPanel = () => {
   const mutation = createMutation(() => customerAuthMutationOptions(queryClient));
   const [awaitingCode, setAwaitingCode] = createSignal(false);
   const [countdown, setCountdown] = createSignal(0);
-  const timer = window.setInterval(() => setCountdown((value) => Math.max(0, value - 1)), 1_000);
-  onCleanup(() => window.clearInterval(timer));
+  onMount(() => {
+    const timer = window.setInterval(() => setCountdown((value) => Math.max(0, value - 1)), 1_000);
+    onCleanup(() => window.clearInterval(timer));
+  });
 
   const form = createForm(() => ({
     defaultValues: { phone: "", code: "", message: "" },
@@ -68,9 +70,13 @@ export const CustomerAuthPanel = () => {
   }));
 
   const logout = async () => {
-    await mutation.mutateAsync({ kind: "logout" });
-    setAwaitingCode(false);
-    form.reset();
+    try {
+      await mutation.mutateAsync({ kind: "logout" });
+    } finally {
+      setAwaitingCode(false);
+      setCountdown(0);
+      form.reset();
+    }
   };
 
   return (

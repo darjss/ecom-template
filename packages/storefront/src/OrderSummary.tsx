@@ -96,7 +96,10 @@ export const OrderSummaryView = (props: { readonly order: OrderSummary }) => {
         <dt>Барааны дүн</dt>
         <dd class="m-0 tabular-nums">{money.format(props.order.subtotalMnt)} ₮</dd>
         <dt>Хөнгөлөлт</dt>
-        <dd class="m-0 tabular-nums">−{money.format(props.order.discountTotalMnt)} ₮</dd>
+        <dd class="m-0 tabular-nums">
+          {props.order.discountTotalMnt > 0 ? "−" : ""}
+          {money.format(props.order.discountTotalMnt)} ₮
+        </dd>
         <dt>Хүргэлт</dt>
         <dd class="m-0 tabular-nums">{money.format(props.order.deliveryFeeMnt)} ₮</dd>
         <dt class="border-t border-black/15 pt-3 font-bold">Нийт</dt>
