@@ -298,7 +298,11 @@ export const CheckoutQuote = () => {
                 <Button
                   class="w-full"
                   type="submit"
-                  disabled={placement.isPending || correctiveQuote() !== undefined}
+                  disabled={
+                    placement.isPending ||
+                    placement.data !== undefined ||
+                    correctiveQuote() !== undefined
+                  }
                 >
                   {placement.isPending ? "Захиалга үүсгэж байна…" : "Банкны шилжүүлгээр захиалах"}
                 </Button>
