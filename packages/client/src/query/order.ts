@@ -18,6 +18,6 @@ export const orderStatusQueryOptions = (token: OrderStatusToken) =>
 export const customerOrdersQueryOptions = (phone: MongolianPhone | undefined) =>
   queryOptions<InferOk<CustomerOrdersResult>, InferErr<CustomerOrdersResult>>({
     queryKey: [...customerOrdersQueryKey, phone],
-    queryFn: async () => unwrapRequestResult(await requestCustomerOrders()),
+    queryFn: async ({ signal }) => unwrapRequestResult(await requestCustomerOrders(signal)),
     enabled: phone !== undefined,
   });

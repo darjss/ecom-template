@@ -15,9 +15,9 @@ export const requestOrderStatus = (token: OrderStatusToken) =>
     "Invalid Order status response",
   );
 
-export const requestCustomerOrders = () =>
+export const requestCustomerOrders = (signal?: AbortSignal) =>
   requestResult(
-    () => createApiClient().api.customer.orders.get(),
+    () => createApiClient().api.customer.orders.get(signal ? { fetch: { signal } } : undefined),
     CustomerOrdersResponseSchema,
     OrderAccessApiErrorSchema,
     "Invalid Customer Order history response",
