@@ -5,6 +5,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import {
+  BundleMutationResponseSchema,
+  CatalogProductResponseSchema,
+  CmsCachePurgeResponseSchema,
   CmsDocumentResponseSchema,
   CommerceSettingsMutationResponseSchema,
   compactSku,
@@ -20,6 +23,7 @@ const wranglerConfig = "wrangler.jsonc";
 const databaseName = "urnuun-48-db";
 const bucketName = "urnuun-48-media";
 const objectPrefix = "reference/wf29";
+const fixtureVersion = "wf29-urnuun48:v2";
 const seedTimestamp = Date.parse(referenceStoreFixture.seededAt);
 const commerceSettings = referenceStoreFixture.commerceSettings;
 if (storeDefinition.providers.payment !== referenceStoreFixture.paymentProvider) {
@@ -104,152 +108,174 @@ const catalogMediaSeedStatements = createPipeHandlers<(typeof referenceStoreFixt
   ],
 });
 
-const buildSeedSql = () => {
-  const statements: string[] = ["PRAGMA foreign_keys = ON;"];
+const buildSeedSql = (cacheOwnedDifferences: ReadonlySet<string>) => {
+  const seedFixture =
+    mode === "--local" ||
+    cacheOwnedDifferences.has("fixture") ||
+    [...cacheOwnedDifferences].some((target) => target.startsWith("catalog:"));
+  const statements: string[] = seedFixture ? ["PRAGMA foreign_keys = ON;"] : [];
 
-  for (const media of referenceStoreFixture.media) {
-    statements.push(
-      `INSERT INTO media_assets (id, object_key, declared_content_type, created_at) VALUES ${tuple([media.id, `${objectPrefix}/${media.fileName}`, "image/webp", seedTimestamp])} ON CONFLICT(id) DO UPDATE SET object_key = excluded.object_key, declared_content_type = excluded.declared_content_type;`,
-    );
-  }
-
-  for (const item of catalogItems) {
-    statements.push(
-      `INSERT INTO catalog_items (id, kind, slug, state, name, description, brand_text, price_mnt, created_at, updated_at, published_at, archived_at) VALUES ${tuple([item.id, item.kind, item.slug, "published", item.name, item.description, item.brandText, item.priceMnt, seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, state = 'published', name = excluded.name, description = excluded.description, brand_text = excluded.brand_text, price_mnt = excluded.price_mnt, updated_at = excluded.updated_at, published_at = coalesce(catalog_items.published_at, excluded.published_at), archived_at = NULL;`,
-    );
-  }
-
-  for (const group of optionGroups) {
-    statements.push(
-      `INSERT INTO option_groups (id, product_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([group.id, group.productId, group.key, group.label, group.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
-    );
-  }
-
-  for (const value of optionValues) {
-    statements.push(
-      `INSERT INTO option_values (id, option_group_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([value.id, value.optionGroupId, value.key, value.label, value.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
-    );
-  }
-
-  for (const variant of variants) {
-    statements.push(
-      `INSERT INTO variants (id, product_id, is_default, combination_key, price_override_mnt, image_media_asset_id, state, created_at, updated_at) VALUES ${tuple([variant.id, variant.productId, variant.isDefault ? 1 : 0, variant.combinationKey, variant.priceOverrideMnt, variant.imageMediaAssetId, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET combination_key = excluded.combination_key, price_override_mnt = excluded.price_override_mnt, image_media_asset_id = excluded.image_media_asset_id, state = 'active', updated_at = excluded.updated_at;`,
-      `INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES ${tuple([variant.sku, compactSku(variant.sku), "variant", variant.id, null, seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(sku_compact) DO UPDATE SET sku = excluded.sku, owner_kind = 'variant', variant_id = excluded.variant_id, bundle_id = NULL, locked_at = coalesce(skus.locked_at, excluded.locked_at), updated_at = excluded.updated_at;`,
-      `INSERT OR IGNORE INTO stock_items (id, variant_id, on_hand_quantity, reserved_quantity, updated_at) VALUES ${tuple([variant.stockItemId, variant.id, variant.openingQuantity, 0, seedTimestamp])};`,
-      `INSERT OR IGNORE INTO inventory_entries (id, stock_item_id, reservation_id, order_id, kind, on_hand_delta, reserved_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) SELECT ${tuple([variant.inventoryEntryId, variant.stockItemId, null, null, "opening", variant.openingQuantity, 0, "system", null, null, "WF29 жишиг анхны үлдэгдэл", "wf29.reference.seed.opening.v1", seedTimestamp]).slice(1, -1)} WHERE NOT EXISTS (SELECT 1 FROM inventory_entries WHERE id = ${quote(variant.inventoryEntryId)});`,
-    );
-  }
-
-  statements.push(`DELETE FROM variant_option_values WHERE variant_id IN (${list(variantIds)});`);
-  for (const variant of variants) {
-    for (const optionValueId of variant.optionValueIds) {
+  if (seedFixture) {
+    for (const media of referenceStoreFixture.media) {
       statements.push(
-        `INSERT INTO variant_option_values (variant_id, option_value_id) VALUES ${tuple([variant.id, optionValueId])};`,
+        `INSERT INTO media_assets (id, object_key, declared_content_type, created_at) VALUES ${tuple([media.id, `${objectPrefix}/${media.fileName}`, "image/webp", seedTimestamp])} ON CONFLICT(id) DO UPDATE SET object_key = excluded.object_key, declared_content_type = excluded.declared_content_type;`,
       );
     }
   }
 
-  for (const bundle of referenceStoreFixture.bundles) {
+  const catalogItemsToSeed = seedFixture
+    ? catalogItems
+    : catalogItems.filter((item) => cacheOwnedDifferences.has(`catalog:${item.id}`));
+  if (catalogItemsToSeed.length > 0) {
+    statements.push("BEGIN TRANSACTION;");
+  }
+  for (const item of catalogItemsToSeed) {
     statements.push(
-      `INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES ${tuple([bundle.sku, compactSku(bundle.sku), "bundle", null, bundle.id, seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(sku_compact) DO UPDATE SET sku = excluded.sku, owner_kind = 'bundle', variant_id = NULL, bundle_id = excluded.bundle_id, locked_at = coalesce(skus.locked_at, excluded.locked_at), updated_at = excluded.updated_at;`,
-      `DELETE FROM bundle_components WHERE bundle_id = ${quote(bundle.id)};`,
+      `INSERT INTO catalog_items (id, kind, slug, state, name, description, brand_text, price_mnt, created_at, updated_at, published_at, archived_at) VALUES ${tuple([item.id, item.kind, item.slug, "published", item.name, item.description, item.brandText, item.priceMnt, seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, state = 'published', name = excluded.name, description = excluded.description, brand_text = excluded.brand_text, price_mnt = excluded.price_mnt, updated_at = excluded.updated_at, published_at = coalesce(catalog_items.published_at, excluded.published_at), archived_at = NULL WHERE catalog_items.slug IS NOT excluded.slug OR catalog_items.state IS NOT 'published' OR catalog_items.name IS NOT excluded.name OR catalog_items.description IS NOT excluded.description OR catalog_items.brand_text IS NOT excluded.brand_text OR catalog_items.price_mnt IS NOT excluded.price_mnt OR catalog_items.archived_at IS NOT NULL;`,
     );
-    for (const component of bundle.components) {
+    if (mode === "--remote" && cacheOwnedDifferences.has(`catalog:${item.id}`)) {
       statements.push(
-        `INSERT INTO bundle_components (bundle_id, variant_id, quantity) VALUES ${tuple([bundle.id, component.variantId, component.quantity])};`,
+        `INSERT INTO catalog_cache_purge_debts (product_id, revision, attempt_count, request_id, command_committed_at, last_attempted_at) VALUES ${tuple([item.id, crypto.randomUUID(), 0, null, seedTimestamp, null])} ON CONFLICT(product_id) DO UPDATE SET revision = excluded.revision, attempt_count = 0, request_id = NULL, command_committed_at = excluded.command_committed_at, last_attempted_at = NULL;`,
       );
     }
   }
+  if (catalogItemsToSeed.length > 0) {
+    statements.push("COMMIT;");
+  }
 
-  statements.push(
-    `DELETE FROM personalization_values WHERE personalization_id IN (${list(personalizationIds)});`,
-  );
-  for (const definition of referenceStoreFixture.personalizations) {
-    statements.push(
-      `INSERT INTO personalization_definitions (id, catalog_item_id, kind, key, label, position, required, state, max_length, created_at, updated_at) VALUES ${tuple([definition.id, definition.catalogItemId, definition.kind, definition.key, definition.label, definition.position, definition.required ? 1 : 0, "active", definition.maxLength, seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, key = excluded.key, label = excluded.label, position = excluded.position, required = excluded.required, state = 'active', max_length = excluded.max_length, updated_at = excluded.updated_at;`,
-    );
-    for (const value of definition.values) {
+  if (seedFixture) {
+    for (const group of optionGroups) {
       statements.push(
-        `INSERT INTO personalization_values (id, personalization_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([value.id, definition.id, value.key, value.label, value.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
+        `INSERT INTO option_groups (id, product_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([group.id, group.productId, group.key, group.label, group.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
       );
     }
-  }
 
-  for (const category of referenceStoreFixture.categories) {
-    statements.push(
-      `INSERT INTO categories (id, slug, name, parent_id, position, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([category.id, category.slug, category.name, category.parentId, category.position, "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, name = excluded.name, parent_id = excluded.parent_id, position = excluded.position, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(categories.activated_at, excluded.activated_at), archived_at = NULL;`,
-    );
-  }
-
-  for (const collection of referenceStoreFixture.collections) {
-    statements.push(
-      `INSERT INTO collections (id, slug, name, description, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([collection.id, collection.slug, collection.name, collection.description, "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, name = excluded.name, description = excluded.description, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(collections.activated_at, excluded.activated_at), archived_at = NULL;`,
-    );
-  }
-
-  for (const tag of referenceStoreFixture.tags) {
-    statements.push(
-      `INSERT INTO tags (id, label, normalized_label, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([tag.id, tag.label, tag.label.toLocaleLowerCase("mn-MN"), "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET label = excluded.label, normalized_label = excluded.normalized_label, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(tags.activated_at, excluded.activated_at), archived_at = NULL;`,
-    );
-  }
-
-  statements.push(
-    `DELETE FROM catalog_item_categories WHERE catalog_item_id IN (${list(catalogItemIds)});`,
-    `DELETE FROM catalog_item_collections WHERE catalog_item_id IN (${list(catalogItemIds)});`,
-    `DELETE FROM catalog_item_tags WHERE catalog_item_id IN (${list(catalogItemIds)});`,
-  );
-  for (const category of referenceStoreFixture.categories) {
-    for (const catalogItemId of category.catalogItemIds) {
+    for (const value of optionValues) {
       statements.push(
-        `INSERT INTO catalog_item_categories (catalog_item_id, category_id) VALUES ${tuple([catalogItemId, category.id])};`,
+        `INSERT INTO option_values (id, option_group_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([value.id, value.optionGroupId, value.key, value.label, value.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
       );
     }
-  }
-  for (const collection of referenceStoreFixture.collections) {
-    for (const [position, catalogItemId] of collection.catalogItemIds.entries()) {
+
+    for (const variant of variants) {
       statements.push(
-        `INSERT INTO catalog_item_collections (catalog_item_id, collection_id, position) VALUES ${tuple([catalogItemId, collection.id, position])};`,
+        `INSERT INTO variants (id, product_id, is_default, combination_key, price_override_mnt, image_media_asset_id, state, created_at, updated_at) VALUES ${tuple([variant.id, variant.productId, variant.isDefault ? 1 : 0, variant.combinationKey, variant.priceOverrideMnt, variant.imageMediaAssetId, variant.state, seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET is_default = excluded.is_default, combination_key = excluded.combination_key, price_override_mnt = excluded.price_override_mnt, image_media_asset_id = excluded.image_media_asset_id, state = excluded.state, updated_at = excluded.updated_at;`,
+        `INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES ${tuple([variant.sku, compactSku(variant.sku), "variant", variant.id, null, seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(sku_compact) DO UPDATE SET sku = excluded.sku, owner_kind = 'variant', variant_id = excluded.variant_id, bundle_id = NULL, locked_at = coalesce(skus.locked_at, excluded.locked_at), updated_at = excluded.updated_at;`,
+        `INSERT OR IGNORE INTO stock_items (id, variant_id, on_hand_quantity, reserved_quantity, updated_at) VALUES ${tuple([variant.stockItemId, variant.id, variant.openingQuantity, 0, seedTimestamp])};`,
+        `INSERT OR IGNORE INTO inventory_entries (id, stock_item_id, reservation_id, order_id, kind, on_hand_delta, reserved_delta, actor_kind, staff_id, staff_role, reason, command_correlation_id, created_at) SELECT ${tuple([variant.inventoryEntryId, variant.stockItemId, null, null, "opening", variant.openingQuantity, 0, "system", null, null, "WF29 жишиг анхны үлдэгдэл", "wf29.reference.seed.opening.v1", seedTimestamp]).slice(1, -1)} WHERE NOT EXISTS (SELECT 1 FROM inventory_entries WHERE id = ${quote(variant.inventoryEntryId)});`,
       );
     }
-  }
-  for (const tag of referenceStoreFixture.tags) {
-    for (const catalogItemId of tag.catalogItemIds) {
-      statements.push(
-        `INSERT INTO catalog_item_tags (catalog_item_id, tag_id) VALUES ${tuple([catalogItemId, tag.id])};`,
-      );
+
+    statements.push(`DELETE FROM variant_option_values WHERE variant_id IN (${list(variantIds)});`);
+    for (const variant of variants) {
+      for (const optionValueId of variant.optionValueIds) {
+        statements.push(
+          `INSERT INTO variant_option_values (variant_id, option_value_id) VALUES ${tuple([variant.id, optionValueId])};`,
+        );
+      }
     }
-  }
 
-  statements.push(
-    `DELETE FROM catalog_item_images WHERE catalog_item_id IN (${list(catalogItemIds)});`,
-  );
-  for (const media of referenceStoreFixture.media) {
-    statements.push(...catalogMediaSeedStatements(media));
-  }
+    for (const bundle of referenceStoreFixture.bundles) {
+      statements.push(
+        `INSERT INTO skus (sku, sku_compact, owner_kind, variant_id, bundle_id, locked_at, created_at, updated_at) VALUES ${tuple([bundle.sku, compactSku(bundle.sku), "bundle", null, bundle.id, seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(sku_compact) DO UPDATE SET sku = excluded.sku, owner_kind = 'bundle', variant_id = NULL, bundle_id = excluded.bundle_id, locked_at = coalesce(skus.locked_at, excluded.locked_at), updated_at = excluded.updated_at;`,
+        `DELETE FROM bundle_components WHERE bundle_id = ${quote(bundle.id)};`,
+      );
+      for (const component of bundle.components) {
+        statements.push(
+          `INSERT INTO bundle_components (bundle_id, variant_id, quantity) VALUES ${tuple([bundle.id, component.variantId, component.quantity])};`,
+        );
+      }
+    }
 
-  for (const discount of referenceStoreFixture.discounts) {
     statements.push(
-      `INSERT INTO discount_rules (id, name, mode, code, calculation, value, state, starts_at, ends_at, minimum_subtotal_mnt, global_limit, targets_json, revision, created_at, updated_at) VALUES ${tuple([discount.id, discount.name, discount.mode, discount.code, discount.calculation, discount.value, "active", null, null, discount.minimumSubtotalMnt, discount.globalLimit, JSON.stringify(discount.targets), 1, seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET name = excluded.name, mode = excluded.mode, code = excluded.code, calculation = excluded.calculation, value = excluded.value, state = 'active', starts_at = NULL, ends_at = NULL, minimum_subtotal_mnt = excluded.minimum_subtotal_mnt, global_limit = excluded.global_limit, targets_json = excluded.targets_json, updated_at = excluded.updated_at;`,
+      `DELETE FROM personalization_values WHERE personalization_id IN (${list(personalizationIds)});`,
+    );
+    for (const definition of referenceStoreFixture.personalizations) {
+      statements.push(
+        `INSERT INTO personalization_definitions (id, catalog_item_id, kind, key, label, position, required, state, max_length, created_at, updated_at) VALUES ${tuple([definition.id, definition.catalogItemId, definition.kind, definition.key, definition.label, definition.position, definition.required ? 1 : 0, "active", definition.maxLength, seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, key = excluded.key, label = excluded.label, position = excluded.position, required = excluded.required, state = 'active', max_length = excluded.max_length, updated_at = excluded.updated_at;`,
+      );
+      for (const value of definition.values) {
+        statements.push(
+          `INSERT INTO personalization_values (id, personalization_id, key, label, position, state, created_at, updated_at) VALUES ${tuple([value.id, definition.id, value.key, value.label, value.position, "active", seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET key = excluded.key, label = excluded.label, position = excluded.position, state = 'active', updated_at = excluded.updated_at;`,
+        );
+      }
+    }
+
+    for (const category of referenceStoreFixture.categories) {
+      statements.push(
+        `INSERT INTO categories (id, slug, name, parent_id, position, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([category.id, category.slug, category.name, category.parentId, category.position, "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, name = excluded.name, parent_id = excluded.parent_id, position = excluded.position, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(categories.activated_at, excluded.activated_at), archived_at = NULL;`,
+      );
+    }
+
+    for (const collection of referenceStoreFixture.collections) {
+      statements.push(
+        `INSERT INTO collections (id, slug, name, description, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([collection.id, collection.slug, collection.name, collection.description, "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET slug = excluded.slug, name = excluded.name, description = excluded.description, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(collections.activated_at, excluded.activated_at), archived_at = NULL;`,
+      );
+    }
+
+    for (const tag of referenceStoreFixture.tags) {
+      statements.push(
+        `INSERT INTO tags (id, label, normalized_label, state, created_at, updated_at, activated_at, archived_at) VALUES ${tuple([tag.id, tag.label, tag.label.toLocaleLowerCase("mn-MN"), "active", seedTimestamp, seedTimestamp, seedTimestamp, null])} ON CONFLICT(id) DO UPDATE SET label = excluded.label, normalized_label = excluded.normalized_label, state = 'active', updated_at = excluded.updated_at, activated_at = coalesce(tags.activated_at, excluded.activated_at), archived_at = NULL;`,
+      );
+    }
+
+    statements.push(
+      `DELETE FROM catalog_item_categories WHERE catalog_item_id IN (${list(catalogItemIds)});`,
+      `DELETE FROM catalog_item_collections WHERE catalog_item_id IN (${list(catalogItemIds)});`,
+      `DELETE FROM catalog_item_tags WHERE catalog_item_id IN (${list(catalogItemIds)});`,
+    );
+    for (const category of referenceStoreFixture.categories) {
+      for (const catalogItemId of category.catalogItemIds) {
+        statements.push(
+          `INSERT INTO catalog_item_categories (catalog_item_id, category_id) VALUES ${tuple([catalogItemId, category.id])};`,
+        );
+      }
+    }
+    for (const collection of referenceStoreFixture.collections) {
+      for (const [position, catalogItemId] of collection.catalogItemIds.entries()) {
+        statements.push(
+          `INSERT INTO catalog_item_collections (catalog_item_id, collection_id, position) VALUES ${tuple([catalogItemId, collection.id, position])};`,
+        );
+      }
+    }
+    for (const tag of referenceStoreFixture.tags) {
+      for (const catalogItemId of tag.catalogItemIds) {
+        statements.push(
+          `INSERT INTO catalog_item_tags (catalog_item_id, tag_id) VALUES ${tuple([catalogItemId, tag.id])};`,
+        );
+      }
+    }
+
+    statements.push(
+      `DELETE FROM catalog_item_images WHERE catalog_item_id IN (${list(catalogItemIds)});`,
+    );
+    for (const media of referenceStoreFixture.media) {
+      statements.push(...catalogMediaSeedStatements(media));
+    }
+
+    for (const discount of referenceStoreFixture.discounts) {
+      statements.push(
+        `INSERT INTO discount_rules (id, name, mode, code, calculation, value, state, starts_at, ends_at, minimum_subtotal_mnt, global_limit, targets_json, revision, created_at, updated_at) VALUES ${tuple([discount.id, discount.name, discount.mode, discount.code, discount.calculation, discount.value, "active", null, null, discount.minimumSubtotalMnt, discount.globalLimit, JSON.stringify(discount.targets), 1, seedTimestamp, seedTimestamp])} ON CONFLICT(id) DO UPDATE SET name = excluded.name, mode = excluded.mode, code = excluded.code, calculation = excluded.calculation, value = excluded.value, state = 'active', starts_at = NULL, ends_at = NULL, minimum_subtotal_mnt = excluded.minimum_subtotal_mnt, global_limit = excluded.global_limit, targets_json = excluded.targets_json, updated_at = excluded.updated_at;`,
+      );
+    }
+
+    if (mode === "--local") {
+      statements.push(
+        `INSERT INTO commerce_settings (key, bank_transfer_enabled, cash_on_delivery_enabled, customer_accounts_enabled, telegram_enabled, pickup_enabled, delivery_enabled, delivery_fee_mnt, free_delivery_threshold_mnt, updated_at) VALUES ${tuple(["commerce", Number(commerceSettings.bankTransferEnabled), Number(commerceSettings.cashOnDeliveryEnabled), Number(commerceSettings.customerAccountsEnabled), Number(commerceSettings.telegramEnabled), Number(commerceSettings.pickupEnabled), Number(commerceSettings.deliveryEnabled), commerceSettings.deliveryFeeMnt, commerceSettings.freeDeliveryThresholdMnt, seedTimestamp])} ON CONFLICT(key) DO UPDATE SET bank_transfer_enabled = excluded.bank_transfer_enabled, cash_on_delivery_enabled = excluded.cash_on_delivery_enabled, customer_accounts_enabled = excluded.customer_accounts_enabled, telegram_enabled = excluded.telegram_enabled, pickup_enabled = excluded.pickup_enabled, delivery_enabled = excluded.delivery_enabled, delivery_fee_mnt = excluded.delivery_fee_mnt, free_delivery_threshold_mnt = excluded.free_delivery_threshold_mnt, updated_at = excluded.updated_at;`,
+      );
+
+      for (const document of referenceStoreFixture.cmsDocuments) {
+        statements.push(
+          `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, JSON.stringify(document.content), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
+        );
+      }
+    }
+
+    statements.push(
+      `INSERT INTO system_metadata (key, value, updated_at) VALUES ${tuple(["reference_store_fixture", fixtureVersion, seedTimestamp])} ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`,
     );
   }
 
-  if (mode === "--local") {
-    statements.push(
-      `INSERT INTO commerce_settings (key, bank_transfer_enabled, cash_on_delivery_enabled, customer_accounts_enabled, telegram_enabled, pickup_enabled, delivery_enabled, delivery_fee_mnt, free_delivery_threshold_mnt, updated_at) VALUES ${tuple(["commerce", Number(commerceSettings.bankTransferEnabled), Number(commerceSettings.cashOnDeliveryEnabled), Number(commerceSettings.customerAccountsEnabled), Number(commerceSettings.telegramEnabled), Number(commerceSettings.pickupEnabled), Number(commerceSettings.deliveryEnabled), commerceSettings.deliveryFeeMnt, commerceSettings.freeDeliveryThresholdMnt, seedTimestamp])} ON CONFLICT(key) DO UPDATE SET bank_transfer_enabled = excluded.bank_transfer_enabled, cash_on_delivery_enabled = excluded.cash_on_delivery_enabled, customer_accounts_enabled = excluded.customer_accounts_enabled, telegram_enabled = excluded.telegram_enabled, pickup_enabled = excluded.pickup_enabled, delivery_enabled = excluded.delivery_enabled, delivery_fee_mnt = excluded.delivery_fee_mnt, free_delivery_threshold_mnt = excluded.free_delivery_threshold_mnt, updated_at = excluded.updated_at;`,
-    );
-
-    for (const document of referenceStoreFixture.cmsDocuments) {
-      statements.push(
-        `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, JSON.stringify(document.content), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
-      );
-    }
-  }
-
-  statements.push(
-    `INSERT INTO system_metadata (key, value, updated_at) VALUES ${tuple(["reference_store_fixture", "wf29-urnuun48:v1", seedTimestamp])} ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`,
-  );
-
-  return `${statements.join("\n")}\n`;
+  return statements.length === 0 ? "" : `${statements.join("\n")}\n`;
 };
 
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -287,6 +313,11 @@ const ensureMediaObject = async (
       throw new Error(`${objectPath} already exists with a different immutable payload`);
     }
     return "retained" as const;
+  }
+  if (!`${download.stderr}\n${download.stdout}`.includes("The specified key does not exist.")) {
+    throw new Error(
+      download.stderr.trim() || download.stdout.trim() || "R2 object download failed",
+    );
   }
 
   await runRequired("pnpm", [
@@ -342,7 +373,13 @@ const CacheOwnedDifferenceSchema = v.object({ target: v.string() });
 
 const readCacheOwnedDifferences = async () => {
   const statements = [
+    `SELECT 'fixture' AS target WHERE NOT EXISTS (SELECT 1 FROM system_metadata WHERE key = 'reference_store_fixture' AND value = ${quote(fixtureVersion)})`,
+    `SELECT 'storefront_cache' AS target WHERE EXISTS (SELECT 1 FROM cms_cache_purge_debt WHERE key = 'storefront')`,
     `SELECT 'commerce' AS target WHERE NOT EXISTS (SELECT 1 FROM commerce_settings WHERE key = 'commerce' AND bank_transfer_enabled = ${Number(commerceSettings.bankTransferEnabled)} AND cash_on_delivery_enabled = ${Number(commerceSettings.cashOnDeliveryEnabled)} AND customer_accounts_enabled = ${Number(commerceSettings.customerAccountsEnabled)} AND telegram_enabled = ${Number(commerceSettings.telegramEnabled)} AND pickup_enabled = ${Number(commerceSettings.pickupEnabled)} AND delivery_enabled = ${Number(commerceSettings.deliveryEnabled)} AND delivery_fee_mnt = ${commerceSettings.deliveryFeeMnt} AND free_delivery_threshold_mnt IS ${nullable(commerceSettings.freeDeliveryThresholdMnt)})`,
+    ...catalogItems.map(
+      (item) =>
+        `SELECT ${quote(`catalog:${item.id}`)} AS target WHERE NOT EXISTS (SELECT 1 FROM catalog_items WHERE id = ${quote(item.id)} AND kind = ${quote(item.kind)} AND slug = ${quote(item.slug)} AND state = 'published' AND name = ${quote(item.name)} AND description = ${quote(item.description)} AND brand_text = ${quote(item.brandText)} AND price_mnt = ${item.priceMnt} AND archived_at IS NULL${item.kind === "product" ? ` AND (SELECT count(*) FROM variants WHERE product_id = ${quote(item.id)} AND is_default = 1) = 1` : ""})`,
+    ),
     ...referenceStoreFixture.cmsDocuments.map(
       (document) =>
         `SELECT ${quote(document.kind)} AS target WHERE NOT EXISTS (SELECT 1 FROM cms_documents WHERE kind = ${quote(document.kind)} AND status = 'published' AND schema_version = 1 AND content_json = ${json(document.content)})`,
@@ -389,12 +426,41 @@ const seedRemoteCacheOwnedContent = async (differences: ReadonlySet<string>) => 
     });
     const value: unknown = await response.json();
     if (!response.ok) {
-      throw new Error(`Reference Store CMS mutation returned HTTP ${response.status}`);
+      throw new Error(`Reference Store content mutation returned HTTP ${response.status}`);
     }
     return value;
   };
 
   const purgeRequestIds: (string | null)[] = [];
+  if (differences.has("storefront_cache")) {
+    const result = v.parse(
+      CmsCachePurgeResponseSchema,
+      await request("/api/cms/cache-purge/retry", "POST"),
+    ).data;
+    if (result.cache !== "purged") {
+      throw new Error("Outstanding storefront cache purge was not completed");
+    }
+    purgeRequestIds.push(result.cachePurgeRequestId);
+  }
+  for (const item of catalogItems) {
+    if (!differences.has(`catalog:${item.id}`)) {
+      continue;
+    }
+    const result =
+      item.kind === "product"
+        ? v.parse(
+            CatalogProductResponseSchema,
+            await request(`/api/catalog/products/${item.id}/cache-purge/retry`, "POST"),
+          ).data
+        : v.parse(
+            BundleMutationResponseSchema,
+            await request(`/api/catalog/bundles/${item.id}/cache-purge/retry`, "POST"),
+          ).data;
+    if (result.cache !== "purged") {
+      throw new Error(`${item.id} cache purge was not completed`);
+    }
+    purgeRequestIds.push(result.cachePurgeRequestId);
+  }
   if (differences.has("commerce")) {
     const result = v.parse(
       CommerceSettingsMutationResponseSchema,
@@ -459,6 +525,7 @@ const ProofSchema = v.strictObject({
   products: v.number(),
   bundles: v.number(),
   variants: v.number(),
+  defaultVariants: v.number(),
   media: v.number(),
   catalogMedia: v.number(),
   brandText: v.number(),
@@ -470,6 +537,7 @@ const ProofSchema = v.strictObject({
   commerceSettings: v.number(),
   cmsDocuments: v.number(),
   cachePurgeDebt: v.number(),
+  catalogCachePurgeDebt: v.number(),
   openingEntries: v.number(),
   openingQuantity: v.number(),
   onHandQuantity: v.number(),
@@ -489,7 +557,8 @@ const readProof = async () => {
   const rows = await query(`SELECT
     (SELECT count(*) FROM catalog_items WHERE kind = 'product' AND state = 'published') AS products,
     (SELECT count(*) FROM catalog_items WHERE kind = 'bundle' AND state = 'published') AS bundles,
-    (SELECT count(*) FROM variants WHERE state = 'active') AS variants,
+    (SELECT count(*) FROM variants) AS variants,
+    (SELECT count(*) FROM variants WHERE is_default = 1) AS defaultVariants,
     (SELECT count(*) FROM media_assets WHERE object_key LIKE 'reference/wf29/%') AS media,
     (SELECT count(*) FROM catalog_item_images WHERE catalog_item_id IN (${list(catalogItemIds)})) AS catalogMedia,
     (SELECT count(*) FROM catalog_items WHERE id IN (${list(catalogItemIds)}) AND brand_text IS NOT NULL) AS brandText,
@@ -501,6 +570,7 @@ const readProof = async () => {
     (SELECT count(*) FROM commerce_settings WHERE key = 'commerce' AND bank_transfer_enabled = ${Number(commerceSettings.bankTransferEnabled)} AND cash_on_delivery_enabled = ${Number(commerceSettings.cashOnDeliveryEnabled)} AND customer_accounts_enabled = ${Number(commerceSettings.customerAccountsEnabled)} AND telegram_enabled = ${Number(commerceSettings.telegramEnabled)} AND pickup_enabled = ${Number(commerceSettings.pickupEnabled)} AND delivery_enabled = ${Number(commerceSettings.deliveryEnabled)} AND delivery_fee_mnt = ${commerceSettings.deliveryFeeMnt} AND free_delivery_threshold_mnt IS ${nullable(commerceSettings.freeDeliveryThresholdMnt)}) AS commerceSettings,
     (SELECT count(*) FROM cms_documents WHERE status = 'published') AS cmsDocuments,
     (SELECT count(*) FROM cms_cache_purge_debt WHERE key = 'storefront') AS cachePurgeDebt,
+    (SELECT count(*) FROM catalog_cache_purge_debts) AS catalogCachePurgeDebt,
     (SELECT count(*) FROM inventory_entries WHERE command_correlation_id = 'wf29.reference.seed.opening.v1') AS openingEntries,
     (SELECT coalesce(sum(on_hand_delta), 0) FROM inventory_entries WHERE command_correlation_id = 'wf29.reference.seed.opening.v1') AS openingQuantity,
     (SELECT coalesce(sum(on_hand_quantity), 0) FROM stock_items) AS onHandQuantity,
@@ -521,7 +591,7 @@ const assertProof = (proof: v.InferOutput<typeof ProofSchema>) => {
   const checks = {
     products: proof.products === 9,
     bundles: proof.bundles === 2,
-    variants: proof.variants === 13,
+    variants: proof.variants === 15 && proof.defaultVariants === 9,
     media: proof.media === 14 && proof.catalogMedia === 13,
     brandText: proof.brandText === 11,
     categories: proof.categories === 5,
@@ -530,8 +600,8 @@ const assertProof = (proof: v.InferOutput<typeof ProofSchema>) => {
     discounts: proof.discounts === 2 && proof.discountTargets === 2,
     commerceSettings: proof.commerceSettings === 1,
     cmsDocuments: proof.cmsDocuments === 7,
-    cacheInvalidation: proof.cachePurgeDebt === 0,
-    openingEntries: proof.openingEntries === 13,
+    cacheInvalidation: proof.cachePurgeDebt === 0 && proof.catalogCachePurgeDebt === 0,
+    openingEntries: proof.openingEntries === 15,
     openingQuantity: proof.openingQuantity === 111,
     inventoryLedger: proof.onHandQuantity === proof.ledgerQuantity,
     searchProjection:
@@ -577,22 +647,25 @@ const main = async () => {
       });
     }
 
-    const sqlPath = join(temporaryDirectory, "reference-store-seed.sql");
-    await writeFile(sqlPath, buildSeedSql());
-    await runRequired("pnpm", [
-      "exec",
-      "wrangler",
-      "d1",
-      "execute",
-      databaseName,
-      mode,
-      "--config",
-      wranglerConfig,
-      ...persistenceArgs,
-      "--file",
-      sqlPath,
-      "--yes",
-    ]);
+    const sql = buildSeedSql(cacheOwnedDifferences);
+    if (sql) {
+      const sqlPath = join(temporaryDirectory, "reference-store-seed.sql");
+      await writeFile(sqlPath, sql);
+      await runRequired("pnpm", [
+        "exec",
+        "wrangler",
+        "d1",
+        "execute",
+        databaseName,
+        mode,
+        "--config",
+        wranglerConfig,
+        ...persistenceArgs,
+        "--file",
+        sqlPath,
+        "--yes",
+      ]);
+    }
     const cacheInvalidation =
       mode === "--remote"
         ? await seedRemoteCacheOwnedContent(cacheOwnedDifferences)

@@ -1,6 +1,6 @@
 import { normalizeText } from "@ecom/contracts";
 
-export const catalogSearchDocumentVersion = "krilleer-cyr-lat-v1" as const;
+export const catalogSearchDocumentVersion = "krilleer-cyr-lat-v2" as const;
 
 export const krilleerCyrillicToLatin = [
   ["щ", "shch"],
@@ -61,6 +61,7 @@ export type CatalogSearchDocumentInput = {
   readonly kind: "product" | "bundle";
   readonly slug: string;
   readonly title: string;
+  readonly brand: string;
   readonly description: string;
   readonly facets: string;
 };
@@ -69,6 +70,7 @@ export const buildCatalogSearchDocument = (input: CatalogSearchDocumentInput) =>
   const fields = {
     slug: normalizeSearchText(input.slug.trim()),
     title: normalizeSearchText(input.title.trim()),
+    brand: normalizeSearchText(input.brand.trim()),
     description: normalizeSearchText(input.description.trim()),
     facets: normalizeSearchText(input.facets.trim()),
   };
@@ -86,6 +88,7 @@ export const buildCatalogSearchDocument = (input: CatalogSearchDocumentInput) =>
     ...fields,
     latinSlug: transliterateSearchText(fields.slug),
     latinTitle: transliterateSearchText(fields.title),
+    latinBrand: transliterateSearchText(fields.brand),
     latinDescription: transliterateSearchText(fields.description),
     latinFacets: transliterateSearchText(fields.facets),
   };

@@ -19,6 +19,7 @@ export const SearchMatchFieldSchema = v.picklist([
   "sku",
   "slug",
   "title",
+  "brand",
   "category_tags",
   "description",
   "mixed",
@@ -62,7 +63,7 @@ export const SearchShortcutSchema = v.variant("kind", [
 
 export const CatalogSearchResponseSchema = v.strictObject({
   query: v.string(),
-  normalizationVersion: v.literal("krilleer-cyr-lat-v1"),
+  normalizationVersion: v.literal("krilleer-cyr-lat-v2"),
   results: v.strictObject({
     items: v.array(CatalogItemSearchResultSchema),
     page: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),

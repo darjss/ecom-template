@@ -1,1 +1,294 @@
 ALTER TABLE `catalog_items` ADD `brand_text` text;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_refresh_item;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_catalog_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_catalog_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_catalog_delete;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_categories_membership_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_categories_membership_delete;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_collections_membership_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_collections_membership_delete;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_tags_membership_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_tags_membership_delete;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_categories_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_collections_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_tags_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_option_groups_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_option_values_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variants_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variants_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variants_delete;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variant_option_values_insert;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variant_option_values_update;
+--> statement-breakpoint
+DROP TRIGGER catalog_search_variant_option_values_delete;
+--> statement-breakpoint
+DROP VIEW catalog_search_diagnostics;
+--> statement-breakpoint
+DROP VIEW catalog_search_documents;
+--> statement-breakpoint
+DROP VIEW catalog_search_source;
+--> statement-breakpoint
+DROP TABLE catalog_search;
+--> statement-breakpoint
+CREATE VIRTUAL TABLE catalog_search USING fts5(
+  item_id UNINDEXED,
+  kind UNINDEXED,
+  document_version UNINDEXED,
+  fingerprint UNINDEXED,
+  slug,
+  title,
+  brand,
+  description,
+  facets,
+  latin_slug,
+  latin_title,
+  latin_brand,
+  latin_description,
+  latin_facets,
+  tokenize = 'unicode61',
+  prefix = '2 3'
+);
+--> statement-breakpoint
+CREATE VIEW catalog_search_source AS
+SELECT
+  item.id AS item_id,
+  item.kind AS kind,
+  item.slug AS slug,
+  item.name AS title,
+  coalesce(item.brand_text, '') AS brand,
+  item.description AS description,
+  trim(
+    coalesce((SELECT group_concat(value, ' ') FROM (SELECT category.name AS value FROM catalog_item_categories membership JOIN categories category ON category.id = membership.category_id WHERE membership.catalog_item_id = item.id AND category.state = 'active' ORDER BY category.position, category.name, category.id)), '') || ' ' ||
+    coalesce((SELECT group_concat(value, ' ') FROM (SELECT collection.name AS value FROM catalog_item_collections membership JOIN collections collection ON collection.id = membership.collection_id WHERE membership.catalog_item_id = item.id AND collection.state = 'active' ORDER BY collection.name, collection.id)), '') || ' ' ||
+    coalesce((SELECT group_concat(value, ' ') FROM (SELECT tag.label AS value FROM catalog_item_tags membership JOIN tags tag ON tag.id = membership.tag_id WHERE membership.catalog_item_id = item.id AND tag.state = 'active' ORDER BY tag.label, tag.id)), '') || ' ' ||
+    coalesce((SELECT group_concat(value, ' ') FROM (SELECT option_value.label AS value FROM variants variant JOIN variant_option_values membership ON membership.variant_id = variant.id JOIN option_values option_value ON option_value.id = membership.option_value_id JOIN option_groups option_group ON option_group.id = option_value.option_group_id WHERE variant.product_id = item.id AND variant.state = 'active' AND option_value.state = 'active' AND option_group.state = 'active' ORDER BY option_group.position, option_value.position, option_value.label, option_value.id)), '')
+  ) AS facets
+FROM catalog_items item
+WHERE item.state = 'published';
+--> statement-breakpoint
+CREATE VIEW catalog_search_documents AS
+WITH
+  catalog_search_transliteration_1 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(slug, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(title, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(brand, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(description, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(facets, 'щ', 'shch'), 'Щ', 'shch'), 'ш', 'sh'), 'Ш', 'sh'), 'ч', 'ch'), 'Ч', 'ch'), 'ц', 'c'), 'Ц', 'c') AS latin_facets
+    FROM catalog_search_source
+  ),
+  catalog_search_transliteration_2 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'ё', 'yo'), 'Ё', 'yo'), 'ю', 'yu'), 'Ю', 'yu'), 'я', 'ya'), 'Я', 'ya'), 'е', 'ye'), 'Е', 'ye') AS latin_facets
+    FROM catalog_search_transliteration_1
+  ),
+  catalog_search_transliteration_3 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'ж', 'j'), 'Ж', 'j'), 'х', 'h'), 'Х', 'h'), 'а', 'a'), 'А', 'a'), 'б', 'b'), 'Б', 'b') AS latin_facets
+    FROM catalog_search_transliteration_2
+  ),
+  catalog_search_transliteration_4 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'в', 'v'), 'В', 'v'), 'г', 'g'), 'Г', 'g'), 'д', 'd'), 'Д', 'd'), 'э', 'e'), 'Э', 'e') AS latin_facets
+    FROM catalog_search_transliteration_3
+  ),
+  catalog_search_transliteration_5 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'з', 'z'), 'З', 'z'), 'и', 'i'), 'И', 'i'), 'й', 'yy'), 'Й', 'yy'), 'к', 'k'), 'К', 'k') AS latin_facets
+    FROM catalog_search_transliteration_4
+  ),
+  catalog_search_transliteration_6 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'л', 'l'), 'Л', 'l'), 'м', 'm'), 'М', 'm'), 'н', 'n'), 'Н', 'n'), 'о', 'o'), 'О', 'o') AS latin_facets
+    FROM catalog_search_transliteration_5
+  ),
+  catalog_search_transliteration_7 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'п', 'p'), 'П', 'p'), 'р', 'r'), 'Р', 'r'), 'с', 's'), 'С', 's'), 'т', 't'), 'Т', 't') AS latin_facets
+    FROM catalog_search_transliteration_6
+  ),
+  catalog_search_transliteration_8 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_slug, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_title, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_title,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_brand, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_description, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_description,
+      replace(replace(replace(replace(replace(replace(replace(replace(latin_facets, 'у', 'u'), 'У', 'u'), 'ф', 'f'), 'Ф', 'f'), 'ө', 'q'), 'Ө', 'q'), 'ү', 'w'), 'Ү', 'w') AS latin_facets
+    FROM catalog_search_transliteration_7
+  ),
+  catalog_search_transliteration_9 AS (
+    SELECT
+      item_id, kind, slug, title, brand, description, facets,
+      replace(replace(replace(replace(replace(replace(latin_slug, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_slug,
+      replace(replace(replace(replace(replace(replace(latin_title, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_title,
+      replace(replace(replace(replace(replace(replace(latin_brand, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_brand,
+      replace(replace(replace(replace(replace(replace(latin_description, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_description,
+      replace(replace(replace(replace(replace(replace(latin_facets, 'ы', 'y'), 'Ы', 'y'), 'ь', 'ь'), 'Ь', 'ь'), 'ъ', ''''), 'Ъ', '''') AS latin_facets
+    FROM catalog_search_transliteration_8
+  )
+SELECT
+  item_id,
+  kind,
+  'krilleer-cyr-lat-v2' AS document_version,
+  json_array('krilleer-cyr-lat-v2', item_id, kind, slug, title, brand, description, facets) AS fingerprint,
+  slug,
+  title,
+  brand,
+  description,
+  facets,
+  latin_slug,
+  latin_title,
+  latin_brand,
+  latin_description,
+  latin_facets
+FROM catalog_search_transliteration_9;
+--> statement-breakpoint
+INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets FROM catalog_search_documents;
+--> statement-breakpoint
+CREATE VIEW catalog_search_diagnostics AS
+SELECT
+  (SELECT count(*) FROM catalog_search_documents) AS canonical_count,
+  (SELECT count(*) FROM catalog_search) AS projection_count,
+  (SELECT count(*) FROM catalog_search_documents expected WHERE NOT EXISTS (SELECT 1 FROM catalog_search actual WHERE actual.item_id = expected.item_id)) AS missing_count,
+  (SELECT count(*) FROM catalog_search actual WHERE NOT EXISTS (SELECT 1 FROM catalog_search_documents expected WHERE expected.item_id = actual.item_id)) AS orphan_count,
+  (SELECT count(*) FROM (SELECT item_id FROM catalog_search GROUP BY item_id HAVING count(*) > 1)) AS duplicate_count,
+  (SELECT count(*) FROM catalog_search_documents expected JOIN catalog_search actual ON actual.item_id = expected.item_id WHERE actual.document_version IS NOT expected.document_version OR actual.fingerprint IS NOT expected.fingerprint OR actual.kind IS NOT expected.kind OR actual.slug IS NOT expected.slug OR actual.title IS NOT expected.title OR actual.brand IS NOT expected.brand OR actual.description IS NOT expected.description OR actual.facets IS NOT expected.facets OR actual.latin_slug IS NOT expected.latin_slug OR actual.latin_title IS NOT expected.latin_title OR actual.latin_brand IS NOT expected.latin_brand OR actual.latin_description IS NOT expected.latin_description OR actual.latin_facets IS NOT expected.latin_facets) AS mismatched_count;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_refresh_item AFTER INSERT ON catalog_search_refresh BEGIN
+  DELETE FROM catalog_search WHERE item_id = NEW.item_id;
+  INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets FROM catalog_search_documents WHERE item_id = NEW.item_id;
+  DELETE FROM catalog_search_refresh WHERE item_id = NEW.item_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_catalog_insert AFTER INSERT ON catalog_items BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_catalog_update AFTER UPDATE OF slug, state, name, brand_text, description ON catalog_items BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_catalog_delete AFTER DELETE ON catalog_items BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_categories_membership_insert AFTER INSERT ON catalog_item_categories BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_categories_membership_delete AFTER DELETE ON catalog_item_categories BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_collections_membership_insert AFTER INSERT ON catalog_item_collections BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_collections_membership_delete AFTER DELETE ON catalog_item_collections BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_tags_membership_insert AFTER INSERT ON catalog_item_tags BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_tags_membership_delete AFTER DELETE ON catalog_item_tags BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.catalog_item_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_categories_update AFTER UPDATE OF name, state, position ON categories BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT catalog_item_id FROM catalog_item_categories WHERE category_id = NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_collections_update AFTER UPDATE OF name, state ON collections BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT catalog_item_id FROM catalog_item_collections WHERE collection_id = NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_tags_update AFTER UPDATE OF label, state ON tags BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT catalog_item_id FROM catalog_item_tags WHERE tag_id = NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_option_groups_update AFTER UPDATE OF state, position ON option_groups BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT product_id FROM variants WHERE product_id = NEW.product_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_option_values_update AFTER UPDATE OF label, state, position ON option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT variant.product_id FROM variant_option_values membership JOIN variants variant ON variant.id = membership.variant_id WHERE membership.option_value_id = NEW.id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variants_insert AFTER INSERT ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (NEW.product_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variants_update AFTER UPDATE OF state, product_id ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.product_id);
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT NEW.product_id WHERE NEW.product_id <> OLD.product_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variants_delete AFTER DELETE ON variants BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) VALUES (OLD.product_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_insert AFTER INSERT ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT product_id FROM variants WHERE id = NEW.variant_id;
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_update AFTER UPDATE OF variant_id, option_value_id ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT DISTINCT product_id FROM variants WHERE id IN (OLD.variant_id, NEW.variant_id);
+END;
+--> statement-breakpoint
+CREATE TRIGGER catalog_search_variant_option_values_delete AFTER DELETE ON variant_option_values BEGIN
+  INSERT OR IGNORE INTO catalog_search_refresh(item_id) SELECT product_id FROM variants WHERE id = OLD.variant_id;
+END;

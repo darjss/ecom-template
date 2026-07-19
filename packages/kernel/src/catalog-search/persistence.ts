@@ -30,15 +30,17 @@ import {
 
 const nativePlans = [
   { column: "title", field: "title", priority: 0 },
-  { column: "slug", field: "slug", priority: 1 },
-  { column: "facets", field: "category_tags", priority: 2 },
-  { column: "description", field: "description", priority: 3 },
+  { column: "brand", field: "brand", priority: 1 },
+  { column: "slug", field: "slug", priority: 2 },
+  { column: "facets", field: "category_tags", priority: 3 },
+  { column: "description", field: "description", priority: 4 },
 ] as const;
 const transliterationPlans = [
   { column: "latin_title", field: "title", priority: 0 },
-  { column: "latin_slug", field: "slug", priority: 1 },
-  { column: "latin_facets", field: "category_tags", priority: 2 },
-  { column: "latin_description", field: "description", priority: 3 },
+  { column: "latin_brand", field: "brand", priority: 1 },
+  { column: "latin_slug", field: "slug", priority: 2 },
+  { column: "latin_facets", field: "category_tags", priority: 3 },
+  { column: "latin_description", field: "description", priority: 4 },
 ] as const;
 type SearchPlan = (typeof nativePlans)[number] | (typeof transliterationPlans)[number];
 
@@ -54,7 +56,7 @@ const SearchRowSchema = v.strictObject({
   title: v.string(),
   description: v.string(),
   price_mnt: v.number(),
-  matched_field: v.picklist(["slug", "title", "category_tags", "description", "mixed"]),
+  matched_field: v.picklist(["slug", "title", "brand", "category_tags", "description", "mixed"]),
   rank: v.number(),
 });
 type SearchRow = v.InferOutput<typeof SearchRowSchema>;
@@ -70,13 +72,13 @@ const searchRows = async (
   const fieldMatches = [
     ...plans.map(
       ({ field, priority }) => `
-        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 1, 2, 3, 6, 1, 2) AS rank,
+        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 6, 1, 2, 3, 6, 6, 1, 2) AS rank,
           '${field}' AS matched_field, ${priority} AS field_priority, 0 AS scope_priority
         FROM catalog_search
         WHERE catalog_search MATCH ?`,
     ),
     `
-        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 1, 2, 3, 6, 1, 2) AS rank,
+        SELECT item_id, kind, bm25(catalog_search, 0, 0, 0, 0, 3, 6, 6, 1, 2, 3, 6, 6, 1, 2) AS rank,
           'mixed' AS matched_field, ${plans.length} AS field_priority, 1 AS scope_priority
         FROM catalog_search
         WHERE catalog_search MATCH ?`,
@@ -390,7 +392,7 @@ export const catalogSearchQueries = {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM catalog_search"),
       env.DB.prepare(
-        "INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, description, facets, latin_slug, latin_title, latin_description, latin_facets FROM catalog_search_documents",
+        "INSERT INTO catalog_search(item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets) SELECT item_id, kind, document_version, fingerprint, slug, title, brand, description, facets, latin_slug, latin_title, latin_brand, latin_description, latin_facets FROM catalog_search_documents",
       ),
     ]);
     return diagnostics();
