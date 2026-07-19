@@ -1,8 +1,20 @@
-import { checkoutOptionsQueryOptions, checkoutQuoteMutationOptions, useCart } from "@ecom/client";
-import { CheckoutQuoteInputSchema, type CheckoutClientError } from "@ecom/contracts";
+import {
+  checkoutOptionsQueryOptions,
+  checkoutQuoteMutationOptions,
+  orderPlacementMutationOptions,
+  useCart,
+} from "@ecom/client";
+import {
+  CheckoutClientErrorSchema,
+  CheckoutQuoteInputSchema,
+  PlaceOrderInputSchema,
+  type CheckoutClientError,
+  type CheckoutQuote as CheckoutQuoteData,
+  type CheckoutQuoteInput,
+} from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
-import { useMutation, useQuery } from "@tanstack/solid-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
 
@@ -32,8 +44,14 @@ const errorMessage = (error: CheckoutClientError) => {
 export const CheckoutQuote = () => {
   const cart = useCart();
   const options = useQuery(() => checkoutOptionsQueryOptions());
+  const queryClient = useQueryClient();
   const mutation = useMutation(() => checkoutQuoteMutationOptions());
+  const placement = useMutation(() => orderPlacementMutationOptions());
   const [invalid, setInvalid] = createSignal(false);
+  const [placementInvalid, setPlacementInvalid] = createSignal(false);
+  const [acceptedInput, setAcceptedInput] = createSignal<CheckoutQuoteInput>();
+  const [placementKey, setPlacementKey] = createSignal(crypto.randomUUID());
+  const [correctiveQuote, setCorrectiveQuote] = createSignal<CheckoutQuoteData>();
   const form = createForm(() => ({
     defaultValues: { code: "", fulfillment: "delivery", locationId: "" },
     onSubmit: async ({ value }) => {
@@ -50,7 +68,15 @@ export const CheckoutQuote = () => {
         return;
       }
       setInvalid(false);
-      await mutation.mutateAsync(parsed.output);
+      try {
+        await mutation.mutateAsync(parsed.output);
+        setAcceptedInput(parsed.output);
+        setPlacementKey(crypto.randomUUID());
+        setCorrectiveQuote(undefined);
+        placement.reset();
+      } catch {
+        setAcceptedInput(undefined);
+      }
     },
   }));
   return (
@@ -202,6 +228,124 @@ export const CheckoutQuote = () => {
             <p class="mt-4 mb-0 break-all text-xs text-(--muted)">
               Fingerprint: {quote.commercialFingerprint}
             </p>
+            <form
+              class="mt-6 grid gap-3 border-t border-black/15 pt-5 sm:grid-cols-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const quoteInput = acceptedInput();
+                const data = new FormData(event.currentTarget);
+                const parsed = v.safeParse(PlaceOrderInputSchema, {
+                  idempotencyKey: placementKey(),
+                  acceptedCommercialFingerprint: quote.commercialFingerprint,
+                  quoteInput,
+                  contact: {
+                    recipientName: data.get("recipientName"),
+                    recipientPhone: data.get("recipientPhone"),
+                    deliveryAddress:
+                      quote.fulfillment.kind === "delivery" ? data.get("deliveryAddress") : null,
+                  },
+                  paymentMethod: "bank_transfer",
+                });
+                if (!parsed.success) {
+                  setPlacementInvalid(true);
+                  return;
+                }
+                setPlacementInvalid(false);
+                try {
+                  await placement.mutateAsync(parsed.output);
+                  await queryClient.invalidateQueries({ queryKey: ["availability"] });
+                } catch (error) {
+                  const parsedError = v.safeParse(CheckoutClientErrorSchema, error);
+                  if (parsedError.success && parsedError.output.kind === "api") {
+                    setCorrectiveQuote(parsedError.output.error.currentQuote);
+                  }
+                }
+              }}
+            >
+              <label class="grid gap-1.5 text-sm font-bold">
+                Хүлээн авагчийн нэр
+                <input
+                  name="recipientName"
+                  autocomplete="name"
+                  required
+                  class="min-h-11 rounded-lg border border-black/30 bg-white px-3 font-normal focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+                />
+              </label>
+              <label class="grid gap-1.5 text-sm font-bold">
+                Утас
+                <input
+                  name="recipientPhone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  placeholder="+97699112233"
+                  required
+                  class="min-h-11 rounded-lg border border-black/30 bg-white px-3 font-normal focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+                />
+              </label>
+              <Show when={quote.fulfillment.kind === "delivery"}>
+                <label class="grid gap-1.5 text-sm font-bold sm:col-span-2">
+                  Хүргэлтийн хаяг
+                  <textarea
+                    name="deliveryAddress"
+                    autocomplete="street-address"
+                    required
+                    maxlength={500}
+                    class="min-h-24 rounded-lg border border-black/30 bg-white px-3 py-2 font-normal focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+                  />
+                </label>
+              </Show>
+              <div class="sm:col-span-2">
+                <Button
+                  class="w-full"
+                  type="submit"
+                  disabled={
+                    placement.isPending ||
+                    placement.data !== undefined ||
+                    correctiveQuote() !== undefined
+                  }
+                >
+                  {placement.isPending ? "Захиалга үүсгэж байна…" : "Банкны шилжүүлгээр захиалах"}
+                </Button>
+              </div>
+            </form>
+            <Show when={placementInvalid()}>
+              <p class="mt-3 text-sm text-red-800" role="alert">
+                Нэр, +976 утас, хүргэлтийн хаягаа шалгана уу.
+              </p>
+            </Show>
+            <Show when={placement.error} keyed>
+              {(error) => (
+                <p class="mt-3 text-sm text-red-800" role="alert">
+                  {error.kind === "api" && error.error.reason === "commercial_changed"
+                    ? "Үнэ эсвэл нөхцөл өөрчлөгдсөн. Доорх шинэ саналыг шалгаад дахин тооцоолно уу."
+                    : error.kind === "api" && error.error.reason === "idempotency_conflict"
+                      ? "Энэ оролдлогын түлхүүр өөр захиалгад ашиглагдсан байна."
+                      : errorMessage(error)}
+                </p>
+              )}
+            </Show>
+            <Show when={correctiveQuote()} keyed>
+              {(current) => (
+                <div class="mt-4 border border-amber-700 bg-amber-50 p-4 text-sm text-amber-950">
+                  Одоогийн шинэ нийт дүн: <strong>{money.format(current.totalMnt)} ₮</strong>. Дахин
+                  тооцоолж зөвшөөрсний дараа захиална уу.
+                </div>
+              )}
+            </Show>
+            <Show when={placement.data?.data} keyed>
+              {(order) => (
+                <div
+                  class="mt-5 border-y border-green-800/30 bg-green-50 px-4 py-5 text-green-950"
+                  aria-live="polite"
+                >
+                  <h3 class="m-0 text-base font-bold">Захиалга №{order.orderNumber} үүслээ</h3>
+                  <p class="mt-2 mb-0 text-sm">
+                    {money.format(order.totalMnt)} ₮-ийн банкны шилжүүлэг баталгаажихыг хүлээж
+                    байна. Шилжүүлгийн утгад захиалгын дугаараа бичнэ үү.
+                  </p>
+                </div>
+              )}
+            </Show>
           </div>
         )}
       </Show>
