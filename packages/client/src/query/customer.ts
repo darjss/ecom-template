@@ -16,7 +16,7 @@ type CustomerMutationResult = Awaited<ReturnType<typeof requestCustomerAuthMutat
 export const customerSessionQueryOptions = () =>
   queryOptions<InferOk<CustomerSessionResult>, InferErr<CustomerSessionResult>>({
     queryKey: customerSessionKey,
-    queryFn: async () => unwrapRequestResult(await requestCustomerSession()),
+    queryFn: async ({ signal }) => unwrapRequestResult(await requestCustomerSession(signal)),
   });
 
 export const customerAuthMutationOptions = (queryClient: QueryClient) =>
@@ -31,7 +31,10 @@ export const customerAuthMutationOptions = (queryClient: QueryClient) =>
       if (mutation.kind === "request_otp") {
         return;
       }
-      await queryClient.cancelQueries({ queryKey: customerOrdersQueryKey });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: customerSessionKey }),
+        queryClient.cancelQueries({ queryKey: customerOrdersQueryKey }),
+      ]);
       queryClient.removeQueries({ queryKey: customerOrdersQueryKey });
       queryClient.setQueryData(customerSessionKey, result);
     },

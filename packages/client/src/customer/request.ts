@@ -8,9 +8,10 @@ import {
 import { createApiClient } from "../eden";
 import { requestResult } from "../request";
 
-export const requestCustomerSession = () =>
+export const requestCustomerSession = (signal?: AbortSignal) =>
   requestResult(
-    () => createApiClient().api.auth.customer.session.get(),
+    () =>
+      createApiClient().api.auth.customer.session.get(signal ? { fetch: { signal } } : undefined),
     CustomerSessionResponseSchema,
     CustomerAuthApiErrorSchema,
     "Invalid Customer session response",
