@@ -1,6 +1,10 @@
 export { requestAvailability } from "./availability/request";
 export { CartProvider, useCart } from "./cart/index";
-export { requestCheckoutOptions, requestCheckoutQuote } from "./checkout/request";
+export {
+  requestCheckoutOptions,
+  requestCheckoutQuote,
+  requestPlaceOrder,
+} from "./checkout/request";
 export {
   requestBundleMutation,
   requestBundles,
@@ -49,7 +53,11 @@ export {
   personalizationQueryOptions,
 } from "./query/bundle";
 export { catalogImageMutationOptions } from "./query/catalog-media";
-export { checkoutOptionsQueryOptions, checkoutQuoteMutationOptions } from "./query/checkout";
+export {
+  checkoutOptionsQueryOptions,
+  checkoutQuoteMutationOptions,
+  orderPlacementMutationOptions,
+} from "./query/checkout";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export {
   cmsCachePurgeMutationOptions,

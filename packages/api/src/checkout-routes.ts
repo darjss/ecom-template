@@ -3,8 +3,10 @@ import {
   CheckoutOptionsResponseSchema,
   CheckoutQuoteInputSchema,
   CheckoutQuoteResponseSchema,
+  PlaceOrderInputSchema,
+  PlaceOrderResponseSchema,
 } from "@ecom/contracts";
-import { quoteCheckout, readCheckoutOptions, type CheckoutFailure } from "@ecom/kernel";
+import { placeOrder, quoteCheckout, readCheckoutOptions, type CheckoutFailure } from "@ecom/kernel";
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
@@ -44,6 +46,21 @@ const mapping = createPipeHandlers<CheckoutFailure>("code").match<CheckoutFailur
     status: 422,
     code: "validation" as const,
     message: "The selected Pickup Location is not available",
+  }),
+  commercial_changed: () => ({
+    status: 409,
+    code: "conflict" as const,
+    message: "Commercial facts changed; accept the current quote before placement",
+  }),
+  idempotency_conflict: () => ({
+    status: 409,
+    code: "conflict" as const,
+    message: "The placement key was already used for different intent",
+  }),
+  bank_transfer_unavailable: () => ({
+    status: 422,
+    code: "validation" as const,
+    message: "Bank transfer is not currently available",
   }),
   infrastructure_unavailable: () => ({
     status: 503,
@@ -93,6 +110,38 @@ export const createCheckoutRoutes = () =>
             reason:
               result.error.code === "infrastructure_unavailable" ? undefined : result.error.code,
             linePositions: result.error.linePositions,
+          },
+        }),
+      );
+    })
+    .post("/checkout/place", async ({ body, status }) => {
+      const input = v.safeParse(PlaceOrderInputSchema, body);
+      if (!input.success) {
+        return status(
+          422,
+          v.parse(CheckoutApiErrorSchema, {
+            error: {
+              code: "validation",
+              message: "Valid accepted quote and contact facts are required",
+            },
+          }),
+        );
+      }
+      const result = await placeOrder(input.output);
+      if (result.isOk()) {
+        return v.parse(PlaceOrderResponseSchema, { data: result.value });
+      }
+      const mapped = mapping(result.error);
+      return status(
+        mapped.status,
+        v.parse(CheckoutApiErrorSchema, {
+          error: {
+            code: mapped.code,
+            message: mapped.message,
+            reason:
+              result.error.code === "infrastructure_unavailable" ? undefined : result.error.code,
+            linePositions: result.error.linePositions,
+            currentQuote: result.error.currentQuote,
           },
         }),
       );

@@ -19,10 +19,13 @@ import {
   commerceSettings,
   discountRedemptionEntries,
   discountRules,
+  optionGroups,
+  optionValues,
   personalizationDefinitions,
   personalizationValues,
   skus,
   stockItems,
+  variantOptionValues,
   variants,
 } from "../db/schema";
 
@@ -112,6 +115,7 @@ export const checkoutQueries = {
         productKind: sql<typeof catalogItems.$inferSelect.kind>`${componentProducts.kind}`.as(
           "checkout_component_product_kind",
         ),
+        name: sql<string>`${componentProducts.name}`.as("checkout_component_name"),
         sku: sql<string>`${skus.sku}`.as("checkout_component_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_component_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
@@ -150,10 +154,27 @@ export const checkoutQueries = {
         ),
       )
       .orderBy(asc(personalizationValues.position));
+    const optionRowsQuery = db
+      .select({
+        variantId: variantOptionValues.variantId,
+        groupId: optionGroups.id,
+        groupKey: optionGroups.key,
+        groupLabel: optionGroups.label,
+        groupPosition: optionGroups.position,
+        valueId: optionValues.id,
+        valueKey: optionValues.key,
+        valueLabel: optionValues.label,
+      })
+      .from(variantOptionValues)
+      .innerJoin(optionValues, eq(optionValues.id, variantOptionValues.optionValueId))
+      .innerJoin(optionGroups, eq(optionGroups.id, optionValues.optionGroupId))
+      .where(inArray(variantOptionValues.variantId, variantIds))
+      .orderBy(asc(optionGroups.position));
     const [
       variantRows,
       bundleRows,
       componentRows,
+      optionRows,
       allDefinitions,
       allValues,
       ruleRows,
@@ -168,6 +189,7 @@ export const checkoutQueries = {
       variantRowsQuery,
       bundleRowsQuery,
       componentRowsQuery,
+      optionRowsQuery,
       definitionQuery,
       valueQuery,
       db
@@ -213,6 +235,7 @@ export const checkoutQueries = {
       variantRows,
       bundleRows,
       componentRows,
+      optionRows,
       definitions,
       values: allValues,
       rules: ruleRows.map((rule) => ({

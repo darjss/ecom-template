@@ -147,7 +147,7 @@ export const inventoryQueries = {
     const rows = await database()
       .select({
         reservationId: inventoryReservations.id,
-        orderReference: inventoryReservations.orderReference,
+        orderReference: inventoryReservations.orderId,
         quantity: inventoryReservationItems.quantity,
       })
       .from(inventoryReservations)

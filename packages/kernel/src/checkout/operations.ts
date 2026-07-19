@@ -5,9 +5,12 @@ import {
   type CheckoutQuote,
   type CheckoutQuoteInput,
   type CheckoutQuoteLine,
+  type PlaceOrderInput,
+  type PlaceOrderResult,
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
+import { commitPlacement, readPlacement } from "./placement-persistence";
 import { checkoutQueries } from "./persistence";
 
 type CheckoutFailureCode =
@@ -17,16 +20,28 @@ type CheckoutFailureCode =
   | "quantity_exceeded"
   | "delivery_unavailable"
   | "pickup_unavailable"
+  | "commercial_changed"
+  | "idempotency_conflict"
+  | "bank_transfer_unavailable"
   | "infrastructure_unavailable";
 export type CheckoutFailure = {
   [Code in CheckoutFailureCode]: {
     readonly code: Code;
     readonly linePositions?: readonly number[];
+    readonly currentQuote?: CheckoutQuote;
   };
 }[CheckoutFailureCode];
 
-const failure = (code: CheckoutFailure["code"], linePositions?: readonly number[]) =>
-  Result.err<never, CheckoutFailure>({ code, ...(linePositions ? { linePositions } : {}) });
+const failure = (
+  code: CheckoutFailure["code"],
+  linePositions?: readonly number[],
+  currentQuote?: CheckoutQuote,
+) =>
+  Result.err<never, CheckoutFailure>({
+    code,
+    ...(linePositions ? { linePositions } : {}),
+    ...(currentQuote ? { currentQuote } : {}),
+  });
 
 type Snapshot = Awaited<ReturnType<typeof checkoutQueries.readQuoteSnapshot>>;
 type Definition = Snapshot["definitions"][number];
@@ -73,7 +88,17 @@ const validatedPersonalizations = (
     } else if (definition.required && !answer.checked) {
       return [];
     }
-    return [{ label: definition.label, answer }];
+    const value =
+      answer.kind === "text"
+        ? { kind: "text" as const, text: answer.value }
+        : answer.kind === "single_select"
+          ? {
+              kind: "single_select" as const,
+              valueId: answer.valueId,
+              label: values.find(({ id }) => id === answer.valueId)?.label ?? "",
+            }
+          : { kind: "checkbox" as const, checked: answer.checked };
+    return [{ definitionId: definition.id, key: definition.key, label: definition.label, value }];
   });
   return resolved.length === answers.length ? resolved : undefined;
 };
@@ -115,7 +140,18 @@ const resolveLines = (input: CheckoutQuoteInput, snapshot: Snapshot) => {
         merchandiseAmountMnt: unitPriceMnt * intent.quantity,
         discountMnt: 0,
         totalMnt: unitPriceMnt * intent.quantity,
+        options: snapshot.optionRows
+          .filter(({ variantId }) => variantId === intent.variantId)
+          .map(({ groupId, groupKey, groupLabel, valueId, valueKey, valueLabel }) => ({
+            groupId,
+            groupKey,
+            groupLabel,
+            valueId,
+            valueKey,
+            valueLabel,
+          })),
         personalizations,
+        bundleComponents: [],
         demand: [{ variantId: intent.variantId, quantity: intent.quantity }],
       });
       continue;
@@ -166,7 +202,15 @@ const resolveLines = (input: CheckoutQuoteInput, snapshot: Snapshot) => {
       merchandiseAmountMnt: row.unitPriceMnt * intent.quantity,
       discountMnt: 0,
       totalMnt: row.unitPriceMnt * intent.quantity,
+      options: [],
       personalizations,
+      bundleComponents: components.map((component) => ({
+        variantId: component.variantId,
+        name: component.name,
+        sku: component.sku,
+        perBundleQuantity: component.quantity,
+        totalQuantity: component.quantity * intent.quantity,
+      })),
       demand: [...demandByVariant]
         .toSorted(([left], [right]) => left.localeCompare(right))
         .map(([variantId, quantity]) => ({ variantId, quantity })),
@@ -280,6 +324,78 @@ const digest = async (value: unknown) => {
     new TextEncoder().encode(JSON.stringify(value)),
   );
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+export const placeOrder = async (
+  input: PlaceOrderInput,
+): Promise<Result<PlaceOrderResult, CheckoutFailure>> => {
+  const intentDigest = await digest(input);
+  try {
+    const existing = await readPlacement(input.idempotencyKey);
+    if (existing) {
+      return existing.intentDigest === intentDigest
+        ? Result.ok(existing.result)
+        : failure("idempotency_conflict");
+    }
+    const current = await quoteCheckout(input.quoteInput);
+    if (current.isErr()) {
+      return Result.err(current.error);
+    }
+    if (current.value.commercialFingerprint !== input.acceptedCommercialFingerprint) {
+      return failure("commercial_changed", undefined, current.value);
+    }
+    const options = await checkoutQueries.readOptions();
+    if (!options.settings) {
+      return failure("infrastructure_unavailable");
+    }
+    if (!options.settings.bankTransferEnabled) {
+      return failure("bank_transfer_unavailable");
+    }
+    const fulfillment = input.quoteInput.fulfillment;
+    const destination =
+      fulfillment.kind === "delivery"
+        ? input.contact.deliveryAddress === null
+          ? undefined
+          : { kind: "delivery" as const, address: input.contact.deliveryAddress }
+        : options.locations
+            .filter(({ active, pickupEnabled }) => active && pickupEnabled)
+            .map(({ id, name, address }) => ({
+              kind: "pickup" as const,
+              locationId: id,
+              name,
+              address,
+            }))
+            .find(({ locationId }) => locationId === fulfillment.locationId);
+    if (!destination) {
+      return failure(
+        input.quoteInput.fulfillment.kind === "delivery"
+          ? "delivery_unavailable"
+          : "pickup_unavailable",
+      );
+    }
+    const committed = await commitPlacement(input, current.value, intentDigest, destination);
+    if (committed) {
+      return Result.ok(committed);
+    }
+    const racedPlacement = await readPlacement(input.idempotencyKey);
+    if (racedPlacement) {
+      return racedPlacement.intentDigest === intentDigest
+        ? Result.ok(racedPlacement.result)
+        : failure("idempotency_conflict");
+    }
+    const corrective = await quoteCheckout(input.quoteInput);
+    if (
+      corrective.isOk() &&
+      corrective.value.commercialFingerprint !== input.acceptedCommercialFingerprint
+    ) {
+      return failure("commercial_changed", undefined, corrective.value);
+    }
+    return corrective.isErr() && corrective.error.code === "insufficient_inventory"
+      ? Result.err(corrective.error)
+      : failure("infrastructure_unavailable");
+  } catch {
+    return failure("infrastructure_unavailable");
+  }
 };
 
 export const readCheckoutOptions = async () => {

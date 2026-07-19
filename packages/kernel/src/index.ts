@@ -80,7 +80,12 @@ export {
   type CmsMutationResult,
   type CmsOperationFailure,
 } from "./cms/operations";
-export { quoteCheckout, readCheckoutOptions, type CheckoutFailure } from "./checkout/operations";
+export {
+  placeOrder,
+  quoteCheckout,
+  readCheckoutOptions,
+  type CheckoutFailure,
+} from "./checkout/operations";
 export {
   changeDiscountRule,
   createDiscountRule,

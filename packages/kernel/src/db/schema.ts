@@ -870,11 +870,225 @@ export const stockItems = sqliteTable(
   ],
 );
 
+export const orders = sqliteTable(
+  "orders",
+  {
+    id: text("id").primaryKey(),
+    orderNumber: integer("order_number").notNull().unique(),
+    state: text("state", { enum: ["placed", "completed", "cancelled"] }).notNull(),
+    recipientName: text("recipient_name").notNull(),
+    recipientPhone: text("recipient_phone").notNull(),
+    currency: text("currency", { enum: ["MNT"] }).notNull(),
+    subtotalMnt: integer("subtotal_mnt").notNull(),
+    discountTotalMnt: integer("discount_total_mnt").notNull(),
+    deliveryFeeMnt: integer("delivery_fee_mnt").notNull(),
+    grandTotalMnt: integer("grand_total_mnt").notNull(),
+    fulfillmentMode: text("fulfillment_mode", { enum: ["delivery", "pickup"] }).notNull(),
+    deliveryAddress: text("delivery_address"),
+    pickupLocationId: text("pickup_location_id"),
+    pickupName: text("pickup_name"),
+    pickupAddress: text("pickup_address"),
+    commercialFingerprint: text("commercial_fingerprint").notNull(),
+    placedAt: integer("placed_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("orders_number_check", sql`${table.orderNumber} > 0`),
+    check("orders_state_check", sql`${table.state} IN ('placed', 'completed', 'cancelled')`),
+    check("orders_currency_check", sql`${table.currency} = 'MNT'`),
+    check(
+      "orders_amount_check",
+      sql`${table.subtotalMnt} >= 0 AND ${table.discountTotalMnt} >= 0 AND ${table.discountTotalMnt} <= ${table.subtotalMnt} AND ${table.deliveryFeeMnt} >= 0 AND ${table.grandTotalMnt} = ${table.subtotalMnt} - ${table.discountTotalMnt} + ${table.deliveryFeeMnt}`,
+    ),
+    check(
+      "orders_destination_check",
+      sql`(${table.fulfillmentMode} = 'delivery' AND ${table.deliveryAddress} IS NOT NULL AND ${table.pickupLocationId} IS NULL AND ${table.pickupName} IS NULL AND ${table.pickupAddress} IS NULL) OR (${table.fulfillmentMode} = 'pickup' AND ${table.deliveryAddress} IS NULL AND ${table.pickupLocationId} IS NOT NULL AND ${table.pickupName} IS NOT NULL AND ${table.pickupAddress} IS NOT NULL)`,
+    ),
+    check("orders_fingerprint_check", sql`length(${table.commercialFingerprint}) = 64`),
+    index("orders_state_created_idx").on(table.state, table.createdAt),
+    index("orders_phone_created_idx").on(table.recipientPhone, table.createdAt),
+  ],
+);
+
+export const orderLines = sqliteTable(
+  "order_lines",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    catalogItemId: text("catalog_item_id").notNull(),
+    itemKind: text("item_kind", { enum: ["product", "bundle"] }).notNull(),
+    variantId: text("variant_id"),
+    itemName: text("item_name").notNull(),
+    sku: text("sku").notNull(),
+    quantity: integer("quantity").notNull(),
+    unitPriceMnt: integer("unit_price_mnt").notNull(),
+    merchandiseAmountMnt: integer("merchandise_amount_mnt").notNull(),
+    discountMnt: integer("discount_mnt").notNull(),
+    totalMnt: integer("total_mnt").notNull(),
+    optionsJson: text("options_json").notNull(),
+    personalizationsJson: text("personalizations_json").notNull(),
+    bundleComponentsJson: text("bundle_components_json").notNull(),
+  },
+  (table) => [
+    uniqueIndex("order_lines_order_position_idx").on(table.orderId, table.position),
+    check("order_lines_quantity_check", sql`${table.quantity} BETWEEN 1 AND 999`),
+    check(
+      "order_lines_amount_check",
+      sql`${table.unitPriceMnt} >= 0 AND ${table.merchandiseAmountMnt} = ${table.unitPriceMnt} * ${table.quantity} AND ${table.discountMnt} >= 0 AND ${table.totalMnt} = ${table.merchandiseAmountMnt} - ${table.discountMnt}`,
+    ),
+    check(
+      "order_lines_json_check",
+      sql`json_valid(${table.optionsJson}) AND json_valid(${table.personalizationsJson}) AND json_valid(${table.bundleComponentsJson})`,
+    ),
+    index("order_lines_order_idx").on(table.orderId),
+  ],
+);
+
+export const orderDiscountAdjustments = sqliteTable(
+  "order_discount_adjustments",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    discountRuleId: text("discount_rule_id").references(() => discountRules.id, {
+      onDelete: "restrict",
+    }),
+    ruleName: text("rule_name").notNull(),
+    amountMnt: integer("amount_mnt").notNull(),
+  },
+  (table) => [check("order_discount_adjustments_amount_check", sql`${table.amountMnt} > 0`)],
+);
+
+export const orderDiscountAllocations = sqliteTable(
+  "order_discount_allocations",
+  {
+    adjustmentId: text("adjustment_id")
+      .notNull()
+      .references(() => orderDiscountAdjustments.id, { onDelete: "restrict" }),
+    orderLineId: text("order_line_id")
+      .notNull()
+      .references(() => orderLines.id, { onDelete: "restrict" }),
+    amountMnt: integer("amount_mnt").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.adjustmentId, table.orderLineId] }),
+    check("order_discount_allocations_amount_check", sql`${table.amountMnt} > 0`),
+  ],
+);
+
+export const payments = sqliteTable(
+  "payments",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    attemptNumber: integer("attempt_number").notNull(),
+    method: text("method", { enum: ["bank_transfer"] }).notNull(),
+    state: text("state", {
+      enum: ["awaiting_confirmation", "confirmed", "rejected", "partially_refunded", "refunded"],
+    }).notNull(),
+    expectedAmountMnt: integer("expected_amount_mnt").notNull(),
+    confirmedAmountMnt: integer("confirmed_amount_mnt").notNull().default(0),
+    refundedAmountMnt: integer("refunded_amount_mnt").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("payments_order_attempt_idx").on(table.orderId, table.attemptNumber),
+    check("payments_attempt_check", sql`${table.attemptNumber} > 0`),
+    check("payments_method_check", sql`${table.method} = 'bank_transfer'`),
+    check(
+      "payments_amount_check",
+      sql`${table.expectedAmountMnt} >= 0 AND ${table.confirmedAmountMnt} >= 0 AND ${table.refundedAmountMnt} BETWEEN 0 AND ${table.confirmedAmountMnt}`,
+    ),
+    index("payments_order_idx").on(table.orderId),
+  ],
+);
+
+export const paymentEntries = sqliteTable(
+  "payment_entries",
+  {
+    id: text("id").primaryKey(),
+    paymentId: text("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "restrict" }),
+    sequence: integer("sequence").notNull(),
+    kind: text("kind", {
+      enum: ["expected", "confirmed", "rejected", "refunded", "correction"],
+    }).notNull(),
+    expectedDeltaMnt: integer("expected_delta_mnt").notNull(),
+    confirmedDeltaMnt: integer("confirmed_delta_mnt").notNull(),
+    refundedDeltaMnt: integer("refunded_delta_mnt").notNull(),
+    actorKind: text("actor_kind", { enum: ["system", "staff"] }).notNull(),
+    commandCorrelationId: text("command_correlation_id").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("payment_entries_payment_sequence_idx").on(table.paymentId, table.sequence),
+    index("payment_entries_payment_timeline_idx").on(table.paymentId, table.createdAt, table.id),
+  ],
+);
+
+export const fulfillments = sqliteTable(
+  "fulfillments",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .unique()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    mode: text("mode", { enum: ["delivery", "pickup"] }).notNull(),
+    state: text("state", {
+      enum: [
+        "unfulfilled",
+        "processing",
+        "ready",
+        "handed_off",
+        "picked_up",
+        "fulfilled",
+        "delivery_failed",
+        "returned",
+        "cancelled",
+      ],
+    }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("fulfillments_state_idx").on(table.state, table.createdAt)],
+);
+
+export const placementIdempotency = sqliteTable(
+  "placement_idempotency",
+  {
+    key: text("key").primaryKey(),
+    intentDigest: text("intent_digest").notNull(),
+    resultJson: text("result_json").notNull(),
+    orderId: text("order_id")
+      .notNull()
+      .unique()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check("placement_idempotency_key_check", sql`length(${table.key}) BETWEEN 1 AND 64`),
+    check("placement_idempotency_digest_check", sql`length(${table.intentDigest}) = 64`),
+    check("placement_idempotency_result_check", sql`json_valid(${table.resultJson})`),
+  ],
+);
+
 export const inventoryReservations = sqliteTable(
   "inventory_reservations",
   {
     id: text("id").primaryKey(),
-    orderReference: text("order_reference").notNull().unique(),
+    orderId: text("order_id")
+      .notNull()
+      .unique()
+      .references(() => orders.id, { onDelete: "restrict" }),
     state: text("state", { enum: ["active", "consumed", "released", "expired"] }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     transitionedAt: integer("transitioned_at", { mode: "timestamp_ms" }),
@@ -917,11 +1131,18 @@ export const inventoryEntries = sqliteTable(
     stockItemId: text("stock_item_id")
       .notNull()
       .references(() => stockItems.id, { onDelete: "restrict" }),
-    kind: text("kind", { enum: ["opening", "adjustment"] }).notNull(),
+    reservationId: text("reservation_id").references(() => inventoryReservations.id, {
+      onDelete: "restrict",
+    }),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "restrict" }),
+    kind: text("kind", {
+      enum: ["opening", "adjustment", "reservation", "release", "consumption", "restoration"],
+    }).notNull(),
     onHandDelta: integer("on_hand_delta").notNull(),
-    actorKind: text("actor_kind", { enum: ["staff"] }).notNull(),
-    staffId: text("staff_id").notNull(),
-    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }).notNull(),
+    reservedDelta: integer("reserved_delta").notNull().default(0),
+    actorKind: text("actor_kind", { enum: ["system", "staff"] }).notNull(),
+    staffId: text("staff_id"),
+    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
     reason: text("reason").notNull(),
     commandCorrelationId: text("command_correlation_id").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -931,10 +1152,13 @@ export const inventoryEntries = sqliteTable(
       "inventory_entries_id_check",
       sql`length(${table.id}) = 42 AND substr(${table.id}, 1, 16) = 'inventory_entry_' AND substr(${table.id}, 17, 1) GLOB '[0-7]' AND substr(${table.id}, 17) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
     ),
-    check("inventory_entries_kind_check", sql`${table.kind} IN ('opening', 'adjustment')`),
+    check(
+      "inventory_entries_kind_check",
+      sql`${table.kind} IN ('opening', 'adjustment', 'reservation', 'release', 'consumption', 'restoration')`,
+    ),
     check(
       "inventory_entries_actor_check",
-      sql`${table.actorKind} = 'staff' AND ${table.staffRole} IN ('owner', 'manager', 'staff')`,
+      sql`(${table.actorKind} = 'staff' AND ${table.staffId} IS NOT NULL AND ${table.staffRole} IN ('owner', 'manager', 'staff')) OR (${table.actorKind} = 'system' AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL)`,
     ),
     check("inventory_entries_reason_check", sql`length(trim(${table.reason})) BETWEEN 1 AND 240`),
     uniqueIndex("inventory_entries_correlation_stock_idx").on(
