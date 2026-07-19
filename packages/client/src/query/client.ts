@@ -17,7 +17,7 @@ const retrySafeFailure = (failureCount: number, error: unknown) => {
   );
 };
 
-const presentGlobalError = (error: unknown) => {
+const presentGlobalError = (onUnauthorized?: () => void) => (error: unknown) => {
   const parsed = parseClientError(error);
   if (!parsed.success) {
     toast.error("Тодорхойгүй алдаа гарлаа.");
@@ -31,8 +31,8 @@ const presentGlobalError = (error: unknown) => {
     toast.error("Үйлчилгээний хариуг шалгаж чадсангүй.");
     return;
   }
-  if (parsed.output.error.code === "unauthorized") {
-    window.location.assign("/admin/login");
+  if (parsed.output.error.code === "unauthorized" && onUnauthorized) {
+    onUnauthorized();
     return;
   }
   if (parsed.output.error.code === "rate_limited") {
@@ -46,10 +46,10 @@ const presentGlobalError = (error: unknown) => {
   toast.error(parsed.output.error.message);
 };
 
-export const createStoreQueryClient = () =>
+export const createStoreQueryClient = (onUnauthorized?: () => void) =>
   new QueryClient({
-    queryCache: new QueryCache({ onError: presentGlobalError }),
-    mutationCache: new MutationCache({ onError: presentGlobalError }),
+    queryCache: new QueryCache({ onError: presentGlobalError(onUnauthorized) }),
+    mutationCache: new MutationCache({ onError: presentGlobalError(onUnauthorized) }),
     defaultOptions: {
       queries: {
         retry: retrySafeFailure,

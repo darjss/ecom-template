@@ -19,10 +19,7 @@ const CustomerOrdersContent = () => {
     <div class="grid gap-8">
       <CustomerAuthPanel />
       <Show when={session.data?.data.kind === "authenticated"}>
-        <section aria-labelledby="customer-orders-title">
-          <h2 id="customer-orders-title" class="m-0 text-2xl font-bold">
-            Миний захиалгууд
-          </h2>
+        <section aria-label="Захиалгын жагсаалт">
           <Show
             when={orders.data?.data.orders}
             fallback={

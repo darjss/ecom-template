@@ -388,8 +388,10 @@ const Dashboard = (props: AdminAppProps) => (
   </div>
 );
 
+const redirectToAdminLogin = () => window.location.assign("/admin/login");
+
 export const AdminApp = (props: AdminAppProps) => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createStoreQueryClient(redirectToAdminLogin);
   return (
     <QueryClientProvider client={queryClient}>
       <Dashboard role={props.role} store={props.store} storeName={props.storeName} />
@@ -398,7 +400,7 @@ export const AdminApp = (props: AdminAppProps) => {
 };
 
 export const AdminHealthStatus = () => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createStoreQueryClient(redirectToAdminLogin);
   return (
     <QueryClientProvider client={queryClient}>
       <HealthStatus />

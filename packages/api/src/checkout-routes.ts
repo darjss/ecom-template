@@ -18,6 +18,7 @@ import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { resolveStoreRequestOrigin } from "./request-origin";
+import { forwardSetCookies } from "./set-cookie";
 
 type CheckoutFailureMapping = {
   status: number;
@@ -122,7 +123,7 @@ export const createCheckoutRoutes = (definition: StoreDefinition) =>
         }),
       );
     })
-    .post("/checkout/place", async ({ body, request, status }) => {
+    .post("/checkout/place", async ({ body, request, set, status }) => {
       const input = v.safeParse(PlaceOrderInputSchema, body);
       if (!input.success) {
         return status(
@@ -139,6 +140,9 @@ export const createCheckoutRoutes = (definition: StoreDefinition) =>
       const session = origin
         ? await readCustomerSession(request, origin)
         : { kind: "anonymous" as const };
+      if ("responseHeaders" in session) {
+        forwardSetCookies(session.responseHeaders, set.headers);
+      }
       const result = await placeOrder(
         input.output,
         session.kind === "active" ? { id: session.customerId, phone: session.phone } : null,
