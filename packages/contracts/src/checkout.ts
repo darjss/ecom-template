@@ -196,18 +196,23 @@ export const PlaceOrderResultSchema = v.strictObject({
   orderNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
   orderState: v.literal("placed"),
   totalMnt: CheckoutAmountMntSchema,
-  payment: v.strictObject({
-    id: PaymentIdSchema,
-    method: v.literal("bank_transfer"),
-    state: v.literal("awaiting_confirmation"),
-    expectedAmountMnt: CheckoutAmountMntSchema,
-  }),
+  payment: v.nullable(
+    v.strictObject({
+      id: PaymentIdSchema,
+      method: v.literal("bank_transfer"),
+      state: v.literal("awaiting_confirmation"),
+      expectedAmountMnt: CheckoutAmountMntSchema,
+    }),
+  ),
   fulfillment: v.strictObject({
     id: FulfillmentIdSchema,
     mode: v.picklist(["delivery", "pickup"]),
     state: v.literal("unfulfilled"),
   }),
-  reservation: v.strictObject({ id: ReservationIdSchema, state: v.literal("active") }),
+  reservation: v.strictObject({
+    id: ReservationIdSchema,
+    state: v.picklist(["active", "consumed"]),
+  }),
 });
 export const PlaceOrderResponseSchema = v.strictObject({ data: PlaceOrderResultSchema });
 export const CheckoutApiErrorSchema = v.strictObject({

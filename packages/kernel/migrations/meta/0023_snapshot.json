@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9b8ba20e-86e2-4cd8-85b4-6162781b7a34",
+  "id": "373d7ee8-d61c-43b0-9d22-015e8a774857",
   "prevId": "df275250-6e19-4e4b-808a-cd868f125993",
   "tables": {
     "audit_events": {
@@ -2332,6 +2332,90 @@
           "notNull": true,
           "autoincrement": false
         },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "calculation": {
+          "name": "calculation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "minimum_subtotal_mnt": {
+          "name": "minimum_subtotal_mnt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "global_limit": {
+          "name": "global_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "targets_json": {
+          "name": "targets_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "submitted_code": {
+          "name": "submitted_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "code_accepted": {
+          "name": "code_accepted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "amount_mnt": {
           "name": "amount_mnt",
           "type": "integer",
@@ -2367,6 +2451,14 @@
         "order_discount_adjustments_amount_check": {
           "name": "order_discount_adjustments_amount_check",
           "value": "\"order_discount_adjustments\".\"amount_mnt\" > 0"
+        },
+        "order_discount_adjustments_targets_check": {
+          "name": "order_discount_adjustments_targets_check",
+          "value": "json_valid(\"order_discount_adjustments\".\"targets_json\")"
+        },
+        "order_discount_adjustments_code_accepted_check": {
+          "name": "order_discount_adjustments_code_accepted_check",
+          "value": "\"order_discount_adjustments\".\"code_accepted\" IN (0, 1)"
         }
       }
     },
@@ -2659,6 +2751,27 @@
           "notNull": true,
           "autoincrement": false
         },
+        "free_delivery_threshold_mnt": {
+          "name": "free_delivery_threshold_mnt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "free_delivery_applied": {
+          "name": "free_delivery_applied",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "commerce_settings_updated_at": {
+          "name": "commerce_settings_updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "fulfillment_mode": {
           "name": "fulfillment_mode",
           "type": "text",
@@ -2760,6 +2873,10 @@
         "orders_fingerprint_check": {
           "name": "orders_fingerprint_check",
           "value": "length(\"orders\".\"commercial_fingerprint\") = 64"
+        },
+        "orders_free_delivery_check": {
+          "name": "orders_free_delivery_check",
+          "value": "\"orders\".\"free_delivery_applied\" IN (0, 1) AND (\"orders\".\"free_delivery_threshold_mnt\" IS NULL OR \"orders\".\"free_delivery_threshold_mnt\" >= 0)"
         }
       }
     },
@@ -2822,6 +2939,69 @@
           "notNull": true,
           "autoincrement": false
         },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "staff_role": {
+          "name": "staff_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telegram_operator_label": {
+          "name": "telegram_operator_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_channel": {
+          "name": "source_channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_reference": {
+          "name": "provider_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidence_json": {
+          "name": "evidence_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "command_correlation_id": {
           "name": "command_correlation_id",
           "type": "text",
@@ -2843,6 +3023,12 @@
           "columns": ["payment_id", "sequence"],
           "isUnique": true
         },
+        "payment_entries_provider_reference_idx": {
+          "name": "payment_entries_provider_reference_idx",
+          "columns": ["provider_reference"],
+          "isUnique": true,
+          "where": "\"payment_entries\".\"provider_reference\" IS NOT NULL"
+        },
         "payment_entries_payment_timeline_idx": {
           "name": "payment_entries_payment_timeline_idx",
           "columns": ["payment_id", "created_at", "id"],
@@ -2862,7 +3048,24 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "payment_entries_kind_check": {
+          "name": "payment_entries_kind_check",
+          "value": "\"payment_entries\".\"kind\" IN ('expected', 'evidence_received', 'confirmed', 'rejected', 'failed', 'expired', 'superseded', 'released_unresolved', 'refunded', 'correction')"
+        },
+        "payment_entries_actor_check": {
+          "name": "payment_entries_actor_check",
+          "value": "(\"payment_entries\".\"actor_kind\" = 'staff' AND \"payment_entries\".\"staff_id\" IS NOT NULL AND \"payment_entries\".\"staff_role\" IN ('owner', 'manager', 'staff') AND \"payment_entries\".\"telegram_operator_label\" IS NULL AND \"payment_entries\".\"telegram_user_id\" IS NULL) OR (\"payment_entries\".\"actor_kind\" = 'telegram_operator' AND \"payment_entries\".\"staff_id\" IS NULL AND \"payment_entries\".\"staff_role\" IS NULL AND \"payment_entries\".\"telegram_operator_label\" IS NOT NULL AND \"payment_entries\".\"telegram_user_id\" > 0) OR (\"payment_entries\".\"actor_kind\" IN ('system', 'provider') AND \"payment_entries\".\"staff_id\" IS NULL AND \"payment_entries\".\"staff_role\" IS NULL AND \"payment_entries\".\"telegram_operator_label\" IS NULL AND \"payment_entries\".\"telegram_user_id\" IS NULL)"
+        },
+        "payment_entries_source_check": {
+          "name": "payment_entries_source_check",
+          "value": "\"payment_entries\".\"source_channel\" IN ('storefront', 'admin', 'provider_callback', 'workflow', 'telegram')"
+        },
+        "payment_entries_evidence_check": {
+          "name": "payment_entries_evidence_check",
+          "value": "\"payment_entries\".\"evidence_json\" IS NULL OR json_valid(\"payment_entries\".\"evidence_json\")"
+        }
+      }
     },
     "payments": {
       "name": "payments",
@@ -2895,6 +3098,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "automated_provider": {
+          "name": "automated_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "state": {
           "name": "state",
           "type": "text",
@@ -2925,6 +3135,78 @@
           "autoincrement": false,
           "default": 0
         },
+        "provider_attempt_reference": {
+          "name": "provider_attempt_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_payment_reference": {
+          "name": "provider_payment_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_deadline": {
+          "name": "provider_deadline",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "effective_deadline": {
+          "name": "effective_deadline",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "workflow_instance_id": {
+          "name": "workflow_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refund_obligation_amount_mnt": {
+          "name": "refund_obligation_amount_mnt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "refund_obligation_state": {
+          "name": "refund_obligation_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'none'"
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rejected_at": {
+          "name": "rejected_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expired_at": {
+          "name": "expired_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2941,14 +3223,40 @@
         }
       },
       "indexes": {
+        "payments_provider_attempt_reference_unique": {
+          "name": "payments_provider_attempt_reference_unique",
+          "columns": ["provider_attempt_reference"],
+          "isUnique": true
+        },
+        "payments_provider_payment_reference_unique": {
+          "name": "payments_provider_payment_reference_unique",
+          "columns": ["provider_payment_reference"],
+          "isUnique": true
+        },
         "payments_order_attempt_idx": {
           "name": "payments_order_attempt_idx",
           "columns": ["order_id", "attempt_number"],
           "isUnique": true
         },
+        "payments_active_attempt_idx": {
+          "name": "payments_active_attempt_idx",
+          "columns": ["order_id"],
+          "isUnique": true,
+          "where": "\"payments\".\"state\" IN ('pending', 'awaiting_confirmation')"
+        },
         "payments_order_idx": {
           "name": "payments_order_idx",
           "columns": ["order_id"],
+          "isUnique": false
+        },
+        "payments_provider_attempt_idx": {
+          "name": "payments_provider_attempt_idx",
+          "columns": ["automated_provider", "provider_attempt_reference"],
+          "isUnique": false
+        },
+        "payments_deadline_state_idx": {
+          "name": "payments_deadline_state_idx",
+          "columns": ["state", "effective_deadline"],
           "isUnique": false
         }
       },
@@ -2972,11 +3280,23 @@
         },
         "payments_method_check": {
           "name": "payments_method_check",
-          "value": "\"payments\".\"method\" = 'bank_transfer'"
+          "value": "\"payments\".\"method\" IN ('qpay', 'bank_transfer', 'cash_on_delivery')"
+        },
+        "payments_state_check": {
+          "name": "payments_state_check",
+          "value": "\"payments\".\"state\" IN ('pending', 'awaiting_confirmation', 'confirmed', 'failed', 'expired', 'rejected', 'superseded', 'released_unresolved', 'partially_refunded', 'refunded')"
+        },
+        "payments_provider_check": {
+          "name": "payments_provider_check",
+          "value": "(\"payments\".\"method\" = 'qpay' AND \"payments\".\"automated_provider\" IN ('byl', 'direct_qpay')) OR (\"payments\".\"method\" <> 'qpay' AND \"payments\".\"automated_provider\" IS NULL)"
         },
         "payments_amount_check": {
           "name": "payments_amount_check",
-          "value": "\"payments\".\"expected_amount_mnt\" >= 0 AND \"payments\".\"confirmed_amount_mnt\" >= 0 AND \"payments\".\"refunded_amount_mnt\" BETWEEN 0 AND \"payments\".\"confirmed_amount_mnt\""
+          "value": "\"payments\".\"expected_amount_mnt\" > 0 AND \"payments\".\"confirmed_amount_mnt\" >= 0 AND \"payments\".\"refunded_amount_mnt\" BETWEEN 0 AND \"payments\".\"confirmed_amount_mnt\" AND \"payments\".\"refund_obligation_amount_mnt\" >= 0"
+        },
+        "payments_refund_obligation_check": {
+          "name": "payments_refund_obligation_check",
+          "value": "\"payments\".\"refund_obligation_state\" IN ('none', 'open', 'partially_satisfied', 'satisfied')"
         }
       }
     },

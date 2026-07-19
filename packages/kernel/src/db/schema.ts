@@ -883,6 +883,11 @@ export const orders = sqliteTable(
     discountTotalMnt: integer("discount_total_mnt").notNull(),
     deliveryFeeMnt: integer("delivery_fee_mnt").notNull(),
     grandTotalMnt: integer("grand_total_mnt").notNull(),
+    freeDeliveryThresholdMnt: integer("free_delivery_threshold_mnt"),
+    freeDeliveryApplied: integer("free_delivery_applied", { mode: "boolean" }).notNull(),
+    commerceSettingsUpdatedAt: integer("commerce_settings_updated_at", {
+      mode: "timestamp_ms",
+    }).notNull(),
     fulfillmentMode: text("fulfillment_mode", { enum: ["delivery", "pickup"] }).notNull(),
     deliveryAddress: text("delivery_address"),
     pickupLocationId: text("pickup_location_id"),
@@ -905,6 +910,10 @@ export const orders = sqliteTable(
       sql`(${table.fulfillmentMode} = 'delivery' AND ${table.deliveryAddress} IS NOT NULL AND ${table.pickupLocationId} IS NULL AND ${table.pickupName} IS NULL AND ${table.pickupAddress} IS NULL) OR (${table.fulfillmentMode} = 'pickup' AND ${table.deliveryAddress} IS NULL AND ${table.pickupLocationId} IS NOT NULL AND ${table.pickupName} IS NOT NULL AND ${table.pickupAddress} IS NOT NULL)`,
     ),
     check("orders_fingerprint_check", sql`length(${table.commercialFingerprint}) = 64`),
+    check(
+      "orders_free_delivery_check",
+      sql`${table.freeDeliveryApplied} IN (0, 1) AND (${table.freeDeliveryThresholdMnt} IS NULL OR ${table.freeDeliveryThresholdMnt} >= 0)`,
+    ),
     index("orders_state_created_idx").on(table.state, table.createdAt),
     index("orders_phone_created_idx").on(table.recipientPhone, table.createdAt),
   ],
@@ -958,9 +967,25 @@ export const orderDiscountAdjustments = sqliteTable(
       onDelete: "restrict",
     }),
     ruleName: text("rule_name").notNull(),
+    mode: text("mode", { enum: ["automatic", "code"] }).notNull(),
+    code: text("code"),
+    calculation: text("calculation", { enum: ["percentage", "fixed_mnt"] }).notNull(),
+    value: integer("value").notNull(),
+    startsAt: integer("starts_at", { mode: "timestamp_ms" }),
+    endsAt: integer("ends_at", { mode: "timestamp_ms" }),
+    minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
+    globalLimit: integer("global_limit"),
+    targetsJson: text("targets_json").notNull(),
+    submittedCode: text("submitted_code"),
+    codeAccepted: integer("code_accepted", { mode: "boolean" }).notNull(),
+    reason: text("reason").notNull(),
     amountMnt: integer("amount_mnt").notNull(),
   },
-  (table) => [check("order_discount_adjustments_amount_check", sql`${table.amountMnt} > 0`)],
+  (table) => [
+    check("order_discount_adjustments_amount_check", sql`${table.amountMnt} > 0`),
+    check("order_discount_adjustments_targets_check", sql`json_valid(${table.targetsJson})`),
+    check("order_discount_adjustments_code_accepted_check", sql`${table.codeAccepted} IN (0, 1)`),
+  ],
 );
 
 export const orderDiscountAllocations = sqliteTable(
@@ -988,25 +1013,74 @@ export const payments = sqliteTable(
       .notNull()
       .references(() => orders.id, { onDelete: "restrict" }),
     attemptNumber: integer("attempt_number").notNull(),
-    method: text("method", { enum: ["bank_transfer"] }).notNull(),
+    method: text("method", { enum: ["qpay", "bank_transfer", "cash_on_delivery"] }).notNull(),
+    automatedProvider: text("automated_provider", { enum: ["byl", "direct_qpay"] }),
     state: text("state", {
-      enum: ["awaiting_confirmation", "confirmed", "rejected", "partially_refunded", "refunded"],
+      enum: [
+        "pending",
+        "awaiting_confirmation",
+        "confirmed",
+        "failed",
+        "expired",
+        "rejected",
+        "superseded",
+        "released_unresolved",
+        "partially_refunded",
+        "refunded",
+      ],
     }).notNull(),
     expectedAmountMnt: integer("expected_amount_mnt").notNull(),
     confirmedAmountMnt: integer("confirmed_amount_mnt").notNull().default(0),
     refundedAmountMnt: integer("refunded_amount_mnt").notNull().default(0),
+    providerAttemptReference: text("provider_attempt_reference").unique(),
+    providerPaymentReference: text("provider_payment_reference").unique(),
+    providerDeadline: integer("provider_deadline", { mode: "timestamp_ms" }),
+    effectiveDeadline: integer("effective_deadline", { mode: "timestamp_ms" }),
+    workflowInstanceId: text("workflow_instance_id"),
+    refundObligationAmountMnt: integer("refund_obligation_amount_mnt").notNull().default(0),
+    refundObligationState: text("refund_obligation_state", {
+      enum: ["none", "open", "partially_satisfied", "satisfied"],
+    })
+      .notNull()
+      .default("none"),
+    confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
+    rejectedAt: integer("rejected_at", { mode: "timestamp_ms" }),
+    expiredAt: integer("expired_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
     uniqueIndex("payments_order_attempt_idx").on(table.orderId, table.attemptNumber),
+    uniqueIndex("payments_active_attempt_idx")
+      .on(table.orderId)
+      .where(sql`${table.state} IN ('pending', 'awaiting_confirmation')`),
     check("payments_attempt_check", sql`${table.attemptNumber} > 0`),
-    check("payments_method_check", sql`${table.method} = 'bank_transfer'`),
+    check(
+      "payments_method_check",
+      sql`${table.method} IN ('qpay', 'bank_transfer', 'cash_on_delivery')`,
+    ),
+    check(
+      "payments_state_check",
+      sql`${table.state} IN ('pending', 'awaiting_confirmation', 'confirmed', 'failed', 'expired', 'rejected', 'superseded', 'released_unresolved', 'partially_refunded', 'refunded')`,
+    ),
+    check(
+      "payments_provider_check",
+      sql`(${table.method} = 'qpay' AND ${table.automatedProvider} IN ('byl', 'direct_qpay')) OR (${table.method} <> 'qpay' AND ${table.automatedProvider} IS NULL)`,
+    ),
     check(
       "payments_amount_check",
-      sql`${table.expectedAmountMnt} >= 0 AND ${table.confirmedAmountMnt} >= 0 AND ${table.refundedAmountMnt} BETWEEN 0 AND ${table.confirmedAmountMnt}`,
+      sql`${table.expectedAmountMnt} > 0 AND ${table.confirmedAmountMnt} >= 0 AND ${table.refundedAmountMnt} BETWEEN 0 AND ${table.confirmedAmountMnt} AND ${table.refundObligationAmountMnt} >= 0`,
+    ),
+    check(
+      "payments_refund_obligation_check",
+      sql`${table.refundObligationState} IN ('none', 'open', 'partially_satisfied', 'satisfied')`,
     ),
     index("payments_order_idx").on(table.orderId),
+    index("payments_provider_attempt_idx").on(
+      table.automatedProvider,
+      table.providerAttemptReference,
+    ),
+    index("payments_deadline_state_idx").on(table.state, table.effectiveDeadline),
   ],
 );
 
@@ -1019,17 +1093,60 @@ export const paymentEntries = sqliteTable(
       .references(() => payments.id, { onDelete: "restrict" }),
     sequence: integer("sequence").notNull(),
     kind: text("kind", {
-      enum: ["expected", "confirmed", "rejected", "refunded", "correction"],
+      enum: [
+        "expected",
+        "evidence_received",
+        "confirmed",
+        "rejected",
+        "failed",
+        "expired",
+        "superseded",
+        "released_unresolved",
+        "refunded",
+        "correction",
+      ],
     }).notNull(),
     expectedDeltaMnt: integer("expected_delta_mnt").notNull(),
     confirmedDeltaMnt: integer("confirmed_delta_mnt").notNull(),
     refundedDeltaMnt: integer("refunded_delta_mnt").notNull(),
-    actorKind: text("actor_kind", { enum: ["system", "staff"] }).notNull(),
+    actorKind: text("actor_kind", {
+      enum: ["system", "provider", "staff", "telegram_operator"],
+    }).notNull(),
+    staffId: text("staff_id"),
+    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
+    telegramOperatorLabel: text("telegram_operator_label"),
+    telegramUserId: integer("telegram_user_id"),
+    sourceChannel: text("source_channel", {
+      enum: ["storefront", "admin", "provider_callback", "workflow", "telegram"],
+    }).notNull(),
+    reason: text("reason"),
+    providerReference: text("provider_reference"),
+    observedAt: integer("observed_at", { mode: "timestamp_ms" }),
+    evidenceJson: text("evidence_json"),
     commandCorrelationId: text("command_correlation_id").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
     uniqueIndex("payment_entries_payment_sequence_idx").on(table.paymentId, table.sequence),
+    uniqueIndex("payment_entries_provider_reference_idx")
+      .on(table.providerReference)
+      .where(sql`${table.providerReference} IS NOT NULL`),
+    check(
+      "payment_entries_kind_check",
+      sql`${table.kind} IN ('expected', 'evidence_received', 'confirmed', 'rejected', 'failed', 'expired', 'superseded', 'released_unresolved', 'refunded', 'correction')`,
+    ),
+    check(
+      "payment_entries_actor_check",
+      sql`(${table.actorKind} = 'staff' AND ${table.staffId} IS NOT NULL AND ${table.staffRole} IN ('owner', 'manager', 'staff') AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL) OR (${table.actorKind} = 'telegram_operator' AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NOT NULL AND ${table.telegramUserId} > 0) OR (${table.actorKind} IN ('system', 'provider') AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL)`,
+    ),
+    check(
+      "payment_entries_source_check",
+      sql`${table.sourceChannel} IN ('storefront', 'admin', 'provider_callback', 'workflow', 'telegram')`,
+    ),
+    check(
+      "payment_entries_evidence_check",
+      sql`${table.evidenceJson} IS NULL OR json_valid(${table.evidenceJson})`,
+    ),
     index("payment_entries_payment_timeline_idx").on(table.paymentId, table.createdAt, table.id),
   ],
 );
