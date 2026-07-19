@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { compactSku } from "@ecom/contracts";
+import {
+  CmsDocumentResponseSchema,
+  CommerceSettingsMutationResponseSchema,
+  compactSku,
+} from "@ecom/contracts";
 import { createPipeHandlers } from "dismatch";
 import * as v from "valibot";
 import { storeDefinition } from "../../apps/urnuun-48/src/profile/definition";
@@ -229,14 +233,16 @@ const buildSeedSql = () => {
     );
   }
 
-  statements.push(
-    `INSERT INTO commerce_settings (key, bank_transfer_enabled, cash_on_delivery_enabled, customer_accounts_enabled, telegram_enabled, pickup_enabled, delivery_enabled, delivery_fee_mnt, free_delivery_threshold_mnt, updated_at) VALUES ${tuple(["commerce", Number(commerceSettings.bankTransferEnabled), Number(commerceSettings.cashOnDeliveryEnabled), Number(commerceSettings.customerAccountsEnabled), Number(commerceSettings.telegramEnabled), Number(commerceSettings.pickupEnabled), Number(commerceSettings.deliveryEnabled), commerceSettings.deliveryFeeMnt, commerceSettings.freeDeliveryThresholdMnt, seedTimestamp])} ON CONFLICT(key) DO UPDATE SET bank_transfer_enabled = excluded.bank_transfer_enabled, cash_on_delivery_enabled = excluded.cash_on_delivery_enabled, customer_accounts_enabled = excluded.customer_accounts_enabled, telegram_enabled = excluded.telegram_enabled, pickup_enabled = excluded.pickup_enabled, delivery_enabled = excluded.delivery_enabled, delivery_fee_mnt = excluded.delivery_fee_mnt, free_delivery_threshold_mnt = excluded.free_delivery_threshold_mnt, updated_at = excluded.updated_at;`,
-  );
-
-  for (const document of referenceStoreFixture.cmsDocuments) {
+  if (mode === "--local") {
     statements.push(
-      `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, JSON.stringify(document.content), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
+      `INSERT INTO commerce_settings (key, bank_transfer_enabled, cash_on_delivery_enabled, customer_accounts_enabled, telegram_enabled, pickup_enabled, delivery_enabled, delivery_fee_mnt, free_delivery_threshold_mnt, updated_at) VALUES ${tuple(["commerce", Number(commerceSettings.bankTransferEnabled), Number(commerceSettings.cashOnDeliveryEnabled), Number(commerceSettings.customerAccountsEnabled), Number(commerceSettings.telegramEnabled), Number(commerceSettings.pickupEnabled), Number(commerceSettings.deliveryEnabled), commerceSettings.deliveryFeeMnt, commerceSettings.freeDeliveryThresholdMnt, seedTimestamp])} ON CONFLICT(key) DO UPDATE SET bank_transfer_enabled = excluded.bank_transfer_enabled, cash_on_delivery_enabled = excluded.cash_on_delivery_enabled, customer_accounts_enabled = excluded.customer_accounts_enabled, telegram_enabled = excluded.telegram_enabled, pickup_enabled = excluded.pickup_enabled, delivery_enabled = excluded.delivery_enabled, delivery_fee_mnt = excluded.delivery_fee_mnt, free_delivery_threshold_mnt = excluded.free_delivery_threshold_mnt, updated_at = excluded.updated_at;`,
     );
+
+    for (const document of referenceStoreFixture.cmsDocuments) {
+      statements.push(
+        `INSERT INTO cms_documents (kind, status, schema_version, content_json, created_at, updated_at, published_at) VALUES ${tuple([document.kind, "published", 1, JSON.stringify(document.content), seedTimestamp, seedTimestamp, seedTimestamp])} ON CONFLICT(kind, status) DO UPDATE SET schema_version = 1, content_json = excluded.content_json, updated_at = excluded.updated_at, published_at = coalesce(cms_documents.published_at, excluded.published_at);`,
+      );
+    }
   }
 
   statements.push(
@@ -332,6 +338,93 @@ const query = async (sql: string) => {
   return result.results;
 };
 
+const CacheOwnedDifferenceSchema = v.object({ target: v.string() });
+
+const readCacheOwnedDifferences = async () => {
+  const statements = [
+    `SELECT 'commerce' AS target WHERE NOT EXISTS (SELECT 1 FROM commerce_settings WHERE key = 'commerce' AND bank_transfer_enabled = ${Number(commerceSettings.bankTransferEnabled)} AND cash_on_delivery_enabled = ${Number(commerceSettings.cashOnDeliveryEnabled)} AND customer_accounts_enabled = ${Number(commerceSettings.customerAccountsEnabled)} AND telegram_enabled = ${Number(commerceSettings.telegramEnabled)} AND pickup_enabled = ${Number(commerceSettings.pickupEnabled)} AND delivery_enabled = ${Number(commerceSettings.deliveryEnabled)} AND delivery_fee_mnt = ${commerceSettings.deliveryFeeMnt} AND free_delivery_threshold_mnt IS ${nullable(commerceSettings.freeDeliveryThresholdMnt)})`,
+    ...referenceStoreFixture.cmsDocuments.map(
+      (document) =>
+        `SELECT ${quote(document.kind)} AS target WHERE NOT EXISTS (SELECT 1 FROM cms_documents WHERE kind = ${quote(document.kind)} AND status = 'published' AND schema_version = 1 AND content_json = ${json(document.content)})`,
+    ),
+  ];
+  return new Set(
+    v
+      .parse(v.array(CacheOwnedDifferenceSchema), await query(statements.join(" UNION ALL ")))
+      .map(({ target }) => target),
+  );
+};
+
+const seedRemoteCacheOwnedContent = async (differences: ReadonlySet<string>) => {
+  if (differences.size === 0) {
+    return { cache: "not_required" as const, cachePurgeRequestId: null };
+  }
+  const remoteUrl = new URL(
+    v.parse(v.pipe(v.string(), v.url()), process.env.REFERENCE_STORE_ORIGIN),
+  );
+  if (
+    remoteUrl.protocol !== "https:" ||
+    remoteUrl.username !== "" ||
+    remoteUrl.password !== "" ||
+    remoteUrl.pathname !== "/" ||
+    remoteUrl.search !== "" ||
+    remoteUrl.hash !== ""
+  ) {
+    throw new Error("REFERENCE_STORE_ORIGIN must be an HTTPS origin");
+  }
+  const origin = remoteUrl.origin;
+  const cookie = v.parse(
+    v.pipe(v.string(), v.minLength(1)),
+    process.env.REFERENCE_STORE_STAFF_COOKIE,
+  );
+  const request = async (path: string, method: "POST" | "PUT", body?: unknown) => {
+    const response = await fetch(new URL(path, origin), {
+      method,
+      headers: {
+        cookie,
+        origin,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const value: unknown = await response.json();
+    if (!response.ok) {
+      throw new Error(`Reference Store CMS mutation returned HTTP ${response.status}`);
+    }
+    return value;
+  };
+
+  const purgeRequestIds: (string | null)[] = [];
+  if (differences.has("commerce")) {
+    const result = v.parse(
+      CommerceSettingsMutationResponseSchema,
+      await request("/api/commerce-settings", "PUT", commerceSettings),
+    ).data;
+    if (result.cache !== "purged") {
+      throw new Error("Commerce settings cache purge was not completed");
+    }
+    purgeRequestIds.push(result.cachePurgeRequestId);
+  }
+  for (const document of referenceStoreFixture.cmsDocuments) {
+    if (!differences.has(document.kind)) {
+      continue;
+    }
+    v.parse(
+      CmsDocumentResponseSchema,
+      await request(`/api/cms/documents/${document.kind}/draft`, "PUT", document),
+    );
+    const result = v.parse(
+      CmsDocumentResponseSchema,
+      await request(`/api/cms/documents/${document.kind}/publish`, "POST"),
+    ).data;
+    if (result.cache !== "purged") {
+      throw new Error(`${document.kind} cache purge was not completed`);
+    }
+    purgeRequestIds.push(result.cachePurgeRequestId);
+  }
+  return { cache: "purged" as const, cachePurgeRequestId: purgeRequestIds.at(-1) ?? null };
+};
+
 const OperationalCountsSchema = v.strictObject({
   orders: v.number(),
   orderLines: v.number(),
@@ -376,6 +469,7 @@ const ProofSchema = v.strictObject({
   discountTargets: v.number(),
   commerceSettings: v.number(),
   cmsDocuments: v.number(),
+  cachePurgeDebt: v.number(),
   openingEntries: v.number(),
   openingQuantity: v.number(),
   onHandQuantity: v.number(),
@@ -406,6 +500,7 @@ const readProof = async () => {
     (SELECT count(*) FROM discount_rules WHERE (id = ${quote(referenceStoreFixture.discounts[0]?.id ?? "")} AND targets_json = ${json(referenceStoreFixture.discounts[0]?.targets ?? [])}) OR (id = ${quote(referenceStoreFixture.discounts[1]?.id ?? "")} AND targets_json = ${json(referenceStoreFixture.discounts[1]?.targets ?? [])})) AS discountTargets,
     (SELECT count(*) FROM commerce_settings WHERE key = 'commerce' AND bank_transfer_enabled = ${Number(commerceSettings.bankTransferEnabled)} AND cash_on_delivery_enabled = ${Number(commerceSettings.cashOnDeliveryEnabled)} AND customer_accounts_enabled = ${Number(commerceSettings.customerAccountsEnabled)} AND telegram_enabled = ${Number(commerceSettings.telegramEnabled)} AND pickup_enabled = ${Number(commerceSettings.pickupEnabled)} AND delivery_enabled = ${Number(commerceSettings.deliveryEnabled)} AND delivery_fee_mnt = ${commerceSettings.deliveryFeeMnt} AND free_delivery_threshold_mnt IS ${nullable(commerceSettings.freeDeliveryThresholdMnt)}) AS commerceSettings,
     (SELECT count(*) FROM cms_documents WHERE status = 'published') AS cmsDocuments,
+    (SELECT count(*) FROM cms_cache_purge_debt WHERE key = 'storefront') AS cachePurgeDebt,
     (SELECT count(*) FROM inventory_entries WHERE command_correlation_id = 'wf29.reference.seed.opening.v1') AS openingEntries,
     (SELECT coalesce(sum(on_hand_delta), 0) FROM inventory_entries WHERE command_correlation_id = 'wf29.reference.seed.opening.v1') AS openingQuantity,
     (SELECT coalesce(sum(on_hand_quantity), 0) FROM stock_items) AS onHandQuantity,
@@ -435,6 +530,7 @@ const assertProof = (proof: v.InferOutput<typeof ProofSchema>) => {
     discounts: proof.discounts === 2 && proof.discountTargets === 2,
     commerceSettings: proof.commerceSettings === 1,
     cmsDocuments: proof.cmsDocuments === 7,
+    cacheInvalidation: proof.cachePurgeDebt === 0,
     openingEntries: proof.openingEntries === 13,
     openingQuantity: proof.openingQuantity === 111,
     inventoryLedger: proof.onHandQuantity === proof.ledgerQuantity,
@@ -468,6 +564,8 @@ const main = async () => {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "urnuun48-seed-"));
   try {
     const before = await readOperationalCounts();
+    const cacheOwnedDifferences =
+      mode === "--remote" ? await readCacheOwnedDifferences() : new Set<string>();
     const mediaOutcomes = [] as {
       readonly asset: string;
       readonly outcome: "retained" | "uploaded";
@@ -495,6 +593,10 @@ const main = async () => {
       sqlPath,
       "--yes",
     ]);
+    const cacheInvalidation =
+      mode === "--remote"
+        ? await seedRemoteCacheOwnedContent(cacheOwnedDifferences)
+        : { cache: "not_required" as const, cachePurgeRequestId: null };
 
     const after = await readOperationalCounts();
     if (JSON.stringify(before) !== JSON.stringify(after)) {
@@ -511,6 +613,7 @@ const main = async () => {
           paymentProvider: referenceStoreFixture.paymentProvider,
           scenarioKeys: referenceStoreFixture.scenarioKeys,
           mode: mode.slice(2),
+          cacheInvalidation,
           media: mediaOutcomes.map((entry) => ({
             asset: entry.asset,
             outcome: summarizeMedia(entry),

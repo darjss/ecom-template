@@ -1,0 +1,1 @@
+ALTER TABLE `catalog_items` ADD `brand_text` text;
