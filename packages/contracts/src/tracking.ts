@@ -90,7 +90,7 @@ export const GuestTrackingOrderSchema = v.strictObject({
 export const GuestTrackingResponseSchema = v.strictObject({ data: GuestTrackingOrderSchema });
 export const GuestTrackingApiErrorSchema = v.strictObject({
   error: v.strictObject({
-    code: v.picklist(["not_found", "unavailable"]),
+    code: v.picklist(["not_found", "rate_limited", "unavailable"]),
     message: v.string(),
   }),
 });

@@ -78,7 +78,7 @@ const GuestTrackingContent = () => {
   }));
   return (
     <Switch>
-      <Match when={!fragmentRead() || tracking.isPending}>
+      <Match when={!fragmentRead()}>
         <p
           class="mx-auto max-w-2xl border-y border-black/15 bg-white px-5 py-10 text-center font-bold"
           role="status"
@@ -92,6 +92,14 @@ const GuestTrackingContent = () => {
           role="alert"
         >
           Tracking холбоос дутуу эсвэл хүчингүй байна.
+        </p>
+      </Match>
+      <Match when={tracking.isPending}>
+        <p
+          class="mx-auto max-w-2xl border-y border-black/15 bg-white px-5 py-10 text-center font-bold"
+          role="status"
+        >
+          Захиалгын явцыг шалгаж байна…
         </p>
       </Match>
       <Match when={tracking.error} keyed>

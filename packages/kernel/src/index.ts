@@ -94,7 +94,12 @@ export {
   type DiscountOperationFailure,
 } from "./discount/operations";
 export { readDatabaseHealth } from "./db/health";
-export { readGuestTracking, rotateGuestTracking } from "./guest-tracking/operations";
+export {
+  readGuestTracking,
+  readGuestTrackingFailureLimit,
+  recordGuestTrackingFailure,
+  rotateGuestTracking,
+} from "./guest-tracking/operations";
 export {
   approveStaff,
   changeStaffRole,
