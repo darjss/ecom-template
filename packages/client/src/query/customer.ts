@@ -27,7 +27,7 @@ export const customerAuthMutationOptions = (queryClient: QueryClient) =>
   >({
     mutationFn: async (mutation) =>
       unwrapRequestResult(await requestCustomerAuthMutation(mutation)),
-    onSuccess: async (result, mutation) => {
+    onSuccess: async (_result, mutation) => {
       if (mutation.kind === "request_otp") {
         return;
       }
@@ -35,7 +35,8 @@ export const customerAuthMutationOptions = (queryClient: QueryClient) =>
         queryClient.cancelQueries({ queryKey: customerSessionKey }),
         queryClient.cancelQueries({ queryKey: customerOrdersQueryKey }),
       ]);
+      const sessionReset = queryClient.resetQueries({ queryKey: customerSessionKey });
       queryClient.removeQueries({ queryKey: customerOrdersQueryKey });
-      queryClient.setQueryData(customerSessionKey, result);
+      await sessionReset;
     },
   });
