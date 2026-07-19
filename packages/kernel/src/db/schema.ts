@@ -250,6 +250,7 @@ export const catalogItems = sqliteTable(
     state: text("state", { enum: ["draft", "published", "archived"] }).notNull(),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
+    brandText: text("brand_text"),
     priceMnt: integer("price_mnt").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),

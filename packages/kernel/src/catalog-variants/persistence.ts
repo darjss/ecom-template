@@ -7,6 +7,7 @@ import {
   createOptionValueId,
   createStockItemId,
   createVariantId,
+  compactSku,
   type Product,
   type ProductId,
   type SaveProductOptionsInput,
@@ -30,7 +31,7 @@ import {
   variants,
 } from "../db/schema";
 import { database } from "../db/database";
-import { catalogSku, compactSku } from "../catalog/sku";
+import { catalogSku } from "../catalog/sku";
 
 const combinationKey = (valueIds: readonly string[]) => [...valueIds].toSorted().join("|");
 

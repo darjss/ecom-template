@@ -4,6 +4,7 @@ import {
   createProductId,
   createStockItemId,
   createVariantId,
+  compactSku,
   type CreateProductInput,
   type ProductId,
   type UpdateProductInput,
@@ -27,7 +28,7 @@ import {
 import { database } from "../db/database";
 import type { StaffActor } from "../staff/operations";
 import { catalogReaderQueries, findCatalogProductById } from "../catalog-reader/persistence";
-import { catalogSku, compactSku } from "./sku";
+import { catalogSku } from "./sku";
 
 const existsById = async (id: ProductId) => {
   const rows = await database()

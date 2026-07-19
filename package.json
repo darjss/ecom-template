@@ -25,6 +25,7 @@
     "bindings:generate": "pnpm --filter @shops/urnuun-48 bindings:generate",
     "db:generate": "drizzle-kit generate --config packages/kernel/drizzle.config.ts",
     "db:migrate:local": "pnpm --filter @shops/urnuun-48 db:migrate:local",
+    "reference:seed": "tsx scripts/reference-store/seed.ts",
     "search:migration:generate": "tsx packages/kernel/scripts/catalog-search-migration.ts",
     "auth:generate": "better-auth generate --config packages/kernel/scripts/staff-auth.config.ts --output packages/kernel/src/auth/staff.generated.ts --yes && better-auth generate --config packages/kernel/scripts/customer-auth.config.ts --output packages/kernel/src/auth/customer.generated.ts --yes && oxfmt packages/kernel/src/auth/*.generated.ts",
     "generated:check": "node scripts/check-generated.mjs && tsx packages/kernel/scripts/catalog-search-migration.ts --check",
@@ -40,8 +41,10 @@
   },
   "devDependencies": {
     "@better-auth/cli": "1.4.21",
+    "@ecom/contracts": "workspace:*",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.0.0",
+    "dismatch": "2.6.0",
     "drizzle-kit": "0.31.10",
     "eslint-plugin-solid": "0.14.5",
     "knip": "6.27.0",
@@ -52,6 +55,7 @@
     "solid-js": "1.9.13",
     "tsx": "4.21.0",
     "typescript": "7.0.2",
+    "valibot": "1.4.2",
     "wrangler": "4.107.0"
   },
   "engines": {

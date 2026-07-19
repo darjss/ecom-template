@@ -37,7 +37,7 @@ export const BundleQuantitySchema = v.pipe(v.number(), v.integer(), v.minValue(1
 export const PersonalizationKeySchema = v.pipe(
   v.string(),
   v.trim(),
-  v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  v.regex(/^[a-z0-9]+(?:[_-][a-z0-9]+)*$/),
   v.maxLength(48),
 );
 export const PersonalizationLabelSchema = v.pipe(

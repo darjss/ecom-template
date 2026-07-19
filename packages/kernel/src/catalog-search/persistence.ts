@@ -3,6 +3,7 @@ import {
   CatalogItemIdSchema,
   CatalogItemSearchResultSchema,
   ProductIdSchema,
+  compactSku,
   type CatalogItemSearchResult,
   type CatalogSearchResponse,
 } from "@ecom/contracts";
@@ -10,7 +11,6 @@ import { env } from "cloudflare:workers";
 import { and, asc, eq, or } from "drizzle-orm";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
-import { compactSku } from "../catalog/sku";
 import { database } from "../db/database";
 import {
   catalogItemCategories,

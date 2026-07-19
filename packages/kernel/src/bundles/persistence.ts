@@ -7,6 +7,7 @@ import {
   createBundleId,
   createPersonalizationId,
   createPersonalizationValueId,
+  compactSku,
   type BundleId,
   type CatalogItemId,
   type CreateBundleInput,
@@ -19,7 +20,7 @@ import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import type { StaffActor } from "../staff/operations";
-import { catalogSku, compactSku } from "../catalog/sku";
+import { catalogSku } from "../catalog/sku";
 import { database } from "../db/database";
 import {
   auditEvents,

@@ -41,7 +41,16 @@ export const CatalogSlugSchema = v.pipe(
   v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   v.maxLength(100),
 );
-export const SkuSchema = v.pipe(v.string(), v.regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/), v.maxLength(64));
+export const SkuSchema = v.pipe(
+  v.string(),
+  v.regex(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u),
+  v.maxLength(64),
+);
+export const compactSku = (value: string) =>
+  value
+    .normalize("NFKC")
+    .toLocaleLowerCase("mn-MN")
+    .replaceAll(/[-/\p{White_Space}]/gu, "");
 export const PriceMntSchema = v.pipe(
   v.number(),
   v.integer(),
