@@ -26,6 +26,7 @@ import {
   ProductIdSchema,
   SkuSchema,
   StockItemIdSchema,
+  compactSku,
   TagIdSchema,
   TagLabelSchema,
   VariantIdSchema,
@@ -266,9 +267,11 @@ const FixtureSchema = v.pipe(
       ),
       ...fixture.bundles.map(({ sku }) => sku),
     ];
+    const compactSkus = skus.map(compactSku);
     return (
       new Set(identifiers).size === identifiers.length &&
       new Set(skus).size === skus.length &&
+      new Set(compactSkus).size === compactSkus.length &&
       fixture.products.every((product) => {
         const optionValues = new Set(
           product.optionGroups.flatMap(({ values }) => values.map(({ id }) => id)),
