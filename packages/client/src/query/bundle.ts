@@ -14,7 +14,7 @@ import {
 } from "../bundle/request";
 import { unwrapRequestResult } from "../request";
 import * as v from "valibot";
-import { catalogQueryKey } from "../catalog";
+import { catalogQueryKey } from "./catalog";
 
 const bundleQueryKey = ["catalog", "bundles"] as const;
 type BundleResult = Awaited<ReturnType<typeof requestBundles>>;
