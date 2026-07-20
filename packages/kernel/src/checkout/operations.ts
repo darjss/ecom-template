@@ -348,10 +348,16 @@ export const placeOrder = async (
   input: PlaceOrderInput,
   customer: { readonly id: CustomerId; readonly phone: MongolianPhone } | null,
 ): Promise<Result<PlaceOrderResult, CheckoutFailure>> => {
-  const intentDigest = await digest(input);
+  const intentDigest = await digest({
+    acceptedCommercialFingerprint: input.acceptedCommercialFingerprint,
+    quoteInput: input.quoteInput,
+    contact: input.contact,
+    paymentMethod: input.paymentMethod,
+  });
   const customerId = customer?.phone === input.contact.recipientPhone ? customer.id : null;
   try {
-    const existing = await readPlacement(input.idempotencyKey);
+    const statusAccess = await createOrderStatusAccess(input.idempotencyKey);
+    const existing = await readPlacement(input.idempotencyKey, statusAccess.statusPath);
     if (existing) {
       return existing.intentDigest === intentDigest
         ? Result.ok(existing.result)
@@ -409,12 +415,12 @@ export const placeOrder = async (
       intentDigest,
       destination,
       customerId,
-      await createOrderStatusAccess(),
+      statusAccess,
     );
     if (committed) {
       return Result.ok(committed);
     }
-    const racedPlacement = await readPlacement(input.idempotencyKey);
+    const racedPlacement = await readPlacement(input.idempotencyKey, statusAccess.statusPath);
     if (racedPlacement) {
       return racedPlacement.intentDigest === intentDigest
         ? Result.ok(racedPlacement.result)

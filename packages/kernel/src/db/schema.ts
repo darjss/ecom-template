@@ -879,6 +879,8 @@ export const orders = sqliteTable(
     customerId: text("customer_id").references(() => customers.id, { onDelete: "restrict" }),
     customerLinkedAt: integer("customer_linked_at", { mode: "timestamp_ms" }),
     statusTokenHash: text("status_token_hash").unique(),
+    placementKey: text("placement_key").notNull().unique(),
+    placementIntentDigest: text("placement_intent_digest").notNull(),
     recipientName: text("recipient_name").notNull(),
     recipientPhone: text("recipient_phone").notNull(),
     currency: text("currency", { enum: ["MNT"] }).notNull(),
@@ -921,6 +923,8 @@ export const orders = sqliteTable(
       "orders_status_token_check",
       sql`${table.statusTokenHash} IS NULL OR (length(${table.statusTokenHash}) = 64 AND ${table.statusTokenHash} NOT GLOB '*[^0123456789abcdef]*')`,
     ),
+    check("orders_placement_key_check", sql`length(${table.placementKey}) BETWEEN 1 AND 64`),
+    check("orders_placement_intent_digest_check", sql`length(${table.placementIntentDigest}) = 64`),
     check(
       "orders_free_delivery_check",
       sql`${table.freeDeliveryApplied} IN (0, 1) AND (${table.freeDeliveryThresholdMnt} IS NULL OR ${table.freeDeliveryThresholdMnt} >= 0)`,
@@ -1191,25 +1195,6 @@ export const fulfillments = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("fulfillments_state_idx").on(table.state, table.createdAt)],
-);
-
-export const placementIdempotency = sqliteTable(
-  "placement_idempotency",
-  {
-    key: text("key").primaryKey(),
-    intentDigest: text("intent_digest").notNull(),
-    resultJson: text("result_json").notNull(),
-    orderId: text("order_id")
-      .notNull()
-      .unique()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check("placement_idempotency_key_check", sql`length(${table.key}) BETWEEN 1 AND 64`),
-    check("placement_idempotency_digest_check", sql`length(${table.intentDigest}) = 64`),
-    check("placement_idempotency_result_check", sql`json_valid(${table.resultJson})`),
-  ],
 );
 
 export const inventoryReservations = sqliteTable(
