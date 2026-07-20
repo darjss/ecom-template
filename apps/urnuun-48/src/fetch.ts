@@ -18,7 +18,7 @@ const publicCatalogPath =
 const publicCmsPath =
   /^\/(?:locations\/location_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}|policies\/(?:terms|privacy|delivery|returns_refunds|payment))$/;
 const privateCatalogImageUploadPath =
-  /^\/api\/catalog\/items\/(?:product|bundle)_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}\/images$/;
+  /^\/api\/catalog\/items\/product_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25}\/images$/;
 const isPublicStorefrontPath = (pathname: string) =>
   publicStorefrontPaths.has(pathname) ||
   publicCatalogPath.test(pathname) ||

@@ -1,20 +1,5 @@
 export { signOutCustomer } from "./auth/customer-runtime";
 export { readAvailability, type AvailabilityFailure } from "./availability/operations";
-export {
-  createBundle,
-  expandBundleDemand,
-  listBundles,
-  readCatalogItemPersonalizations,
-  resolvePendingBundleCachePurge,
-  retryBundleCachePurge,
-  saveBundleComponents,
-  saveCatalogItemPersonalizations,
-  transitionBundle,
-  updateBundle,
-  validatePersonalizationAnswers,
-  type BundleMutationResult,
-  type BundleOperationFailure,
-} from "./bundles/operations";
 export { createLocalOwnerSession } from "./auth/local-staff-login";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
 export {

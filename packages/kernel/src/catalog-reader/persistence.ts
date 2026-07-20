@@ -1,18 +1,31 @@
 import {
+  BundleIdSchema,
   CatalogItemIdSchema,
+  PersonalizationDefinitionsSchema,
   ProductIdSchema,
   ProductSchema,
+  PublicBundleDetailSchema,
   PublicCatalogItemSummarySchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  VariantIdSchema,
   type CatalogItemId,
   type Product,
   type ProductId,
 } from "@ecom/contracts";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
+import {
+  bundleComponents,
+  catalogCachePurgeDebts,
+  catalogItems,
+  personalizationDefinitions,
+  personalizationValues,
+  skus,
+  stockItems,
+  variants,
+} from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import {
   readProductOptionConfiguration,
@@ -105,6 +118,51 @@ export const findCatalogProductById = async (id: ProductId) => {
     row,
     images.map(({ image }) => image),
     optionConfiguration,
+  );
+};
+
+const readPersonalizations = async (catalogItemId: CatalogItemId) => {
+  const db = database();
+  const definitions = await db
+    .select()
+    .from(personalizationDefinitions)
+    .where(eq(personalizationDefinitions.catalogItemId, catalogItemId))
+    .orderBy(asc(personalizationDefinitions.position));
+  if (definitions.length === 0) {
+    return [];
+  }
+  const values = await db
+    .select()
+    .from(personalizationValues)
+    .where(
+      inArray(
+        personalizationValues.personalizationId,
+        definitions.map(({ id }) => id),
+      ),
+    )
+    .orderBy(asc(personalizationValues.position));
+  return v.parse(
+    PersonalizationDefinitionsSchema,
+    definitions.map(
+      ({
+        catalogItemId: _catalogItemId,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...definition
+      }) => ({
+        ...definition,
+        values: values
+          .filter(({ personalizationId }) => personalizationId === definition.id)
+          .map(
+            ({
+              personalizationId: _personalizationId,
+              createdAt: _valueCreatedAt,
+              updatedAt: _valueUpdatedAt,
+              ...value
+            }) => value,
+          ),
+      }),
+    ),
   );
 };
 
@@ -269,4 +327,61 @@ export const catalogReaderQueries = {
         })),
     });
   },
+
+  async findPublishedBundleBySlug(slug: string) {
+    const db = database();
+    const rows = await db
+      .select({
+        id: catalogItems.id,
+        slug: catalogItems.slug,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        priceMnt: catalogItems.priceMnt,
+        sku: skus.sku,
+      })
+      .from(catalogItems)
+      .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
+      .where(
+        and(
+          eq(catalogItems.state, "published"),
+          eq(catalogItems.kind, "bundle"),
+          eq(catalogItems.slug, slug),
+        ),
+      )
+      .limit(1);
+    const row = rows.at(0);
+    if (!row) {
+      return undefined;
+    }
+    const id = v.parse(BundleIdSchema, row.id);
+    const [components, images, personalizations] = await Promise.all([
+      db
+        .select({
+          variantId: bundleComponents.variantId,
+          quantity: bundleComponents.quantity,
+          productName: catalogItems.name,
+          variantLabel: skus.sku,
+        })
+        .from(bundleComponents)
+        .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
+        .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+        .innerJoin(skus, eq(skus.variantId, variants.id))
+        .where(eq(bundleComponents.bundleId, id))
+        .orderBy(asc(bundleComponents.variantId)),
+      catalogMediaQueries.listPublicForCatalogItems([id]),
+      readPersonalizations(id),
+    ]);
+    return v.parse(PublicBundleDetailSchema, {
+      ...row,
+      id,
+      components: components.map((component) => ({
+        ...component,
+        variantId: v.parse(VariantIdSchema, component.variantId),
+      })),
+      images: images.map(({ image }) => image),
+      personalizations: personalizations.filter(({ state }) => state === "active"),
+    });
+  },
+
+  readPersonalizations,
 };

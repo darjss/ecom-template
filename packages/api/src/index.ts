@@ -1,7 +1,6 @@
 import {
   ApiErrorSchema,
   CatalogApiErrorSchema,
-  CatalogItemIdSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CatalogSearchApiErrorSchema,
@@ -67,7 +66,6 @@ import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createAvailabilityRoutes } from "./availability-routes";
-import { createBundleRoutes } from "./bundle-routes";
 import { createCheckoutRoutes } from "./checkout-routes";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { createCmsRoutes } from "./cms-routes";
@@ -528,7 +526,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       },
     )
     .post("/catalog/items/:id/images", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CatalogItemIdSchema, params.id);
+      const id = v.safeParse(ProductIdSchema, params.id);
       const multipart = v.safeParse(MediaUploadBodySchema, body);
       const fields = multipart.success
         ? v.safeParse(MediaUploadFieldsSchema, {
@@ -636,7 +634,6 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
-    .use(createBundleRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createDiscountRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createCheckoutRoutes(definition))

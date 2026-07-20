@@ -1,4 +1,4 @@
-import { bundleQueryOptions, catalogQueryOptions, cmsMutationOptions } from "@ecom/client";
+import { catalogQueryOptions, cmsMutationOptions } from "@ecom/client";
 import {
   AnnouncementDocumentSchema,
   HomepageDocumentSchema,
@@ -226,7 +226,6 @@ export const HomepageEditor = (
   const compatible = local.compatible();
   const restored = compatible.kind === "homepage" ? compatible : props.initial;
   const catalog = useQuery(() => catalogQueryOptions());
-  const bundles = useQuery(() => bundleQueryOptions());
   const form = createForm(() => ({
     defaultValues: {
       headline: restored.content.headline,
@@ -272,20 +271,13 @@ export const HomepageEditor = (
       { defer: true },
     ),
   );
-  const items = () => [
-    ...(catalog.data?.data ?? []).map((item) => ({
+  const items = () =>
+    (catalog.data?.data ?? []).map((item) => ({
       id: item.id,
       name: item.name,
       state: item.state,
       images: item.images,
-    })),
-    ...(bundles.data?.data ?? []).map((item) => ({
-      id: item.id,
-      name: item.name,
-      state: item.state,
-      images: item.images,
-    })),
-  ];
+    }));
   const publishedItems = () => items().filter(({ state }) => state === "published");
   const media = () => {
     const entries = publishedItems().flatMap((item) =>
