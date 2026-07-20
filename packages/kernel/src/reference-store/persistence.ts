@@ -292,6 +292,13 @@ export const installReferenceStoreFixtureRows = async (
           })
           .onConflictDoUpdate({ target: variants.id, set: { updatedAt: seededAt } }),
       ),
+      db.delete(skus).where(inArray(skus.variantId, variantIds)),
+      db.delete(skus).where(
+        inArray(
+          skus.bundleId,
+          fixture.bundles.map(({ id }) => id),
+        ),
+      ),
       ...[
         ...variantRows.map((variant) => ({
           sku: variant.sku,
@@ -313,12 +320,7 @@ export const installReferenceStoreFixtureRows = async (
           createdAt: seededAt,
           updatedAt: seededAt,
         })),
-      ].map((sku) =>
-        db
-          .insert(skus)
-          .values(sku)
-          .onConflictDoUpdate({ target: skus.skuCompact, set: { updatedAt: seededAt } }),
-      ),
+      ].map((sku) => db.insert(skus).values(sku)),
       db
         .insert(stockItems)
         .values(
