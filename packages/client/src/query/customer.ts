@@ -6,6 +6,7 @@ import {
   type CustomerAuthMutation,
 } from "../customer/request";
 import { unwrapRequestResult } from "../request";
+import { createStoreQueryClient } from "./client";
 import { customerOrdersQueryKey } from "./order";
 
 const customerSessionKey = ["customer", "session"] as const;
@@ -19,6 +20,21 @@ export const customerSessionQueryOptions = () =>
     queryFn: async ({ signal }) => unwrapRequestResult(await requestCustomerSession(signal)),
   });
 
+const resetCustomerAuthority = async (queryClient: QueryClient) => {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: customerSessionKey }),
+    queryClient.cancelQueries({ queryKey: customerOrdersQueryKey }),
+  ]);
+  const sessionReset = queryClient.resetQueries({ queryKey: customerSessionKey });
+  queryClient.removeQueries({ queryKey: customerOrdersQueryKey });
+  await sessionReset;
+};
+
+export const createCustomerQueryClient = () => {
+  const queryClient = createStoreQueryClient(() => void resetCustomerAuthority(queryClient));
+  return queryClient;
+};
+
 export const customerAuthMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<
     InferOk<CustomerMutationResult>,
@@ -31,12 +47,6 @@ export const customerAuthMutationOptions = (queryClient: QueryClient) =>
       if (mutation.kind === "request_otp") {
         return;
       }
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: customerSessionKey }),
-        queryClient.cancelQueries({ queryKey: customerOrdersQueryKey }),
-      ]);
-      const sessionReset = queryClient.resetQueries({ queryKey: customerSessionKey });
-      queryClient.removeQueries({ queryKey: customerOrdersQueryKey });
-      await sessionReset;
+      await resetCustomerAuthority(queryClient);
     },
   });

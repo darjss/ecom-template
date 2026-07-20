@@ -1,5 +1,5 @@
 import {
-  createStoreQueryClient,
+  createCustomerQueryClient,
   customerOrdersQueryOptions,
   customerSessionQueryOptions,
 } from "@ecom/client";
@@ -48,7 +48,7 @@ const CustomerOrdersContent = () => {
 };
 
 export const CustomerOrdersIsland = () => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createCustomerQueryClient();
   return (
     <QueryClientProvider client={queryClient}>
       <CustomerOrdersContent />

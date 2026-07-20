@@ -1,5 +1,5 @@
 import {
-  createStoreQueryClient,
+  createCustomerQueryClient,
   customerAuthMutationOptions,
   customerSessionQueryOptions,
 } from "@ecom/client";
@@ -172,7 +172,7 @@ export const CustomerAuthPanel = () => {
 };
 
 export const CustomerAuthIsland = () => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createCustomerQueryClient();
   return (
     <QueryClientProvider client={queryClient}>
       <CustomerAuthPanel />

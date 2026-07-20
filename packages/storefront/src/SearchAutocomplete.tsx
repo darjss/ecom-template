@@ -1,4 +1,8 @@
-import { catalogSearchQueryOptions, createStoreQueryClient } from "@ecom/client";
+import {
+  catalogSearchQueryOptions,
+  createStoreQueryClient,
+  reportUnauthorized,
+} from "@ecom/client";
 import { QueryClientProvider, createQuery } from "@tanstack/solid-query";
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 
@@ -171,7 +175,7 @@ const SearchAutocompleteList = (props: Props) => {
 };
 
 export const SearchAutocomplete = (props: Props) => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createStoreQueryClient(reportUnauthorized);
   return (
     <QueryClientProvider client={queryClient}>
       <SearchAutocompleteList inputId={props.inputId} initialQuery={props.initialQuery} />

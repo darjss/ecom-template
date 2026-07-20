@@ -17,7 +17,7 @@ const retrySafeFailure = (failureCount: number, error: unknown) => {
   );
 };
 
-const presentGlobalError = (onUnauthorized?: () => void) => (error: unknown) => {
+const presentGlobalError = (onUnauthorized: () => void) => (error: unknown) => {
   const parsed = parseClientError(error);
   if (!parsed.success) {
     toast.error("Тодорхойгүй алдаа гарлаа.");
@@ -31,7 +31,7 @@ const presentGlobalError = (onUnauthorized?: () => void) => (error: unknown) => 
     toast.error("Үйлчилгээний хариуг шалгаж чадсангүй.");
     return;
   }
-  if (parsed.output.error.code === "unauthorized" && onUnauthorized) {
+  if (parsed.output.error.code === "unauthorized") {
     onUnauthorized();
     return;
   }
@@ -46,7 +46,12 @@ const presentGlobalError = (onUnauthorized?: () => void) => (error: unknown) => 
   toast.error(parsed.output.error.message);
 };
 
-export const createStoreQueryClient = (onUnauthorized?: () => void) =>
+type UnauthorizedHandler = () => void;
+
+export const reportUnauthorized: UnauthorizedHandler = () =>
+  toast.error("Нэвтрэх эрх хүчингүй болсон.");
+
+export const createStoreQueryClient = (onUnauthorized: UnauthorizedHandler) =>
   new QueryClient({
     queryCache: new QueryCache({ onError: presentGlobalError(onUnauthorized) }),
     mutationCache: new MutationCache({ onError: presentGlobalError(onUnauthorized) }),

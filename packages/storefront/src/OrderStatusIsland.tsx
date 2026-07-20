@@ -1,4 +1,4 @@
-import { createStoreQueryClient, orderStatusQueryOptions } from "@ecom/client";
+import { createStoreQueryClient, orderStatusQueryOptions, reportUnauthorized } from "@ecom/client";
 import {
   OrderAccessApiErrorSchema,
   OrderStatusTokenSchema,
@@ -55,7 +55,7 @@ const OrderStatusContent = (props: { readonly token: string }) => {
 };
 
 export const OrderStatusIsland = (props: { readonly token: string }) => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createStoreQueryClient(reportUnauthorized);
   return (
     <QueryClientProvider client={queryClient}>
       <OrderStatusContent token={props.token} />

@@ -1,4 +1,4 @@
-import { CartProvider, createStoreQueryClient, useCart } from "@ecom/client";
+import { CartProvider, createStoreQueryClient, reportUnauthorized, useCart } from "@ecom/client";
 import type {
   CartLine,
   PersonalizationAnswer,
@@ -192,7 +192,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
 };
 
 export const PurchaseIsland = (props: PurchaseIslandProps) => {
-  const queryClient = createStoreQueryClient();
+  const queryClient = createStoreQueryClient(reportUnauthorized);
   let root: HTMLDivElement | undefined;
   onMount(() => {
     root

@@ -44,7 +44,7 @@ export {
   requestUpdateCollection,
   requestUpdateTag,
 } from "./grouping/request";
-export { createStoreQueryClient } from "./query/client";
+export { createStoreQueryClient, reportUnauthorized } from "./query/client";
 export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
 export {
   bundleMutationOptions,
@@ -66,7 +66,11 @@ export {
   commerceSettingsMutationOptions,
   commerceSettingsQueryOptions,
 } from "./query/cms";
-export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
+export {
+  createCustomerQueryClient,
+  customerAuthMutationOptions,
+  customerSessionQueryOptions,
+} from "./query/customer";
 export {
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
