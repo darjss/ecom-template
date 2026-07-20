@@ -1,0 +1,52 @@
+---
+import type { StoreBackend } from "@ecom/api";
+
+type CatalogItems = Awaited<ReturnType<StoreBackend["storefront"]["listPublishedCatalogItems"]>>;
+type CatalogItem = CatalogItems[number];
+interface Props {
+  item: CatalogItem;
+  position: number;
+  priority?: boolean;
+}
+
+const { item, position, priority = false } = Astro.props;
+const image = item.images.at(0);
+const money = new Intl.NumberFormat("mn-MN");
+const imageWidths = [320, 640, 960, 1280];
+const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
+  imageWidths.map((width) => `/media/${mediaAssetId}/${width}.${format} ${width}w`).join(", ");
+const href = `/${item.kind === "bundle" ? "bundles" : "products"}/${item.slug}`;
+---
+<article class="catalog-product">
+  <a class="catalog-product__media" href={href} aria-label={`${item.name} дэлгэрэнгүй`}>
+    {image
+      ? <picture>
+          <source
+            type="image/avif"
+            srcset={imageSrcset(image.mediaAssetId, "avif")}
+            sizes="(max-width: 639px) 40vw, (max-width: 1023px) 50vw, 32vw"
+          />
+          <img
+            src={`/media/${image.mediaAssetId}/960.webp`}
+            srcset={imageSrcset(image.mediaAssetId, "webp")}
+            sizes="(max-width: 639px) 40vw, (max-width: 1023px) 50vw, 32vw"
+            alt={image.altText}
+            width="960"
+            height="960"
+            loading={priority ? "eager" : "lazy"}
+            fetchpriority={priority ? "high" : "auto"}
+            decoding="async"
+          />
+        </picture>
+      : <span class="catalog-product__placeholder" aria-hidden="true">48</span>}
+  </a>
+  <div class="catalog-product__body">
+    <span class="catalog-product__coordinate">Тавиур {String(position).padStart(2, "0")}</span>
+    <h3><a href={href}>{item.name}</a></h3>
+    {item.description && <p>{item.description}</p>}
+    <div class="catalog-product__footer">
+      <strong>{money.format(item.priceMnt)} ₮</strong>
+      <a href={href}>Сонгох <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+</article>
