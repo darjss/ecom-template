@@ -237,7 +237,18 @@ export const installReferenceStoreFixtureRows = async (
           })
           .onConflictDoUpdate({
             target: catalogItems.id,
-            set: { state: "published", updatedAt: seededAt, archivedAt: null },
+            set: {
+              kind: item.kind,
+              slug: item.slug,
+              state: "published",
+              name: item.name,
+              description: item.description,
+              brandText: item.brandText,
+              priceMnt: item.priceMnt,
+              updatedAt: seededAt,
+              publishedAt: seededAt,
+              archivedAt: null,
+            },
           }),
       ),
       db
@@ -583,7 +594,12 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: [cmsDocuments.kind, cmsDocuments.status],
-          set: { schemaVersion: 1, updatedAt: seededAt },
+          set: {
+            schemaVersion: 1,
+            contentJson: sql`excluded.content_json`,
+            updatedAt: seededAt,
+            publishedAt: seededAt,
+          },
         }),
       ...(cacheInvalidationRequired
         ? [
