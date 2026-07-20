@@ -1,50 +1,65 @@
 # Agent conventions
 
-Before coding, read [`docs/agents/coding-standards.md`](docs/agents/coding-standards.md), use the [`contract authority index`](docs/agents/contract-index.md) to find the governing feature contract, and follow the [`feature-slice guide`](docs/agents/feature-slice.md) when extending runtime behavior. The current [`ecommerce system specification`](docs/specs/ecommerce-system.md) mirrors issue #33 and overrides conflicting older Wayfinder artifacts; the [`final scope reconciliation`](docs/wayfinder/final-scope-reconciliation.md) governs decisions the current specification does not replace.
+Scope authority: [issue #115](https://github.com/darjss/ecom-template/issues/115) and [`docs/recovery-brief.md`](docs/recovery-brief.md). Everything in `docs/archive/` is historical evidence — never scope. If an archived artifact conflicts with the brief, the brief wins; do not resurrect it.
 
 ## North star
 
-- **Fix causes, not symptoms.** Make invalid internal states impossible at their source.
-- **Use the simplest maintainable means.** Never add enterprise-style structure or hypothetical extension points.
-- This is greenfield software. Prefer a coherent breaking correction over compatibility with a bad internal interface.
-- Commit each small coherent change.
+- **Fix causes, not symptoms.** Make invalid states impossible at their source.
+- **Full capability, minimal mechanism.** The feature list is broad; every feature ships with the smallest implementation that preserves commerce truth.
+- Greenfield: prefer a coherent breaking correction over compatibility with a bad interface.
+- Commit small coherent changes.
 
 ## Product scale
 
-Design for independent Stores doing roughly 10–20 Orders per day, comfortably around 50 Orders per day and audiences up to about 50,000 followers. Preserve Store isolation, authorization, validation, atomic commercial and inventory truth, recoverability, and compact evidence. Do not optimize for unsupported enterprise scale.
+Independent Stores doing 10–20 Orders/day, comfortable at 50, audiences up to ~50,000 followers. If a design needs a ledger, a rotation, or a second table "for integrity," it is wrong until proven otherwise.
 
-## Stack and ownership
+## Stack
 
-Astro 7 SSR runs on Cloudflare Workers. SolidJS powers islands and the `/admin/*` SPA; never React. Elysia owns `/api`. Tailwind v4 Theme output belongs in `src/styles/global.css`; do not hand-edit Zaidan-generated `base.css`.
+Astro 7 SSR on Cloudflare Workers. SolidJS islands and `/admin/*` SPA; never React. Elysia owns `/api`, Eden types the client. D1 via Drizzle. Tailwind v4.
 
-The target workspace has one minimal Store app and nine shared packages: `contracts`, `kernel`, `api`, `client`, `admin`, `storefront`, `ui`, `integrations`, and `delivery`. See [`docs/architecture/bootstrap-plan.md`](docs/architecture/bootstrap-plan.md).
+- Valibot owns runtime contracts; raw Drizzle rows never cross the browser boundary.
+- Better Result is internal; HTTP uses meaningful statuses and typed envelopes.
+- Server code imports bindings directly from `cloudflare:workers`.
+- TanStack Query owns remote state, TanStack Form owns forms, URLs own navigation, Solid stores own Cart/session/UI state.
+- Mutations invalidate authoritative queries rather than patching cache.
+- Solar Icons only, deep Solid imports.
 
-- Valibot owns runtime contracts. Raw Drizzle rows never cross the browser boundary.
-- Better Result is internal. HTTP uses meaningful statuses and typed envelopes; Query data never contains Result containers.
-- Server owners import fixed bindings directly from `cloudflare:workers`; do not inject binding wrappers.
-- TanStack Query owns remote state, TanStack Form owns forms, URLs own shareable navigation, and Solid stores/context own Cart/session/UI state.
-- Mutations invalidate authoritative queries rather than patching cache truth.
-- Store customization replaces Astro route presentation while shared packages retain commerce behavior and accessibility.
-- Solar Icons only, through deep Solid imports where applicable.
+## Simplicity caps (binding)
+
+- One table per concept. **No** ledger, entries, allocation, debt, or rotation tables.
+- Status + timestamp columns instead of state-history tables.
+- Provider is payment truth: store provider ref + status + confirmedBy/At only.
+- Cache purge is synchronous after admin write; log failures.
+- Guest tracking = the Order token in the URL.
+- Inventory = atomic `onHand`/`reserved` counters moved at placement.
+- Every new table needs a one-line justification in its PR.
+
+## UI law
+
+- Zaidan controls: `pnpm dlx shadcn@latest add @zaidan/<name>` into `packages/ui`. Raw `<input>`/`<select>`/`<textarea>` in new UI is a blocker.
+- No Tailwind-class string constants shared across files — extract a component.
+- Admin is routed; the Order inbox is its home.
+- Storefront follows the committed pantry direction in `DESIGN.md`; adapt composition, not just decoration.
 
 ## Hard guardrails
 
-Strict TypeScript: no `any`, unchecked assertions, non-null assertions, ignored errors, or classes except the established error hierarchy. Do not add inline comments outside established TODO seams. Use named exports and feature public entrypoints. Keep routes thin and raw table access inside feature persistence modules. Cross-feature backend calls are direct operations, never HTTP self-calls.
+Strict TypeScript: no `any`, unchecked assertions, non-null assertions, ignored errors, or classes outside the established error hierarchy. No inline comments outside TODO seams. Named exports, feature public entrypoints, thin routes, raw table access only inside feature persistence modules. Cross-feature backend calls are direct operations, never HTTP self-calls.
 
-Do not add unit or integration tests, mocks, stubs, or fake providers. Verify frontend work in a real browser; verify API/backend work with real curl or a focused TypeScript CLI harness. For model behavior, build an interactive CLI harness.
+No unit/integration tests, mocks, stubs, or fake providers. Blocked beats fake green.
 
-Add dependencies only at an accepted owning seam. Do not introduce a competing validation, Result, state, date, icon, motion, logging, utility, or matching stack.
+Add dependencies only at an accepted owning seam; never a competing validation, Result, state, date, icon, motion, logging, utility, or matching stack.
 
 ## Repository operations
 
-- UI components: `pnpm dlx shadcn@latest add @zaidan/<name>` into the owning shared UI package.
-- Schema changes: update the kernel schema, then run the repository's generate and local-migrate commands.
-- Better Auth plugin changes: update its schema-generation config and regenerate.
-- Environment variables: update Valibot env contracts, `.dev.vars.example`, public Wrangler vars where applicable, and regenerate binding types.
-- Issues and PRDs: [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
-- Triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
-- Domain language: [`docs/agents/domain.md`](docs/agents/domain.md).
+- Schema changes: update the kernel schema, run the repo's generate + local-migrate commands.
+- Better Auth plugin changes: update schema-generation config and regenerate.
+- Env vars: update Valibot env contracts, `.dev.vars.example`, Wrangler vars, regenerate binding types.
+- Domain language: `CONTEXT.md`.
 
-## Proof
+## Gates
 
-Run every applicable repository gate: frozen install, format, lint, TypeScript 7 typecheck, Astro check, Knip, Sherif, dependency-direction checks, and production build. Then run the app through Portless, inspect affected browser behavior, and curl `/api/health` plus relevant cache/no-store headers. Missing credentials or infrastructure means blocked, not passed.
+Per PR: format, lint, typecheck, production build — green. UI PRs add one desktop + one mobile screenshot of the affected route, taken by the agent in a real browser. API PRs add one real curl of the affected endpoint.
+
+Per slice: the agent runs a full browser walkthrough of the user journey plus the full gate suite (Astro check, Knip, Sherif, dependency direction). One correction pass; a second failure escalates to the human instead of spawning another review loop.
+
+Gates green and product approved are separate states. A slice is done when a working user journey exists, not when checks pass.
