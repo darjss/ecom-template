@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./button": "./src/components/button.tsx",
-    "./icons": "./src/icons.ts",
     "./styles.css": "./src/styles.css"
   },
   "dependencies": {
