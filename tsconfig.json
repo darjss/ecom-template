@@ -12,6 +12,7 @@
     "apps/urnuun-48/src/**/*.ts",
     "apps/urnuun-48/src/**/*.tsx",
     "apps/urnuun-48/worker-configuration.d.ts",
-    "scripts/**/*.mjs"
+    "scripts/**/*.mjs",
+    "scripts/**/*.ts"
   ]
 }
