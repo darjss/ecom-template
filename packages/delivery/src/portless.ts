@@ -2,9 +2,9 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import * as v from "valibot";
-import { StoreSlugSchema } from "./index";
 
 const execFileOutput = promisify(execFile);
+const StoreSlugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
 const PortlessOriginSchema = v.pipe(
   v.string(),
   v.url(),
@@ -48,12 +48,7 @@ const readWorktreeIdentity = async () => {
   return sanitizeHostnameLabel(branch.split("/").at(-1) ?? "");
 };
 
-export const parsePortlessOrigin = (input: unknown) => v.parse(PortlessOriginSchema, input);
-
-export const readCommitIdentity = async () => {
-  const { stdout } = await execFileOutput("git", ["rev-parse", "HEAD"]);
-  return v.parse(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)), stdout.trim());
-};
+const parsePortlessOrigin = (input: unknown) => v.parse(PortlessOriginSchema, input);
 
 export const resolveLocalStore = async (input: string) => {
   const slug = v.parse(StoreSlugSchema, input);

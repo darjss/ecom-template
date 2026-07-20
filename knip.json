@@ -12,6 +12,9 @@
       "entry": ["src/index.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx}"]
     },
+    "packages/delivery": {
+      "entry": ["src/{api-request,cli}.ts"]
+    },
     "packages/kernel": {
       "entry": ["scripts/*.ts"]
     }
