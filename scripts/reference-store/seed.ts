@@ -180,8 +180,8 @@ const requireEdenResponse = <Data>(
 
 const createSeedClient = (origin: string) =>
   treaty<StoreElysiaApp>(origin, {
-    headers: {
-      ...(seedArguments.mode === "local"
+    headers:
+      seedArguments.mode === "local"
         ? { "x-reference-store-local-token": localToken }
         : {
             cookie: v.parse(
@@ -189,8 +189,7 @@ const createSeedClient = (origin: string) =>
               process.env.REFERENCE_STORE_STAFF_COOKIE,
             ),
             origin,
-          }),
-    },
+          },
   });
 
 const synchronizeMedia = async (origin: string) => {
@@ -243,22 +242,19 @@ const main = async () => {
   try {
     const origin = seedArguments.mode === "local" ? localOrigin : remoteOrigin();
     const media = await synchronizeMedia(origin);
-    const installation = await request(
-      origin,
-      "/api/reference-store/fixture",
+    const client = createSeedClient(origin);
+    const installation = requireEdenResponse(
+      await client.api["reference-store"].fixture.put(referenceStoreFixture),
       "PUT",
-      jsonBody(),
-      "application/json",
+      "/api/reference-store/fixture",
     );
     if (seedArguments.mode === "remote") {
       await retryCachePurge(origin);
     }
-    const proof = await request(
-      origin,
-      "/api/reference-store/fixture/proof",
+    const proof = requireEdenResponse(
+      await client.api["reference-store"].fixture.proof.post(referenceStoreFixture),
       "POST",
-      jsonBody(),
-      "application/json",
+      "/api/reference-store/fixture/proof",
     );
     process.stdout.write(
       `${JSON.stringify(
