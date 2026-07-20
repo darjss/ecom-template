@@ -24,7 +24,6 @@ import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import { database } from "../db/database";
 import type { OrderStatusAccess } from "../order";
-import type { CommercialFacts } from "./commercial";
 import {
   auditEvents,
   bundleComponents,
@@ -57,6 +56,26 @@ import {
   variantOptionValues,
   variants,
 } from "../db/schema";
+
+export type PlacementPolicySnapshot = {
+  readonly discount:
+    | { readonly kind: "none" }
+    | {
+        readonly kind: "applied";
+        readonly ruleId: string;
+        readonly mode: "automatic" | "code";
+        readonly code: string | null;
+        readonly calculation: "percentage" | "fixed_mnt";
+        readonly value: number;
+        readonly startsAt: number | null;
+        readonly endsAt: number | null;
+        readonly minimumSubtotalMnt: number;
+        readonly globalLimit: number | null;
+        readonly targetsJson: string;
+      };
+  readonly freeDeliveryThresholdMnt: number | null;
+  readonly commerceSettingsUpdatedAt: number;
+};
 
 export const checkoutQueries = {
   async readOptions() {
@@ -309,7 +328,7 @@ export const readPlacement = async (key: string) => {
 export const commitPlacement = async (
   input: PlaceOrderInput,
   quote: CheckoutQuote,
-  commercial: CommercialFacts,
+  policy: PlacementPolicySnapshot,
   intentDigest: string,
   destination: PlacementDestination,
   customerId: CustomerId | null,
@@ -347,186 +366,6 @@ export const commitPlacement = async (
         ),
     ),
   );
-  const catalogCurrent = commercial.lines.flatMap((line) => {
-    const sourceCurrent =
-      line.source.kind === "variant"
-        ? sql`EXISTS (
-            SELECT 1 FROM ${variants}
-            JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
-            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
-            WHERE ${variants.id} = ${line.source.id}
-              AND ${catalogItems.id} = ${line.source.catalogItemId}
-              AND ${variants.state} = 'active'
-              AND ${catalogItems.state} = 'published'
-              AND ${catalogItems.kind} = 'product'
-              AND coalesce(${variants.priceOverrideMnt}, ${catalogItems.priceMnt}) = ${line.unitPriceMnt}
-              AND ${skus.sku} = ${line.sku}
-          )`
-        : sql`EXISTS (
-            SELECT 1 FROM ${catalogItems}
-            JOIN ${skus} ON ${skus.bundleId} = ${catalogItems.id}
-            WHERE ${catalogItems.id} = ${line.source.id}
-              AND ${catalogItems.state} = 'published'
-              AND ${catalogItems.kind} = 'bundle'
-              AND ${catalogItems.priceMnt} = ${line.unitPriceMnt}
-              AND ${skus.sku} = ${line.sku}
-          )`;
-    const optionsCurrent =
-      line.source.kind === "variant"
-        ? [
-            sql`(SELECT count(*) FROM ${variantOptionValues} WHERE ${variantOptionValues.variantId} = ${line.source.id}) = ${line.options.length}`,
-            ...line.options.map(
-              (option) => sql`EXISTS (
-            SELECT 1 FROM ${variantOptionValues}
-            JOIN ${optionValues} ON ${optionValues.id} = ${variantOptionValues.optionValueId}
-            JOIN ${optionGroups} ON ${optionGroups.id} = ${optionValues.optionGroupId}
-            WHERE ${variantOptionValues.variantId} = ${line.source.id}
-              AND ${optionGroups.id} = ${option.groupId}
-              AND ${optionGroups.key} = ${option.groupKey}
-              AND ${optionGroups.state} = 'active'
-              AND ${optionValues.id} = ${option.valueId}
-              AND ${optionValues.key} = ${option.valueKey}
-              AND ${optionValues.state} = 'active'
-          )`,
-            ),
-          ]
-        : [];
-    const componentsCurrent =
-      line.source.kind === "bundle"
-        ? [
-            sql`(SELECT count(*) FROM ${bundleComponents} WHERE ${bundleComponents.bundleId} = ${line.source.id}) = ${line.bundleComponents.length}`,
-            ...line.bundleComponents.map(
-              (component) => sql`EXISTS (
-            SELECT 1 FROM ${bundleComponents}
-            JOIN ${variants} ON ${variants.id} = ${bundleComponents.variantId}
-            JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
-            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
-            WHERE ${bundleComponents.bundleId} = ${line.source.id}
-              AND ${bundleComponents.variantId} = ${component.variantId}
-              AND ${bundleComponents.quantity} = ${component.perBundleQuantity}
-              AND ${variants.state} = 'active'
-              AND ${catalogItems.state} = 'published'
-              AND ${skus.sku} = ${component.sku}
-          )`,
-            ),
-          ]
-        : [];
-    const personalizationsCurrent = line.personalizations.map(
-      (personalization) => sql`EXISTS (
-      SELECT 1 FROM ${personalizationDefinitions}
-      WHERE ${personalizationDefinitions.id} = ${personalization.definitionId}
-        AND ${personalizationDefinitions.catalogItemId} = ${line.source.catalogItemId}
-        AND ${personalizationDefinitions.key} = ${personalization.key}
-        AND ${personalizationDefinitions.kind} = ${personalization.value.kind}
-        AND ${personalizationDefinitions.state} = 'active'
-    )`,
-    );
-    return [sourceCurrent, ...optionsCurrent, ...componentsCurrent, ...personalizationsCurrent];
-  });
-  const discountAvailable =
-    commercial.discountPolicy.kind === "applied"
-      ? exists(
-          db
-            .select({ id: discountRules.id })
-            .from(discountRules)
-            .where(
-              and(
-                eq(discountRules.id, commercial.discountPolicy.ruleId),
-                eq(discountRules.state, "active"),
-                eq(discountRules.mode, commercial.discountPolicy.mode),
-                commercial.discountPolicy.code === null
-                  ? sql`${discountRules.code} IS NULL`
-                  : eq(discountRules.code, commercial.discountPolicy.code),
-                eq(discountRules.calculation, commercial.discountPolicy.calculation),
-                eq(discountRules.value, commercial.discountPolicy.value),
-                commercial.discountPolicy.startsAt === null
-                  ? sql`${discountRules.startsAt} IS NULL`
-                  : sql`${discountRules.startsAt} = ${commercial.discountPolicy.startsAt}`,
-                commercial.discountPolicy.endsAt === null
-                  ? sql`${discountRules.endsAt} IS NULL`
-                  : sql`${discountRules.endsAt} = ${commercial.discountPolicy.endsAt}`,
-                eq(discountRules.minimumSubtotalMnt, commercial.discountPolicy.minimumSubtotalMnt),
-                commercial.discountPolicy.globalLimit === null
-                  ? sql`${discountRules.globalLimit} IS NULL`
-                  : eq(discountRules.globalLimit, commercial.discountPolicy.globalLimit),
-                eq(discountRules.targetsJson, commercial.discountPolicy.targetsJson),
-                sql`${discountRules.globalLimit} IS NULL OR (SELECT coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0) FROM ${discountRedemptionEntries} WHERE ${discountRedemptionEntries.discountRuleId} = ${discountRules.id}) < ${discountRules.globalLimit}`,
-              ),
-            ),
-        )
-      : undefined;
-  const discountContextCurrent = [
-    sql`(SELECT count(*) FROM ${discountRules} WHERE ${discountRules.state} = 'active') = ${commercial.discountContext.activeRules.length}`,
-    ...commercial.discountContext.activeRules.map(
-      (rule) => sql`EXISTS (
-      SELECT 1 FROM ${discountRules}
-      WHERE ${discountRules.id} = ${rule.id}
-        AND ${discountRules.state} = 'active'
-        AND ${discountRules.mode} = ${rule.mode}
-        AND ${discountRules.code} IS ${rule.code}
-        AND ${discountRules.calculation} = ${rule.calculation}
-        AND ${discountRules.value} = ${rule.value}
-        AND ${discountRules.startsAt} IS ${rule.startsAt}
-        AND ${discountRules.endsAt} IS ${rule.endsAt}
-        AND ${discountRules.minimumSubtotalMnt} = ${rule.minimumSubtotalMnt}
-        AND ${discountRules.globalLimit} IS ${rule.globalLimit}
-        AND ${discountRules.targetsJson} = ${rule.targetsJson}
-        AND ${discountRules.updatedAt} = ${rule.updatedAt}
-    )`,
-    ),
-    sql`(SELECT count(*) FROM ${categories} WHERE ${categories.state} = 'active') = ${commercial.discountContext.activeCategoryIds.length}`,
-    ...commercial.discountContext.activeCategoryIds.map(
-      (id) =>
-        sql`EXISTS (SELECT 1 FROM ${categories} WHERE ${categories.id} = ${id} AND ${categories.state} = 'active')`,
-    ),
-    sql`(SELECT count(*) FROM ${collections} WHERE ${collections.state} = 'active') = ${commercial.discountContext.activeCollectionIds.length}`,
-    ...commercial.discountContext.activeCollectionIds.map(
-      (id) =>
-        sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${id} AND ${collections.state} = 'active')`,
-    ),
-    ...commercial.lines.flatMap((line) => {
-      const categoryMemberships = commercial.discountContext.categoryMemberships.filter(
-        ({ catalogItemId }) => catalogItemId === line.source.catalogItemId,
-      );
-      const collectionMemberships = commercial.discountContext.collectionMemberships.filter(
-        ({ catalogItemId }) => catalogItemId === line.source.catalogItemId,
-      );
-      return [
-        sql`(SELECT count(*) FROM ${catalogItemCategories} WHERE ${catalogItemCategories.catalogItemId} = ${line.source.catalogItemId}) = ${categoryMemberships.length}`,
-        ...categoryMemberships.map(
-          ({ categoryId }) =>
-            sql`EXISTS (SELECT 1 FROM ${catalogItemCategories} WHERE ${catalogItemCategories.catalogItemId} = ${line.source.catalogItemId} AND ${catalogItemCategories.categoryId} = ${categoryId})`,
-        ),
-        sql`(SELECT count(*) FROM ${catalogItemCollections} WHERE ${catalogItemCollections.catalogItemId} = ${line.source.catalogItemId}) = ${collectionMemberships.length}`,
-        ...collectionMemberships.map(
-          ({ collectionId }) =>
-            sql`EXISTS (SELECT 1 FROM ${catalogItemCollections} WHERE ${catalogItemCollections.catalogItemId} = ${line.source.catalogItemId} AND ${catalogItemCollections.collectionId} = ${collectionId})`,
-        ),
-      ];
-    }),
-  ];
-  const deliveryCurrent = and(
-    eq(commerceSettings.deliveryEnabled, commercial.deliveryPolicy.deliveryEnabled),
-    eq(commerceSettings.pickupEnabled, commercial.deliveryPolicy.pickupEnabled),
-    eq(commerceSettings.deliveryFeeMnt, commercial.deliveryPolicy.deliveryFeeMnt),
-    commercial.deliveryPolicy.freeDeliveryThresholdMnt === null
-      ? sql`${commerceSettings.freeDeliveryThresholdMnt} IS NULL`
-      : eq(
-          commerceSettings.freeDeliveryThresholdMnt,
-          commercial.deliveryPolicy.freeDeliveryThresholdMnt,
-        ),
-    sql`${commerceSettings.updatedAt} = ${commercial.deliveryPolicy.updatedAt}`,
-    commercial.fulfillment.kind === "pickup"
-      ? sql`EXISTS (
-          SELECT 1 FROM ${cmsDocuments}, json_each(${cmsDocuments.contentJson}, '$.locations') AS location
-          WHERE ${cmsDocuments.kind} = 'locations'
-            AND ${cmsDocuments.status} = 'published'
-            AND json_extract(location.value, '$.id') = ${commercial.fulfillment.locationId}
-            AND json_extract(location.value, '$.active') = 1
-            AND json_extract(location.value, '$.pickupEnabled') = 1
-        )`
-      : eq(commerceSettings.deliveryEnabled, true),
-  );
   const orderExists = exists(
     db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)),
   );
@@ -554,14 +393,14 @@ export const commitPlacement = async (
           ),
         deliveryFeeMnt: sql<number>`${quote.deliveryFeeMnt}`.as("delivery_fee_mnt"),
         grandTotalMnt: sql<number>`${quote.totalMnt}`.as("grand_total_mnt"),
-        freeDeliveryThresholdMnt: sql<
-          number | null
-        >`${commercial.deliveryPolicy.freeDeliveryThresholdMnt}`.as("free_delivery_threshold_mnt"),
+        freeDeliveryThresholdMnt: sql<number | null>`${policy.freeDeliveryThresholdMnt}`.as(
+          "free_delivery_threshold_mnt",
+        ),
         freeDeliveryApplied:
-          sql<boolean>`${commercial.deliveryPolicy.freeDeliveryThresholdMnt !== null && quote.deliveryFeeMnt === 0 && quote.fulfillment.kind === "delivery"}`.as(
+          sql<boolean>`${policy.freeDeliveryThresholdMnt !== null && quote.deliveryFeeMnt === 0 && quote.fulfillment.kind === "delivery"}`.as(
             "free_delivery_applied",
           ),
-        commerceSettingsUpdatedAt: sql<Date>`${commercial.deliveryPolicy.updatedAt}`.as(
+        commerceSettingsUpdatedAt: sql<Date>`${policy.commerceSettingsUpdatedAt}`.as(
           "commerce_settings_updated_at",
         ),
         fulfillmentMode: sql<"delivery" | "pickup">`${destination.kind}`.as("fulfillment_mode"),
@@ -589,13 +428,10 @@ export const commitPlacement = async (
       .where(
         and(
           eq(commerceSettings.key, "commerce"),
+          sql`${commerceSettings.updatedAt} = ${policy.commerceSettingsUpdatedAt}`,
           zeroTotal ? undefined : eq(commerceSettings.bankTransferEnabled, true),
           sql`NOT EXISTS (SELECT 1 FROM ${placementIdempotency} WHERE ${placementIdempotency.key} = ${input.idempotencyKey})`,
           ...stockAvailable,
-          ...catalogCurrent,
-          ...discountContextCurrent,
-          discountAvailable,
-          deliveryCurrent,
         ),
       ),
   );
@@ -652,42 +488,40 @@ export const commitPlacement = async (
             ruleName: sql<string>`${quote.discount.name}`.as("rule_name"),
             mode: sql<
               "automatic" | "code"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.mode : "automatic"}`.as(
+            >`${policy.discount.kind === "applied" ? policy.discount.mode : "automatic"}`.as(
               "mode",
             ),
             code: sql<
               string | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.code : null}`.as(
-              "code",
-            ),
+            >`${policy.discount.kind === "applied" ? policy.discount.code : null}`.as("code"),
             calculation: sql<
               "percentage" | "fixed_mnt"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.calculation : "fixed_mnt"}`.as(
+            >`${policy.discount.kind === "applied" ? policy.discount.calculation : "fixed_mnt"}`.as(
               "calculation",
             ),
             value:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.value : quote.discount.amountMnt}`.as(
+              sql<number>`${policy.discount.kind === "applied" ? policy.discount.value : quote.discount.amountMnt}`.as(
                 "value",
               ),
             startsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.startsAt : null}`.as(
+              sql<Date | null>`${policy.discount.kind === "applied" ? policy.discount.startsAt : null}`.as(
                 "starts_at",
               ),
             endsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.endsAt : null}`.as(
+              sql<Date | null>`${policy.discount.kind === "applied" ? policy.discount.endsAt : null}`.as(
                 "ends_at",
               ),
             minimumSubtotalMnt:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.minimumSubtotalMnt : 0}`.as(
+              sql<number>`${policy.discount.kind === "applied" ? policy.discount.minimumSubtotalMnt : 0}`.as(
                 "minimum_subtotal_mnt",
               ),
             globalLimit: sql<
               number | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.globalLimit : null}`.as(
+            >`${policy.discount.kind === "applied" ? policy.discount.globalLimit : null}`.as(
               "global_limit",
             ),
             targetsJson:
-              sql<string>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.targetsJson : "[]"}`.as(
+              sql<string>`${policy.discount.kind === "applied" ? policy.discount.targetsJson : "[]"}`.as(
                 "targets_json",
               ),
             submittedCode: sql<string | null>`${quote.discount.submittedCode}`.as("submitted_code"),

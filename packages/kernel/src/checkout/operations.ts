@@ -13,8 +13,12 @@ import {
 import { Result } from "better-result";
 import * as v from "valibot";
 import { createOrderStatusAccess } from "../order";
-import { commercialFacts } from "./commercial";
-import { checkoutQueries, commitPlacement, readPlacement } from "./persistence";
+import {
+  checkoutQueries,
+  commitPlacement,
+  readPlacement,
+  type PlacementPolicySnapshot,
+} from "./persistence";
 
 type CheckoutFailureCode =
   | "catalog_unavailable"
@@ -329,21 +333,6 @@ const digest = async (value: unknown) => {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const correctiveCheckout = async (input: CheckoutQuoteInput) => {
-  const options = await checkoutQueries.readOptions();
-  const fulfillment = options.settings?.deliveryEnabled
-    ? { kind: "delivery" as const }
-    : options.settings?.pickupEnabled
-      ? options.locations
-          .filter(({ active, pickupEnabled }) => active && pickupEnabled)
-          .map(({ id }) => ({ kind: "pickup" as const, locationId: id }))
-          .at(0)
-      : undefined;
-  return fulfillment
-    ? calculateCheckout({ ...input, fulfillment })
-    : failure("infrastructure_unavailable");
-};
-
 export const placeOrder = async (
   input: PlaceOrderInput,
   customer: { readonly id: CustomerId; readonly phone: MongolianPhone } | null,
@@ -359,15 +348,6 @@ export const placeOrder = async (
     }
     const current = await calculateCheckout(input.quoteInput);
     if (current.isErr()) {
-      if (
-        current.error.code === "delivery_unavailable" ||
-        current.error.code === "pickup_unavailable"
-      ) {
-        const corrective = await correctiveCheckout(input.quoteInput);
-        return corrective.isOk()
-          ? failure("commercial_changed", undefined, corrective.value.quote)
-          : Result.err(current.error);
-      }
       return Result.err(current.error);
     }
     if (current.value.quote.commercialFingerprint !== input.acceptedCommercialFingerprint) {
@@ -405,7 +385,7 @@ export const placeOrder = async (
     const committed = await commitPlacement(
       input,
       current.value.quote,
-      current.value.commercial,
+      current.value.policy,
       intentDigest,
       destination,
       customerId,
@@ -420,23 +400,14 @@ export const placeOrder = async (
         ? Result.ok(racedPlacement.result)
         : failure("idempotency_conflict");
     }
-    const corrective = await calculateCheckout(input.quoteInput);
-    if (corrective.isOk()) {
-      return corrective.value.quote.commercialFingerprint !== input.acceptedCommercialFingerprint
-        ? failure("commercial_changed", undefined, corrective.value.quote)
+    const refreshed = await calculateCheckout(input.quoteInput);
+    if (refreshed.isOk()) {
+      return refreshed.value.quote.commercialFingerprint !== input.acceptedCommercialFingerprint
+        ? failure("commercial_changed", undefined, refreshed.value.quote)
         : failure("infrastructure_unavailable");
     }
-    if (
-      corrective.error.code === "delivery_unavailable" ||
-      corrective.error.code === "pickup_unavailable"
-    ) {
-      const alternative = await correctiveCheckout(input.quoteInput);
-      return alternative.isOk()
-        ? failure("commercial_changed", undefined, alternative.value.quote)
-        : Result.err(corrective.error);
-    }
-    return corrective.error.code === "insufficient_inventory"
-      ? Result.err(corrective.error)
+    return refreshed.error.code === "insufficient_inventory"
+      ? Result.err(refreshed.error)
       : failure("infrastructure_unavailable");
   } catch {
     return failure("infrastructure_unavailable");
@@ -584,9 +555,8 @@ const calculateCheckout = async (input: CheckoutQuoteInput) => {
       totalMnt: postDiscountMerchandiseMnt + deliveryFeeMnt,
     };
     const chosenRule = chosen?.rule;
-    const commercial = commercialFacts(
-      facts,
-      chosenRule
+    const policy: PlacementPolicySnapshot = {
+      discount: chosenRule
         ? {
             kind: "applied",
             ruleId: chosenRule.id,
@@ -601,51 +571,15 @@ const calculateCheckout = async (input: CheckoutQuoteInput) => {
             targetsJson: chosenRule.targetsJson,
           }
         : { kind: "none" },
-      {
-        activeRules: snapshot.rules.map((rule) => ({
-          id: rule.id,
-          mode: rule.mode,
-          code: rule.code,
-          calculation: rule.calculation,
-          value: rule.value,
-          startsAt: rule.startsAt?.getTime() ?? null,
-          endsAt: rule.endsAt?.getTime() ?? null,
-          minimumSubtotalMnt: rule.minimumSubtotalMnt,
-          globalLimit: rule.globalLimit,
-          targetsJson: rule.targetsJson,
-          updatedAt: rule.updatedAt.getTime(),
-        })),
-        categoryMemberships: snapshot.categoryMemberships
-          .filter(({ catalogItemId }) =>
-            lines.some((line) => line.source.catalogItemId === catalogItemId),
-          )
-          .map(({ catalogItemId, categoryId }) => ({ catalogItemId, categoryId })),
-        collectionMemberships: snapshot.collectionMemberships
-          .filter(({ catalogItemId }) =>
-            lines.some((line) => line.source.catalogItemId === catalogItemId),
-          )
-          .map(({ catalogItemId, collectionId }) => ({ catalogItemId, collectionId })),
-        activeCategoryIds: snapshot.categoryRows
-          .filter(({ state }) => state === "active")
-          .map(({ id }) => id),
-        activeCollectionIds: snapshot.collectionRows
-          .filter(({ state }) => state === "active")
-          .map(({ id }) => id),
-      },
-      {
-        deliveryEnabled: snapshot.settings.deliveryEnabled,
-        pickupEnabled: snapshot.settings.pickupEnabled,
-        deliveryFeeMnt: snapshot.settings.deliveryFeeMnt,
-        freeDeliveryThresholdMnt: snapshot.settings.freeDeliveryThresholdMnt,
-        updatedAt: snapshot.settings.updatedAt.getTime(),
-      },
-    );
+      freeDeliveryThresholdMnt: snapshot.settings.freeDeliveryThresholdMnt,
+      commerceSettingsUpdatedAt: snapshot.settings.updatedAt.getTime(),
+    };
     const quote = v.parse(CheckoutQuoteSchema, {
       quotedAt: snapshot.quotedAt,
       ...facts,
-      commercialFingerprint: await digest(commercial),
+      commercialFingerprint: await digest(facts),
     });
-    return Result.ok({ quote, commercial });
+    return Result.ok({ quote, policy });
   } catch {
     return failure("infrastructure_unavailable");
   }
