@@ -51,5 +51,6 @@
   "vars": {
     "PUBLIC_STORE_ORIGIN": "https://urnuun-48-proof.amerikvitamin.mn",
     "CLOUDFLARE_ZONE_ID": "dea7a51f4cd9dc30b093952261ecc99c",
+    "REFERENCE_STORE_LOCAL_TOKEN": "",
   },
 }

@@ -9,6 +9,8 @@ import { env } from "cloudflare:workers";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 
+const ReferenceStoreLocalTokenSchema = v.pipe(v.string(), v.minLength(1));
+
 type Status = (code: number, body: unknown) => unknown;
 type AuthorizeReferenceStoreRoute = (
   request: Request,
@@ -23,11 +25,10 @@ const authorize = async (
   status: Status,
   authorizeStaff: AuthorizeReferenceStoreRoute,
 ) => {
-  const localToken = Reflect.get(env, "REFERENCE_STORE_LOCAL_TOKEN");
+  const localToken = v.safeParse(ReferenceStoreLocalTokenSchema, env.REFERENCE_STORE_LOCAL_TOKEN);
   if (
-    typeof localToken === "string" &&
-    localToken !== "" &&
-    request.headers.get("x-reference-store-local-token") === localToken
+    localToken.success &&
+    request.headers.get("x-reference-store-local-token") === localToken.output
   ) {
     return { authorized: true as const, local: true as const };
   }

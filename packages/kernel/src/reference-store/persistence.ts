@@ -217,7 +217,13 @@ export const installReferenceStoreFixtureRows = async (
             createdAt: seededAt,
           })),
         )
-        .onConflictDoUpdate({ target: mediaAssets.id, set: { declaredContentType: "image/webp" } }),
+        .onConflictDoUpdate({
+          target: mediaAssets.id,
+          set: {
+            objectKey: sql`excluded.object_key`,
+            declaredContentType: "image/webp",
+          },
+        }),
       ...catalogRows.map((item) =>
         db
           .insert(catalogItems)
@@ -267,7 +273,14 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: optionGroups.id,
-          set: { state: "active", updatedAt: seededAt },
+          set: {
+            productId: sql`excluded.product_id`,
+            key: sql`excluded.key`,
+            label: sql`excluded.label`,
+            position: sql`excluded.position`,
+            state: "active",
+            updatedAt: seededAt,
+          },
         }),
       db
         .insert(optionValues)
@@ -285,7 +298,14 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: optionValues.id,
-          set: { state: "active", updatedAt: seededAt },
+          set: {
+            optionGroupId: sql`excluded.option_group_id`,
+            key: sql`excluded.key`,
+            label: sql`excluded.label`,
+            position: sql`excluded.position`,
+            state: "active",
+            updatedAt: seededAt,
+          },
         }),
       ...variantRows.map((variant) =>
         db
@@ -301,7 +321,18 @@ export const installReferenceStoreFixtureRows = async (
             createdAt: seededAt,
             updatedAt: seededAt,
           })
-          .onConflictDoUpdate({ target: variants.id, set: { updatedAt: seededAt } }),
+          .onConflictDoUpdate({
+            target: variants.id,
+            set: {
+              productId: variant.productId,
+              isDefault: variant.isDefault,
+              combinationKey: variant.combinationKey,
+              priceOverrideMnt: variant.priceOverrideMnt,
+              imageMediaAssetId: variant.imageMediaAssetId,
+              state: variant.state,
+              updatedAt: seededAt,
+            },
+          }),
       ),
       db.delete(skus).where(inArray(skus.variantId, variantIds)),
       db.delete(skus).where(
@@ -416,7 +447,17 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: personalizationDefinitions.id,
-          set: { state: "active", updatedAt: seededAt },
+          set: {
+            catalogItemId: sql`excluded.catalog_item_id`,
+            kind: sql`excluded.kind`,
+            key: sql`excluded.key`,
+            label: sql`excluded.label`,
+            position: sql`excluded.position`,
+            required: sql`excluded.required`,
+            state: "active",
+            maxLength: sql`excluded.max_length`,
+            updatedAt: seededAt,
+          },
         }),
       db
         .insert(personalizationValues)
@@ -436,7 +477,14 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: personalizationValues.id,
-          set: { state: "active", updatedAt: seededAt },
+          set: {
+            personalizationId: sql`excluded.personalization_id`,
+            key: sql`excluded.key`,
+            label: sql`excluded.label`,
+            position: sql`excluded.position`,
+            state: "active",
+            updatedAt: seededAt,
+          },
         }),
       db
         .insert(categories)
@@ -456,7 +504,16 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: categories.id,
-          set: { state: "active", updatedAt: seededAt, archivedAt: null },
+          set: {
+            slug: sql`excluded.slug`,
+            name: sql`excluded.name`,
+            parentId: sql`excluded.parent_id`,
+            position: sql`excluded.position`,
+            state: "active",
+            updatedAt: seededAt,
+            activatedAt: seededAt,
+            archivedAt: null,
+          },
         }),
       db
         .insert(collections)
@@ -475,7 +532,15 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: collections.id,
-          set: { state: "active", updatedAt: seededAt, archivedAt: null },
+          set: {
+            slug: sql`excluded.slug`,
+            name: sql`excluded.name`,
+            description: sql`excluded.description`,
+            state: "active",
+            updatedAt: seededAt,
+            activatedAt: seededAt,
+            archivedAt: null,
+          },
         }),
       db
         .insert(tags)
@@ -493,7 +558,14 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: tags.id,
-          set: { state: "active", updatedAt: seededAt, archivedAt: null },
+          set: {
+            label: sql`excluded.label`,
+            normalizedLabel: sql`excluded.normalized_label`,
+            state: "active",
+            updatedAt: seededAt,
+            activatedAt: seededAt,
+            archivedAt: null,
+          },
         }),
       db
         .delete(catalogItemCategories)
@@ -570,7 +642,21 @@ export const installReferenceStoreFixtureRows = async (
         )
         .onConflictDoUpdate({
           target: discountRules.id,
-          set: { state: "active", updatedAt: seededAt },
+          set: {
+            name: sql`excluded.name`,
+            mode: sql`excluded.mode`,
+            code: sql`excluded.code`,
+            calculation: sql`excluded.calculation`,
+            value: sql`excluded.value`,
+            state: "active",
+            startsAt: null,
+            endsAt: null,
+            minimumSubtotalMnt: sql`excluded.minimum_subtotal_mnt`,
+            globalLimit: sql`excluded.global_limit`,
+            targetsJson: sql`excluded.targets_json`,
+            revision: 1,
+            updatedAt: seededAt,
+          },
         }),
       db
         .insert(commerceSettings)
