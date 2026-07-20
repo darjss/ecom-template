@@ -40,3 +40,23 @@ Browse real seeded products → product detail → cart → guest checkout → b
 - Do not add Cloudflare Workflows, PostHog, event sourcing, audit matrices, capability rotation, or `dismatch` legislation.
 - Do not preserve a broken model with fallbacks; break and fix.
 - Do not treat "gates green" as "product approved" — those are separate states.
+
+## Slice map (in order)
+
+1. #116 — Cut ceremonial machinery (prerequisite, parallel-safe with #117 planning)
+2. #117 — Shopper-to-merchant Order loop (bank transfer)
+3. #119 — Delivery fee and Pickup in the checkout quote
+4. #120 — Customer OTP and Order history
+5. #121 — QPay payment (Byl + direct adapter)
+6. #122 — Payment switching and OTP-gated COD
+7. #123 — Cancellation and manual refund recording
+8. #124 — Telegram one-tap transfer confirm/reject
+9. #125 — Discounts (rules, codes, best-automatic)
+10. #126 — Bundles and Personalization on atomic counters
+11. #127 — Search completion (transliteration, SKU, autocomplete)
+12. #128 — CMS pages to the storefront
+13. #129 — Storefront experience and quality pass
+14. #130 — Admin completion (routed, Zaidan, merchant day)
+15. #131 — Fresh-deploy canary
+
+Dependencies: each slice assumes the previous ones landed. #124 only needs #117. #129/#130 may run in parallel with late commerce slices.
