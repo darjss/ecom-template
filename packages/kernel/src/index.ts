@@ -96,6 +96,12 @@ export {
 } from "./discount/operations";
 export { readDatabaseHealth } from "./db/health";
 export {
+  installReferenceStoreFixture,
+  proveReferenceStoreFixture,
+  synchronizeReferenceStoreMedia,
+} from "./reference-store/operations";
+export { ReferenceStoreFixtureSchema, type ReferenceStoreFixture } from "./reference-store/schema";
+export {
   approveStaff,
   changeStaffRole,
   createStaff,

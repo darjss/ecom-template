@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./reference-store": "./src/reference-store/schema.ts"
   },
   "dependencies": {
     "@ecom/contracts": "workspace:*",

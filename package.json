@@ -41,10 +41,11 @@
   },
   "devDependencies": {
     "@better-auth/cli": "1.4.21",
-    "@ecom/contracts": "workspace:*",
+    "@ecom/api": "workspace:*",
+    "@ecom/kernel": "workspace:*",
+    "@elysiajs/eden": "1.4.5",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "24.0.0",
-    "dismatch": "2.6.0",
     "drizzle-kit": "0.31.10",
     "eslint-plugin-solid": "0.14.5",
     "knip": "6.27.0",
