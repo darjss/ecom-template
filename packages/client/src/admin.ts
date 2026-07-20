@@ -34,9 +34,9 @@ import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid
 import type { InferErr, InferOk } from "better-result";
 import * as v from "valibot";
 import { createApiClient } from "./eden";
+import { catalogQueryKey } from "./query/catalog";
 import { requestResult, unwrapRequestResult } from "./request";
 
-const catalogQueryKey = ["catalog"] as const;
 const bundleQueryKey = ["catalog", "bundles"] as const;
 const groupingQueryKey = ["catalog", "groupings"] as const;
 const discountQueryKey = ["discounts"] as const;
@@ -58,7 +58,7 @@ export const healthQueryOptions = () =>
     staleTime: 30_000,
   });
 
-export type BundleMutation =
+type BundleMutation =
   | ({ readonly kind: "create" } & CreateBundleInput)
   | ({ readonly kind: "update"; readonly id: BundleId } & UpdateBundleInput)
   | ({ readonly kind: "save-components"; readonly id: BundleId } & SaveBundleComponentsInput)
@@ -126,7 +126,7 @@ type BundleMutationResult = Awaited<ReturnType<typeof requestBundleMutation>>;
 
 const personalizationQueryKey = (id: CatalogItemId) => ["catalog", "personalizations", id] as const;
 
-const refreshCatalogItemOwner = async (queryClient: QueryClient, id: CatalogItemId) => {
+export const refreshCatalogItemOwner = async (queryClient: QueryClient, id: CatalogItemId) => {
   const bundleId = v.safeParse(BundleIdSchema, id);
   const authoritativeKey = bundleId.success ? bundleQueryKey : catalogQueryKey;
   await queryClient.invalidateQueries({ queryKey: authoritativeKey, refetchType: "none" });
@@ -174,7 +174,7 @@ export const personalizationMutationOptions = (queryClient: QueryClient, id: Cat
     },
   });
 
-export type GroupingMutation =
+type GroupingMutation =
   | { readonly kind: "create-category"; readonly input: CategoryInput }
   | { readonly kind: "update-category"; readonly id: CategoryId; readonly input: CategoryInput }
   | {
@@ -305,7 +305,7 @@ export const groupingCachePurgeMutationOptions = (queryClient: QueryClient) =>
     onSuccess: async () => refreshGroupings(queryClient),
   });
 
-export type DiscountMutation =
+type DiscountMutation =
   | { readonly kind: "create"; readonly rule: DiscountRuleInput }
   | {
       readonly kind: "change";

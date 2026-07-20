@@ -16,9 +16,6 @@ export {
   healthQueryOptions,
   personalizationMutationOptions,
   personalizationQueryOptions,
-  type BundleMutation,
-  type DiscountMutation,
-  type GroupingMutation,
 } from "./admin";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
@@ -27,12 +24,11 @@ export {
   cmsQueryOptions,
   commerceSettingsMutationOptions,
   commerceSettingsQueryOptions,
-  type CmsMutation,
 } from "./content";
 export { createApiClient } from "./eden";
 export { createStoreQueryClient } from "./query/client";
 export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
-export { catalogImageMutationOptions, type CatalogImageUpload } from "./media";
+export { catalogImageMutationOptions } from "./media";
 export {
   checkoutOptionsQueryOptions,
   checkoutQuoteMutationOptions,
@@ -46,7 +42,7 @@ export {
   orderStatusQueryOptions,
 } from "./query/order";
 export { catalogSearchQueryOptions } from "./query/search";
-export { staffMutationOptions, staffQueryOptions, type StaffMutation } from "./staff";
+export { staffMutationOptions, staffQueryOptions } from "./staff";
 export {
   requestCustomerAuthMutation,
   requestCustomerSession,

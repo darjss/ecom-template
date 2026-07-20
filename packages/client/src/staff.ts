@@ -13,7 +13,7 @@ import { requestResult, unwrapRequestResult } from "./request";
 
 const staffQueryKey = ["staff"] as const;
 
-export type StaffMutation =
+type StaffMutation =
   | ({ readonly kind: "create" } & StaffCreateInput)
   | { readonly kind: "approve"; readonly id: StaffId; readonly role: StaffRole }
   | { readonly kind: "role"; readonly id: StaffId; readonly role: StaffRole }

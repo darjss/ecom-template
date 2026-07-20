@@ -17,7 +17,7 @@ import { requestResult, unwrapRequestResult } from "./request";
 const cmsQueryKey = ["cms", "documents"] as const;
 const commerceSettingsQueryKey = ["commerce-settings"] as const;
 
-export type CmsMutation =
+type CmsMutation =
   | { readonly kind: "save-draft"; readonly document: CmsDocument }
   | { readonly kind: "publish"; readonly documentKind: CmsDocumentKind };
 

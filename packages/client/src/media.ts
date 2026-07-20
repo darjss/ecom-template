@@ -1,5 +1,4 @@
 import {
-  BundleIdSchema,
   CatalogApiErrorSchema,
   MediaUploadResponseSchema,
   type CatalogItemId,
@@ -8,6 +7,7 @@ import {
 import { mutationOptions, type QueryClient } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
 import * as v from "valibot";
+import { refreshCatalogItemOwner } from "./admin";
 import { createApiClient } from "./eden";
 import { requestResult, unwrapRequestResult } from "./request";
 
@@ -26,7 +26,7 @@ const MediaApiErrorSchema = v.union([
   ),
 ]);
 
-export type CatalogImageUpload = MediaUploadFields & {
+type CatalogImageUpload = MediaUploadFields & {
   readonly catalogItemId: CatalogItemId;
   readonly file: File;
 };
@@ -50,11 +50,6 @@ export const catalogImageMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<InferOk<CatalogImageResult>, InferErr<CatalogImageResult>, CatalogImageUpload>({
     mutationFn: async (upload) => unwrapRequestResult(await requestCatalogImageUpload(upload)),
     onSuccess: async (_data, upload) => {
-      const bundleId = v.safeParse(BundleIdSchema, upload.catalogItemId);
-      const queryKey = bundleId.success
-        ? (["catalog", "bundles"] as const)
-        : (["catalog"] as const);
-      await queryClient.invalidateQueries({ queryKey, refetchType: "none" });
-      await queryClient.refetchQueries({ queryKey, type: "active" });
+      await refreshCatalogItemOwner(queryClient, upload.catalogItemId);
     },
   });
