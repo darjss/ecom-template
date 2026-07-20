@@ -237,6 +237,17 @@ const retryCachePurge = async (origin: string) => {
   await request(origin, "/api/cms/cache-purge/retry", "POST");
 };
 
+const stopLocalWorker = async (worker: ChildProcess) => {
+  if (worker.exitCode !== null) {
+    return;
+  }
+  await new Promise<void>((resolveStop, rejectStop) => {
+    worker.once("error", rejectStop);
+    worker.once("close", () => resolveStop());
+    worker.kill("SIGTERM");
+  });
+};
+
 const main = async () => {
   const worker = seedArguments.mode === "local" ? await startLocalWorker() : undefined;
   try {
@@ -272,7 +283,9 @@ const main = async () => {
       )}\n`,
     );
   } finally {
-    worker?.kill("SIGTERM");
+    if (worker) {
+      await stopLocalWorker(worker);
+    }
   }
 };
 
