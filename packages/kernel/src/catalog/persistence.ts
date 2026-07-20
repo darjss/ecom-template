@@ -1,6 +1,5 @@
 import {
   createAuditEventId,
-  createInventoryEntryId,
   createProductId,
   createStockItemId,
   createVariantId,
@@ -16,7 +15,6 @@ import {
   catalogCachePurgeDebts,
   catalogItems,
   cmsDocuments,
-  inventoryEntries,
   optionGroups,
   optionValues,
   skus,
@@ -51,7 +49,7 @@ const hasDuplicateSlug = async (slug: string, excludedId?: ProductId) => {
   return rows.length === 1;
 };
 
-export const recordRejectedAttempt = async (
+const recordRejectedAttempt = async (
   actor: StaffActor,
   action: string,
   entityKind: "product" | "stock_item",
@@ -159,18 +157,6 @@ export const catalogQueries = {
           onHandQuantity: input.openingQuantity,
           reservedQuantity: 0,
           updatedAt: now,
-        }),
-        db.insert(inventoryEntries).values({
-          id: createInventoryEntryId(),
-          stockItemId,
-          kind: "opening",
-          onHandDelta: input.openingQuantity,
-          actorKind: "staff",
-          staffId: actor.staffId,
-          staffRole: actor.role,
-          reason: input.inventoryReason,
-          commandCorrelationId: correlationId,
-          createdAt: now,
         }),
         db.insert(auditEvents).values({
           id: createAuditEventId(),

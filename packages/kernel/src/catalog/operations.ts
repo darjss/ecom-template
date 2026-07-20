@@ -20,19 +20,11 @@ type CatalogOperationFailureCode =
   | "published_bundle_dependency"
   | "published_cms_dependency"
   | "reservation_blocked"
-  | "inventory_inconsistent"
   | "inventory_limit"
   | "conflict"
   | "infrastructure_unavailable";
 export type CatalogOperationFailure = {
-  [Code in CatalogOperationFailureCode]: {
-    readonly code: Code;
-    readonly blockers?: readonly {
-      readonly reservationId: string;
-      readonly orderReference: string;
-      readonly quantity: number;
-    }[];
-  };
+  [Code in CatalogOperationFailureCode]: { readonly code: Code };
 }[CatalogOperationFailureCode];
 
 export type CatalogMutationResult = {
@@ -114,13 +106,9 @@ export const adjustProductInventory = (
   input: InventoryAdjustmentInput,
 ) =>
   execute(actor, async () => {
-    const result = await inventoryQueries.adjust(actor, id, input);
+    const result = await inventoryQueries.adjust(id, input);
     if (result.kind === "changed") {
       return Result.ok(unchangedCache(result.product));
     }
-    return Result.err<never, CatalogOperationFailure>(
-      result.kind === "reservation_blocked" || result.kind === "inventory_inconsistent"
-        ? { code: result.kind, blockers: result.blockers }
-        : { code: result.kind },
-    );
+    return Result.err<never, CatalogOperationFailure>({ code: result.kind });
   });

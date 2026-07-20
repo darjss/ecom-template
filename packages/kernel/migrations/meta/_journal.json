@@ -176,6 +176,13 @@
       "when": 1784478420252,
       "tag": "0024_slippery_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1784565551388,
+      "tag": "0025_flashy_madrox",
+      "breakpoints": true
     }
   ]
 }
