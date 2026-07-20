@@ -6,12 +6,20 @@ export {
   requestPlaceOrder,
 } from "./checkout/request";
 export {
-  requestBundleMutation,
-  requestBundles,
-  requestPersonalizationMutation,
-  requestPersonalizations,
+  bundleMutationOptions,
+  bundleQueryOptions,
+  discountMutationOptions,
+  discountQueryOptions,
+  groupingCachePurgeMutationOptions,
+  groupingMutationOptions,
+  groupingQueryOptions,
+  healthQueryOptions,
+  personalizationMutationOptions,
+  personalizationQueryOptions,
   type BundleMutation,
-} from "./bundle/request";
+  type DiscountMutation,
+  type GroupingMutation,
+} from "./admin";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
   cmsCachePurgeMutationOptions,
@@ -21,36 +29,9 @@ export {
   commerceSettingsQueryOptions,
   type CmsMutation,
 } from "./content";
-export {
-  requestDiscountMutation,
-  requestDiscountRules,
-  type DiscountMutation,
-} from "./discount/request";
 export { createApiClient } from "./eden";
-export {
-  requestCreateCategory,
-  requestCreateCollection,
-  requestCreateTag,
-  requestGroupingCachePurgeRetry,
-  requestGroupings,
-  requestReplaceCategoryMembership,
-  requestReplaceCollectionMembership,
-  requestReplaceTagMembership,
-  requestSetCategoryState,
-  requestSetCollectionState,
-  requestSetTagState,
-  requestUpdateCategory,
-  requestUpdateCollection,
-  requestUpdateTag,
-} from "./grouping/request";
 export { createStoreQueryClient } from "./query/client";
 export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
-export {
-  bundleMutationOptions,
-  bundleQueryOptions,
-  personalizationMutationOptions,
-  personalizationQueryOptions,
-} from "./query/bundle";
 export { catalogImageMutationOptions, type CatalogImageUpload } from "./media";
 export {
   checkoutOptionsQueryOptions,
@@ -64,9 +45,6 @@ export {
   customerOrdersQueryOptions,
   orderStatusQueryOptions,
 } from "./query/order";
-export { discountMutationOptions, discountQueryOptions } from "./query/discount";
-export { healthQueryOptions } from "./query/health";
-export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
 export { catalogSearchQueryOptions } from "./query/search";
 export { staffMutationOptions, staffQueryOptions, type StaffMutation } from "./staff";
 export {
@@ -76,7 +54,6 @@ export {
   type CustomerAuthMutationResult,
 } from "./customer/request";
 export { requestCustomerOrders, requestOrderStatus } from "./order/request";
-export { requestHealth } from "./request";
 export {
   requestCatalogSearch,
   type CatalogSearchData,

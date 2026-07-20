@@ -1,9 +1,4 @@
-import {
-  groupingMutationOptions,
-  requestReplaceCategoryMembership,
-  requestReplaceCollectionMembership,
-  requestReplaceTagMembership,
-} from "@ecom/client";
+import { groupingMutationOptions } from "@ecom/client";
 import type { CatalogItemId, Grouping } from "@ecom/contracts";
 import { AltArrowDown, AltArrowUp, Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
@@ -24,21 +19,28 @@ export const GroupingMembershipEditor = (props: {
 }) => {
   const queryClient = useQueryClient();
   const grouping = untrack(() => props.grouping);
-  const mutation = useMutation(() =>
-    groupingMutationOptions(queryClient, (input: { catalogItemIds: CatalogItemId[] }) => {
-      if (grouping.kind === "category") {
-        return requestReplaceCategoryMembership(grouping.id, input);
-      }
-      if (grouping.kind === "collection") {
-        return requestReplaceCollectionMembership(grouping.id, input);
-      }
-      return requestReplaceTagMembership(grouping.id, input);
-    }),
-  );
+  const mutation = useMutation(() => groupingMutationOptions(queryClient));
   const [open, setOpen] = createSignal(false);
   const form = createForm(() => ({
     defaultValues: { catalogItemIds: [...props.grouping.catalogItemIds] },
-    onSubmit: async ({ value }) => mutation.mutateAsync({ catalogItemIds: value.catalogItemIds }),
+    onSubmit: async ({ value }) => {
+      const input = { catalogItemIds: value.catalogItemIds };
+      if (grouping.kind === "category") {
+        return mutation.mutateAsync({
+          kind: "replace-category-membership",
+          id: grouping.id,
+          input,
+        });
+      }
+      if (grouping.kind === "collection") {
+        return mutation.mutateAsync({
+          kind: "replace-collection-membership",
+          id: grouping.id,
+          input,
+        });
+      }
+      return mutation.mutateAsync({ kind: "replace-tag-membership", id: grouping.id, input });
+    },
   }));
   return (
     <div class="mt-4 border-t border-black/10 pt-4">

@@ -1,12 +1,6 @@
-import {
-  ClientFailureSchema,
-  HealthApiErrorSchema,
-  HealthResponseSchema,
-  type ClientRequestError,
-} from "@ecom/contracts";
+import { ClientFailureSchema, type ClientRequestError } from "@ecom/contracts";
 import { Result, type InferOk, type Result as ResultType } from "better-result";
 import * as v from "valibot";
-import { createApiClient } from "./eden";
 
 type EdenResponse<Data> = {
   readonly data: Data | null;
@@ -49,11 +43,3 @@ export function unwrapRequestResult(result: ResultType<unknown, unknown>): unkno
   }
   return result.value;
 }
-
-export const requestHealth = () =>
-  requestResult(
-    () => createApiClient().api.health.get(),
-    HealthResponseSchema,
-    HealthApiErrorSchema,
-    "Invalid health response",
-  );

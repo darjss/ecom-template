@@ -1,9 +1,4 @@
-import {
-  groupingMutationOptions,
-  requestCreateCategory,
-  requestCreateCollection,
-  requestCreateTag,
-} from "@ecom/client";
+import { groupingMutationOptions } from "@ecom/client";
 import type { Category } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
@@ -16,15 +11,18 @@ const inputClass =
 const labelClass = "grid gap-1.5 text-xs font-bold text-(--muted)";
 export const CreateCategoryForm = (props: { categories: readonly Category[] }) => {
   const queryClient = useQueryClient();
-  const mutation = useMutation(() => groupingMutationOptions(queryClient, requestCreateCategory));
+  const mutation = useMutation(() => groupingMutationOptions(queryClient));
   const form = createForm(() => ({
     defaultValues: { name: "", slug: "", parentId: "", position: 0 },
     onSubmit: async ({ value }) => {
       await mutation.mutateAsync({
-        name: value.name.trim(),
-        slug: value.slug.trim(),
-        parentId: value.parentId === "" ? null : value.parentId,
-        position: value.position,
+        kind: "create-category",
+        input: {
+          name: value.name.trim(),
+          slug: value.slug.trim(),
+          parentId: value.parentId === "" ? null : value.parentId,
+          position: value.position,
+        },
       });
       form.reset();
     },
@@ -109,14 +107,17 @@ export const CreateCategoryForm = (props: { categories: readonly Category[] }) =
 
 export const CreateCollectionForm = () => {
   const queryClient = useQueryClient();
-  const mutation = useMutation(() => groupingMutationOptions(queryClient, requestCreateCollection));
+  const mutation = useMutation(() => groupingMutationOptions(queryClient));
   const form = createForm(() => ({
     defaultValues: { name: "", slug: "", description: "" },
     onSubmit: async ({ value }) => {
       await mutation.mutateAsync({
-        name: value.name.trim(),
-        slug: value.slug.trim(),
-        description: value.description,
+        kind: "create-collection",
+        input: {
+          name: value.name.trim(),
+          slug: value.slug.trim(),
+          description: value.description,
+        },
       });
       form.reset();
     },
@@ -182,11 +183,14 @@ export const CreateCollectionForm = () => {
 
 export const CreateTagForm = () => {
   const queryClient = useQueryClient();
-  const mutation = useMutation(() => groupingMutationOptions(queryClient, requestCreateTag));
+  const mutation = useMutation(() => groupingMutationOptions(queryClient));
   const form = createForm(() => ({
     defaultValues: { label: "" },
     onSubmit: async ({ value }) => {
-      await mutation.mutateAsync({ label: value.label.trim() });
+      await mutation.mutateAsync({
+        kind: "create-tag",
+        input: { label: value.label.trim() },
+      });
       form.reset();
     },
   }));

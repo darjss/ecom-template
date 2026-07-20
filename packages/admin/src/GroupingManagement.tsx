@@ -1,13 +1,7 @@
 import {
+  groupingCachePurgeMutationOptions,
   groupingMutationOptions,
   groupingQueryOptions,
-  requestGroupingCachePurgeRetry,
-  requestSetCategoryState,
-  requestSetCollectionState,
-  requestSetTagState,
-  requestUpdateCategory,
-  requestUpdateCollection,
-  requestUpdateTag,
 } from "@ecom/client";
 import type { Category, Grouping, GroupingState } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
@@ -27,46 +21,8 @@ const lifecycleLabel = (state: GroupingState) => (state === "active" ? "Архи
 const GroupingEditor = (props: { grouping: Grouping; categories: readonly Category[] }) => {
   const queryClient = useQueryClient();
   const grouping = untrack(() => props.grouping);
-  const updateMutation = useMutation(() =>
-    groupingMutationOptions(
-      queryClient,
-      async (value: {
-        name: string;
-        slug: string;
-        description: string;
-        parentId: string;
-        position: number;
-      }) => {
-        if (grouping.kind === "category") {
-          return requestUpdateCategory(grouping.id, {
-            name: value.name.trim(),
-            slug: value.slug.trim(),
-            parentId: value.parentId === "" ? null : value.parentId,
-            position: value.position,
-          });
-        }
-        if (grouping.kind === "collection") {
-          return requestUpdateCollection(grouping.id, {
-            name: value.name.trim(),
-            slug: value.slug.trim(),
-            description: value.description,
-          });
-        }
-        return requestUpdateTag(grouping.id, { label: value.name.trim() });
-      },
-    ),
-  );
-  const lifecycleMutation = useMutation(() =>
-    groupingMutationOptions(queryClient, (state: "active" | "archived") => {
-      if (grouping.kind === "category") {
-        return requestSetCategoryState(grouping.id, state);
-      }
-      if (grouping.kind === "collection") {
-        return requestSetCollectionState(grouping.id, state);
-      }
-      return requestSetTagState(grouping.id, state);
-    }),
-  );
+  const updateMutation = useMutation(() => groupingMutationOptions(queryClient));
+  const lifecycleMutation = useMutation(() => groupingMutationOptions(queryClient));
   const form = createForm(() => ({
     defaultValues: {
       name: props.grouping.kind === "tag" ? props.grouping.label : props.grouping.name,
@@ -75,11 +31,49 @@ const GroupingEditor = (props: { grouping: Grouping; categories: readonly Catego
       parentId: props.grouping.kind === "category" ? (props.grouping.parentId ?? "") : "",
       position: props.grouping.kind === "category" ? props.grouping.position : 0,
     },
-    onSubmit: async ({ value }) => updateMutation.mutateAsync(value),
+    onSubmit: async ({ value }) => {
+      if (grouping.kind === "category") {
+        return updateMutation.mutateAsync({
+          kind: "update-category",
+          id: grouping.id,
+          input: {
+            name: value.name.trim(),
+            slug: value.slug.trim(),
+            parentId: value.parentId === "" ? null : value.parentId,
+            position: value.position,
+          },
+        });
+      }
+      if (grouping.kind === "collection") {
+        return updateMutation.mutateAsync({
+          kind: "update-collection",
+          id: grouping.id,
+          input: {
+            name: value.name.trim(),
+            slug: value.slug.trim(),
+            description: value.description,
+          },
+        });
+      }
+      return updateMutation.mutateAsync({
+        kind: "update-tag",
+        id: grouping.id,
+        input: { label: value.name.trim() },
+      });
+    },
   }));
   const changeState = () => {
     updateMutation.reset();
-    lifecycleMutation.mutate(nextState(props.grouping.state));
+    const state = nextState(props.grouping.state);
+    if (grouping.kind === "category") {
+      lifecycleMutation.mutate({ kind: "set-category-state", id: grouping.id, state });
+      return;
+    }
+    if (grouping.kind === "collection") {
+      lifecycleMutation.mutate({ kind: "set-collection-state", id: grouping.id, state });
+      return;
+    }
+    lifecycleMutation.mutate({ kind: "set-tag-state", id: grouping.id, state });
   };
   return (
     <form
@@ -231,9 +225,7 @@ const GroupingList = (props: {
 
 const CatalogCachePurgeWarning = (props: { attemptCount: number; requestId: string | null }) => {
   const queryClient = useQueryClient();
-  const mutation = useMutation(() =>
-    groupingMutationOptions(queryClient, (_input: undefined) => requestGroupingCachePurgeRetry()),
-  );
+  const mutation = useMutation(() => groupingCachePurgeMutationOptions(queryClient));
   return (
     <div class="my-5 border border-amber-700 bg-amber-50 p-4 text-amber-950" role="alert">
       <p class="mt-0">
