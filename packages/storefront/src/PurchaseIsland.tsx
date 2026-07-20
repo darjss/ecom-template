@@ -6,7 +6,7 @@ import type {
   PublicBundleDetail,
   PublicProductDetail,
 } from "@ecom/contracts";
-import { Button } from "@ecom/ui";
+import { Button, Input } from "@ecom/ui";
 import { CartPresentation } from "./CartPresentation";
 import { PersonalizationControls } from "./PersonalizationControls";
 import { ProductVariantSelector } from "./ProductVariantSelector";
@@ -134,7 +134,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
 
   return (
     <>
-      <form class="grid gap-5" onSubmit={submit} aria-label="Худалдан авах сонголт">
+      <form class="purchase-form" onSubmit={submit} aria-label="Худалдан авах сонголт">
         <Show when={props.kind === "product" && props.product}>
           {(product) => (
             <ProductVariantSelector
@@ -145,10 +145,10 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           )}
         </Show>
         <PersonalizationControls definitions={definitions()} />
-        <label class="grid max-w-28 gap-1 text-sm font-bold">
+        <label class="quantity-field">
           Тоо ширхэг
-          <input
-            class="h-12 rounded-lg border border-black/30 bg-white px-3 tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+          <Input
+            class="quantity-input"
             type="number"
             name="quantity"
             required
@@ -163,18 +163,17 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
             }}
           />
         </label>
-        <div role="status" aria-live="polite" aria-atomic="true">
-          <strong class="block text-2xl tabular-nums">
-            {money.format(price().unitPriceMnt)} ₮
-          </strong>
-          <span class="text-sm text-(--muted)">
+        <div class="purchase-price" role="status" aria-live="polite" aria-atomic="true">
+          <strong>{money.format(price().unitPriceMnt)} ₮</strong>
+          <span>
             {price().source === "current" ? "Шинэчилсэн үнэ" : "Каталогийн үнэ · танилцуулга"}
           </span>
         </div>
-        <p class="m-0 min-h-6 font-bold" aria-live="polite" aria-atomic="true">
+        <p class="purchase-status" aria-live="polite" aria-atomic="true">
           {statusText()}
         </p>
         <Button
+          class="purchase-submit"
           type="submit"
           disabled={
             availability.state() !== "ready" || !demand().withinBounds || cart.recovery() !== null
@@ -201,7 +200,7 @@ export const PurchaseIsland = (props: PurchaseIslandProps) => {
       ?.remove();
   });
   return (
-    <div ref={(element) => (root = element)}>
+    <div class="purchase-island" ref={(element) => (root = element)}>
       <QueryClientProvider client={queryClient}>
         <CartProvider storageKey={props.storageKey}>
           <PurchaseControls {...props} />

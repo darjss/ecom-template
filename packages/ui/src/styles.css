@@ -30,6 +30,23 @@ a {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
+.z-input {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid color-mix(in oklch, var(--ink), transparent 70%);
+  border-radius: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+.z-input::placeholder {
+  color: var(--muted);
+}
+.z-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
 .ui-button {
   min-height: 2.75rem;
   border: 0;
