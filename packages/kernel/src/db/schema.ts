@@ -348,6 +348,7 @@ export const discountRules = sqliteTable(
     endsAt: integer("ends_at", { mode: "timestamp_ms" }),
     minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
     globalLimit: integer("global_limit"),
+    redemptionCount: integer("redemption_count").notNull().default(0),
     targetsJson: text("targets_json").notNull(),
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -380,6 +381,7 @@ export const discountRules = sqliteTable(
       "discount_rules_limit_check",
       sql`${table.globalLimit} IS NULL OR ${table.globalLimit} BETWEEN 1 AND 1000000`,
     ),
+    check("discount_rules_redemption_count_check", sql`${table.redemptionCount} >= 0`),
     check(
       "discount_rules_targets_check",
       sql`json_valid(${table.targetsJson}) AND json_type(${table.targetsJson}) = 'array' AND json_array_length(${table.targetsJson}) BETWEEN 1 AND 100`,
@@ -389,48 +391,6 @@ export const discountRules = sqliteTable(
       .on(table.code)
       .where(sql`${table.code} IS NOT NULL`),
     index("discount_rules_eligibility_idx").on(table.state, table.startsAt, table.endsAt, table.id),
-  ],
-);
-
-export const discountRedemptionEntries = sqliteTable(
-  "discount_redemption_entries",
-  {
-    id: text("id").primaryKey(),
-    discountRuleId: text("discount_rule_id")
-      .notNull()
-      .references(() => discountRules.id, { onDelete: "restrict" }),
-    orderId: text("order_id").notNull(),
-    kind: text("kind", { enum: ["claim", "release"] }).notNull(),
-    quantityDelta: integer("quantity_delta").notNull(),
-    commandCorrelationId: text("command_correlation_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "discount_redemption_entries_id_check",
-      sql`length(${table.id}) = 46 AND substr(${table.id}, 1, 20) = 'discount_redemption_' AND substr(${table.id}, 21, 1) GLOB '[0-7]' AND substr(${table.id}, 21) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check(
-      "discount_redemption_entries_kind_check",
-      sql`(${table.kind} = 'claim' AND ${table.quantityDelta} = 1) OR (${table.kind} = 'release' AND ${table.quantityDelta} = -1)`,
-    ),
-    check(
-      "discount_redemption_entries_order_check",
-      sql`length(${table.orderId}) BETWEEN 1 AND 128`,
-    ),
-    check(
-      "discount_redemption_entries_correlation_check",
-      sql`length(${table.commandCorrelationId}) BETWEEN 1 AND 64`,
-    ),
-    uniqueIndex("discount_redemption_entries_order_kind_idx").on(
-      table.discountRuleId,
-      table.orderId,
-      table.kind,
-    ),
-    index("discount_redemption_entries_rule_timeline_idx").on(
-      table.discountRuleId,
-      table.createdAt,
-    ),
   ],
 );
 
@@ -967,55 +927,6 @@ export const orderLines = sqliteTable(
       sql`json_valid(${table.optionsJson}) AND json_valid(${table.personalizationsJson}) AND json_valid(${table.bundleComponentsJson})`,
     ),
     index("order_lines_order_idx").on(table.orderId),
-  ],
-);
-
-export const orderDiscountAdjustments = sqliteTable(
-  "order_discount_adjustments",
-  {
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    discountRuleId: text("discount_rule_id").references(() => discountRules.id, {
-      onDelete: "restrict",
-    }),
-    ruleName: text("rule_name").notNull(),
-    mode: text("mode", { enum: ["automatic", "code"] }).notNull(),
-    code: text("code"),
-    calculation: text("calculation", { enum: ["percentage", "fixed_mnt"] }).notNull(),
-    value: integer("value").notNull(),
-    startsAt: integer("starts_at", { mode: "timestamp_ms" }),
-    endsAt: integer("ends_at", { mode: "timestamp_ms" }),
-    minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
-    globalLimit: integer("global_limit"),
-    targetsJson: text("targets_json").notNull(),
-    submittedCode: text("submitted_code"),
-    codeAccepted: integer("code_accepted", { mode: "boolean" }).notNull(),
-    reason: text("reason").notNull(),
-    amountMnt: integer("amount_mnt").notNull(),
-  },
-  (table) => [
-    check("order_discount_adjustments_amount_check", sql`${table.amountMnt} > 0`),
-    check("order_discount_adjustments_targets_check", sql`json_valid(${table.targetsJson})`),
-    check("order_discount_adjustments_code_accepted_check", sql`${table.codeAccepted} IN (0, 1)`),
-  ],
-);
-
-export const orderDiscountAllocations = sqliteTable(
-  "order_discount_allocations",
-  {
-    adjustmentId: text("adjustment_id")
-      .notNull()
-      .references(() => orderDiscountAdjustments.id, { onDelete: "restrict" }),
-    orderLineId: text("order_line_id")
-      .notNull()
-      .references(() => orderLines.id, { onDelete: "restrict" }),
-    amountMnt: integer("amount_mnt").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.adjustmentId, table.orderLineId] }),
-    check("order_discount_allocations_amount_check", sql`${table.amountMnt} > 0`),
   ],
 );
 

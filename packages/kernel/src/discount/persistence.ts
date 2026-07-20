@@ -16,7 +16,6 @@ import {
   catalogItems,
   categories,
   collections,
-  discountRedemptionEntries,
   discountRules,
   variants,
 } from "../db/schema";
@@ -31,12 +30,11 @@ const encodeTargets = (targets: readonly DiscountTarget[]) =>
   );
 const decodeTargets = (targetsJson: string) => v.parse(TargetListSchema, JSON.parse(targetsJson));
 
-const dto = (row: typeof discountRules.$inferSelect, redemptionCount: number): DiscountRule => {
+const dto = (row: typeof discountRules.$inferSelect): DiscountRule => {
   const { targetsJson, ...rule } = row;
   return v.parse(DiscountRuleSchema, {
     ...rule,
     targets: decodeTargets(targetsJson),
-    redemptionCount,
     startsAt: row.startsAt?.toISOString() ?? null,
     endsAt: row.endsAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -45,25 +43,12 @@ const dto = (row: typeof discountRules.$inferSelect, redemptionCount: number): D
 };
 
 const readRules = async (onlyActive = false) => {
-  const db = database();
-  const [rows, redemptionRows] = await db.batch([
-    db
-      .select()
-      .from(discountRules)
-      .where(onlyActive ? eq(discountRules.state, "active") : undefined)
-      .orderBy(asc(discountRules.createdAt), asc(discountRules.id)),
-    db
-      .select({
-        discountRuleId: discountRedemptionEntries.discountRuleId,
-        count: sql<number>`coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0)`.as(
-          "redemption_count",
-        ),
-      })
-      .from(discountRedemptionEntries)
-      .groupBy(discountRedemptionEntries.discountRuleId),
-  ] as const);
-  const counts = new Map(redemptionRows.map((row) => [row.discountRuleId, row.count]));
-  return rows.map((row) => dto(row, counts.get(row.id) ?? 0));
+  const rows = await database()
+    .select()
+    .from(discountRules)
+    .where(onlyActive ? eq(discountRules.state, "active") : undefined)
+    .orderBy(asc(discountRules.createdAt), asc(discountRules.id));
+  return rows.map(dto);
 };
 
 const auditValues = (actor: StaffActor, action: string, id: DiscountRuleId, now: Date) => ({
