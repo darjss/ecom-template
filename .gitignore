@@ -9,3 +9,4 @@ dist/
 coverage/
 worker-configuration.d.ts
 *.tsbuildinfo
+.claude/worktrees/

@@ -1,6 +1,6 @@
 # Coding standards
 
-This is the everyday coding contract. Current implementation scope lives in the [ecommerce system specification](../specs/ecommerce-system.md); the [final scope reconciliation](../wayfinder/final-scope-reconciliation.md) and accepted Wayfinder contracts govern details the current specification does not replace.
+This is the everyday coding contract. Scope lives in [`docs/recovery-brief.md`](../recovery-brief.md) (issue #115); the simplicity caps in `AGENTS.md` are binding.
 
 ## Cause-first
 
