@@ -12,16 +12,15 @@ export {
   requestPersonalizations,
   type BundleMutation,
 } from "./bundle/request";
-export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
-  requestCmsCachePurge,
-  requestCmsDocuments,
-  requestCmsMutation,
-  requestCommerceSettings,
-  requestCommerceSettingsMutation,
+  cmsCachePurgeMutationOptions,
+  cmsMutationOptions,
+  cmsQueryOptions,
+  commerceSettingsMutationOptions,
+  commerceSettingsQueryOptions,
   type CmsMutation,
-} from "./cms/request";
+} from "./content";
 export {
   requestDiscountMutation,
   requestDiscountRules,
@@ -52,20 +51,13 @@ export {
   personalizationMutationOptions,
   personalizationQueryOptions,
 } from "./query/bundle";
-export { catalogImageMutationOptions } from "./query/catalog-media";
+export { catalogImageMutationOptions, type CatalogImageUpload } from "./media";
 export {
   checkoutOptionsQueryOptions,
   checkoutQuoteMutationOptions,
   orderPlacementMutationOptions,
 } from "./query/checkout";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
-export {
-  cmsCachePurgeMutationOptions,
-  cmsMutationOptions,
-  cmsQueryOptions,
-  commerceSettingsMutationOptions,
-  commerceSettingsQueryOptions,
-} from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export {
   customerOrdersQueryKey,
@@ -76,13 +68,7 @@ export { discountMutationOptions, discountQueryOptions } from "./query/discount"
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
 export { catalogSearchQueryOptions } from "./query/search";
-export { staffMutationOptions, staffQueryOptions } from "./query/staff";
-export {
-  requestStaffList,
-  requestStaffMutation,
-  type StaffMutation,
-  type StaffMutationResult,
-} from "./staff/request";
+export { staffMutationOptions, staffQueryOptions, type StaffMutation } from "./staff";
 export {
   requestCustomerAuthMutation,
   requestCustomerSession,
