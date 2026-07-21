@@ -36,7 +36,6 @@ export const OrderLineIdSchema = typeIdSchema("order_line");
 export const PaymentIdSchema = typeIdSchema("payment");
 export const PaymentEntryIdSchema = typeIdSchema("payment_entry");
 export const FulfillmentIdSchema = typeIdSchema("fulfillment");
-export const ReservationIdSchema = typeIdSchema("reservation");
 export const CheckoutFulfillmentSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("delivery") }),
   v.strictObject({ kind: v.literal("pickup"), locationId: LocationIdSchema }),
@@ -203,10 +202,6 @@ export const PlaceOrderResultSchema = v.strictObject({
     mode: v.picklist(["delivery", "pickup"]),
     state: v.literal("unfulfilled"),
   }),
-  reservation: v.strictObject({
-    id: ReservationIdSchema,
-    state: v.picklist(["active", "consumed"]),
-  }),
 });
 export const PlaceOrderResponseSchema = v.strictObject({ data: PlaceOrderResultSchema });
 export const CheckoutApiErrorSchema = v.strictObject({
@@ -249,4 +244,3 @@ export const createOrderLineId = () => typeidUnboxed("order_line");
 export const createPaymentId = () => typeidUnboxed("payment");
 export const createPaymentEntryId = () => typeidUnboxed("payment_entry");
 export const createFulfillmentId = () => typeidUnboxed("fulfillment");
-export const createReservationId = () => typeidUnboxed("reservation");

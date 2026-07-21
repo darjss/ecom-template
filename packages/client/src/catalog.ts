@@ -67,7 +67,6 @@ const requestCatalogMutation = (mutation: CatalogMutation) => {
           description: mutation.description,
           priceMnt: mutation.priceMnt,
           openingQuantity: mutation.openingQuantity,
-          inventoryReason: mutation.inventoryReason,
         })
       : mutation.kind === "update"
         ? client.api.catalog.products({ id: mutation.id }).patch({
@@ -106,7 +105,6 @@ const requestCatalogMutation = (mutation: CatalogMutation) => {
                         .post()
                     : requestInventoryAdjustment(client, mutation.id, {
                         delta: mutation.delta,
-                        reason: mutation.reason,
                       });
   return requestResult(
     request,

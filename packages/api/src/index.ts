@@ -146,8 +146,7 @@ const catalogFailureMapping = createPipeHandlers<CatalogFailure>(
   ),
   invalid_publication: catalogConflict("Product publication invariants are not satisfied"),
   invalid_lifecycle: catalogConflict("Product lifecycle transition is not valid"),
-  reservation_blocked: catalogConflict("Active reservations block this inventory adjustment"),
-  inventory_inconsistent: catalogConflict("Reserved inventory truth requires reconciliation"),
+  reservation_blocked: catalogConflict("Reserved inventory blocks this adjustment"),
   inventory_limit: catalogConflict("Inventory on-hand cannot exceed 1,000,000"),
   conflict: catalogConflict("Inventory changed concurrently"),
   unsupported_media_type: () =>
@@ -181,7 +180,6 @@ const catalogError = (
           failure.code === "forbidden"
             ? undefined
             : failure.code,
-        blockers: "blockers" in failure ? failure.blockers : undefined,
       },
     }),
   );
@@ -616,10 +614,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         const id = v.safeParse(ProductIdSchema, params.id);
         const input = v.safeParse(InventoryAdjustmentInputSchema, body);
         if (!id.success || !input.success) {
-          return status(
-            422,
-            apiError("validation", "A non-zero inventory delta and reason are required"),
-          );
+          return status(422, apiError("validation", "A non-zero inventory delta is required"));
         }
         const authorization = await authorizeRoute(request, definition, status);
         if (!authorization.authorized) {

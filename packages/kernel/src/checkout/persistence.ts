@@ -4,12 +4,10 @@ import {
   PlaceOrderResultSchema,
   createAuditEventId,
   createFulfillmentId,
-  createInventoryEntryId,
   createOrderId,
   createOrderLineId,
   createPaymentEntryId,
   createPaymentId,
-  createReservationId,
   type CatalogItemId,
   type CustomerId,
   type CheckoutQuote,
@@ -35,9 +33,6 @@ import {
   commerceSettings,
   discountRules,
   fulfillments,
-  inventoryEntries,
-  inventoryReservationItems,
-  inventoryReservations,
   optionGroups,
   orderLines,
   orders,
@@ -303,7 +298,6 @@ export const commitPlacement = async (
   const lineIds = new Map(quote.lines.map((line) => [line.position, createOrderLineId()]));
   const paymentId = createPaymentId();
   const fulfillmentId = createFulfillmentId();
-  const reservationId = createReservationId();
   const correlationId = crypto.randomUUID();
   const now = new Date();
   const zeroTotal = quote.totalMnt === 0;
@@ -632,57 +626,9 @@ export const commitPlacement = async (
         .where(and(eq(discountRules.id, quote.discount.ruleId), orderExists)),
     );
   }
-  statements.push(
-    db.insert(inventoryReservations).select(
-      db
-        .select({
-          id: sql<string>`${reservationId}`.as("id"),
-          orderId: orders.id,
-          state: sql<"active" | "consumed">`${zeroTotal ? "consumed" : "active"}`.as("state"),
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          transitionedAt: sql<Date | null>`${zeroTotal ? now.getTime() : null}`.as(
-            "transitioned_at",
-          ),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
-  );
   for (const [variantId, quantity] of demand) {
     const stockExistsForOrder = and(eq(stockItems.variantId, variantId), orderExists);
     statements.push(
-      db.insert(inventoryReservationItems).select(
-        db
-          .select({
-            reservationId: sql<string>`${reservationId}`.as("reservation_id"),
-            stockItemId: stockItems.id,
-            quantity: sql<number>`${quantity}`.as("quantity"),
-          })
-          .from(stockItems)
-          .where(stockExistsForOrder),
-      ),
-      db.insert(inventoryEntries).select(
-        db
-          .select({
-            id: sql<string>`${createInventoryEntryId()}`.as("id"),
-            stockItemId: stockItems.id,
-            reservationId: sql<string>`${reservationId}`.as("reservation_id"),
-            orderId: sql<string>`${orderId}`.as("order_id"),
-            kind: sql<
-              "reservation" | "consumption"
-            >`${zeroTotal ? "consumption" : "reservation"}`.as("kind"),
-            onHandDelta: sql<number>`${zeroTotal ? -quantity : 0}`.as("on_hand_delta"),
-            reservedDelta: sql<number>`${zeroTotal ? 0 : quantity}`.as("reserved_delta"),
-            actorKind: sql<"system">`'system'`.as("actor_kind"),
-            staffId: sql<string | null>`NULL`.as("staff_id"),
-            staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-            reason: sql<string>`'order_placement'`.as("reason"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          })
-          .from(stockItems)
-          .where(stockExistsForOrder),
-      ),
       db
         .update(stockItems)
         .set({
@@ -803,8 +749,7 @@ export const commitPlacement = async (
             'statusPath', ${statusAccess.statusPath},
             'totalMnt', ${orders.grandTotalMnt},
             'payment', ${paymentResult},
-            'fulfillment', json_object('id', ${fulfillmentId}, 'mode', ${destination.kind}, 'state', 'unfulfilled'),
-            'reservation', json_object('id', ${reservationId}, 'state', ${zeroTotal ? "consumed" : "active"})
+            'fulfillment', json_object('id', ${fulfillmentId}, 'mode', ${destination.kind}, 'state', 'unfulfilled')
           )`.as("result_json"),
           orderId: orders.id,
           createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
