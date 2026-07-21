@@ -1,6 +1,7 @@
 ---
 import type { StoreBackend } from "@ecom/api";
 import { CustomerAuthIsland } from "@ecom/storefront";
+import CatalogProductCard from "./CatalogProductCard.astro";
 
 type Storefront = StoreBackend["storefront"];
 type CatalogItems = Awaited<ReturnType<Storefront["listPublishedCatalogItems"]>>;
@@ -16,13 +17,18 @@ interface Props {
 const { homepage, shell, catalogItems, groupings } = Astro.props;
 const commerceSettings = shell.commerceSettings;
 const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
-const fallbackProducts = catalogItems.filter(({ kind }) => kind === "product");
-const featuredItems = homepage
+const publishedProducts = catalogItems.filter(({ kind }) => kind === "product");
+const featuredProducts = homepage
   ? homepage.featuredCatalogItemIds.flatMap((id) => {
       const item = catalogById.get(id);
-      return item ? [item] : [];
+      return item?.kind === "product" ? [item] : [];
     })
-  : fallbackProducts;
+  : [];
+const featuredProductIds = new Set(featuredProducts.map(({ id }) => id));
+const products = [
+  ...featuredProducts,
+  ...publishedProducts.filter(({ id }) => !featuredProductIds.has(id)),
+];
 const headline = homepage?.headline ?? "Гэрийн тавиур.";
 const headlineParts = headline.split(" ");
 const headlineLead = headlineParts.slice(0, -1).join(" ") || headline;
@@ -50,7 +56,7 @@ const summary =
         <p class="kicker">Өдөр бүрийн хэрэгцээг цэгцтэй</p>
         <h1 id="pantry-title">{headlineLead}{" "}{headlineAccent && <><br /><span>{headlineAccent}</span></>}</h1>
         <p>{summary}</p>
-        <a href="#featured">Тавиур үзэх</a>
+        <a href="#catalog">Бараа үзэх</a>
       </div>
       <div class="pantry-image">
         {homepage?.hero
@@ -60,23 +66,34 @@ const summary =
       </div>
       <article class="bundle-bay">
         <img src="/media/b01-cleaning-bundle.webp" alt="Угаалгын нунтаг болон аяга таваг угаагчийн цэвэрлэгээний хослол" width="1000" height="1000" loading="lazy" />
-        <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>Каталогоос сонгоорой</span>
+        <p>Тасалгаа 05</p><h2>Цэвэрлэгээний хослол</h2><span>Өдөр тутмын хоёр бараа нэг дор</span>
       </article>
       <div class="delivery-bay">{commerceSettings?.freeDeliveryThresholdMnt == null ? <><span>Хүргэлтийн нөхцөл</span><strong>Үнэгүй хүргэлт тохируулаагүй</strong></> : <><span>{new Intl.NumberFormat("mn-MN").format(commerceSettings.freeDeliveryThresholdMnt)} ₮</span><strong>дээш хүргэлт үнэгүй</strong></>}<small>{commerceSettings?.deliveryEnabled === false ? "Хүргэлт түр хаалттай" : "Улаанбаатар хотод"}</small></div>
     </div>
     <div class="pantry-plinth"><span>01 Хүнс</span><span>02 Гэр ахуй</span><span>03 Жижиг бэлэг</span><b>ӨРНҮҮН / 48</b></div>
   </section>
-  <section id="featured" class="featured" aria-labelledby="featured-title">
-    <div class="product-copy">
-      <p class="kicker">Нийтлэгдсэн каталог</p>
-      <h2 id="featured-title">Өдөр тутмын сонголт</h2>
-      <p>Үнэ нь бүхэл төгрөгөөр харагдана. Худалдан авах боломжийг захиалгын өмнө шинээр шалгана.</p>
-    </div>
-    <div class="product-copy">
-      {groupings.collections.length > 0 && <nav class="mb-6 flex flex-wrap gap-3" aria-label="Цуглуулга"><span class="font-bold">Цуглуулга:</span>{groupings.collections.map((collection) => <a href={`/collections/${collection.slug}`}>{collection.name}</a>)}</nav>}
-      {featuredItems.length === 0 ? <p>Одоогоор сонгосон бүтээгдэхүүн алга.</p> : <ol class="catalog-list">{featuredItems.map((item) => <li><a href={`/${item.kind === "bundle" ? "bundles" : "products"}/${item.slug}`}><strong>{item.name}</strong><span>{new Intl.NumberFormat("mn-MN").format(item.priceMnt)} ₮</span></a></li>)}</ol>}
-    </div>
+
+  <section id="catalog" class="catalog-shelf" aria-labelledby="catalog-title">
+    <header class="catalog-shelf__header">
+      <div>
+        <span>Тавиур 02 · {products.length} бүтээгдэхүүн</span>
+        <h2 id="catalog-title">Өдөр тутмын сонголт</h2>
+        <p>Үнэ, тайлбар, савлагааг нэг дор харж, хэрэгтэй бараагаа шууд нээгээрэй.</p>
+      </div>
+      <a href="/search">Каталогоос хайх <span aria-hidden="true">→</span></a>
+    </header>
+    {groupings.categories.length > 0 && (
+      <nav class="catalog-shelf__categories" aria-label="Каталогийн ангилал">
+        <a href="#catalog" aria-current="page">Бүх бараа</a>
+        {groupings.categories.map((category) => <a href={`/categories/${category.slug}`}>{category.name}</a>)}
+      </nav>
+    )}
+    {products.length === 0
+      ? <p class="catalog-shelf__empty">Одоогоор нийтлэгдсэн бүтээгдэхүүн алга.</p>
+      : <div class="catalog-grid">{products.map((item, index) => <CatalogProductCard item={item} position={index + 1} priority={index === 0} />)}</div>}
+    <div class="catalog-shelf__rail"><span>Үнэ бүхэл төгрөгөөр</span><span>Боломжийг худалдан авах үед шинэчилнэ</span><b>Ө48</b></div>
   </section>
+
   <section class="customer-auth" aria-labelledby="customer-auth-title">
     <div>
       <h2 id="customer-auth-title">Захиалгын түүхээ хадгалах</h2>
