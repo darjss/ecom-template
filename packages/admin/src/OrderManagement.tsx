@@ -11,7 +11,7 @@ import {
   type OrderPaymentState,
 } from "@ecom/contracts";
 import { QueryClientProvider, useQuery } from "@tanstack/solid-query";
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import * as v from "valibot";
 
 const money = new Intl.NumberFormat("mn-MN", {
@@ -362,14 +362,22 @@ export const AdminOrderInbox = () => {
 };
 
 export const AdminOrderDetail = (props: { id: string }) => {
-  const id = v.safeParse(OrderIdSchema, props.id);
-  if (!id.success) {
-    return <ErrorState label="Захиалгын хаяг буруу байна. Жагсаалт руу буцна уу." />;
-  }
+  const id = createMemo(() => {
+    const parsed = v.safeParse(OrderIdSchema, props.id);
+    return parsed.success ? parsed.output : undefined;
+  });
   const queryClient = createStoreQueryClient();
   return (
-    <QueryClientProvider client={queryClient}>
-      <OrderDetail id={id.output} />
-    </QueryClientProvider>
+    <Show
+      when={id()}
+      keyed
+      fallback={<ErrorState label="Захиалгын хаяг буруу байна. Жагсаалт руу буцна уу." />}
+    >
+      {(orderId) => (
+        <QueryClientProvider client={queryClient}>
+          <OrderDetail id={orderId} />
+        </QueryClientProvider>
+      )}
+    </Show>
   );
 };
