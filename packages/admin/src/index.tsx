@@ -5,6 +5,7 @@ import {
   staffQueryOptions,
 } from "@ecom/client";
 import {
+  OrderIdSchema,
   StaffRoleSchema,
   type StaffClientError,
   type StaffMember,
@@ -21,6 +22,7 @@ import { CatalogManagement } from "./CatalogManagement";
 import { CmsManagement } from "./CmsManagement";
 import { DiscountManagement } from "./DiscountManagement";
 import { GroupingManagement } from "./GroupingManagement";
+import { OrderDetail } from "./OrderDetail";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
 export { StaffLoginForm } from "./StaffLoginForm";
@@ -336,6 +338,14 @@ const StaffManagement = () => {
 
 export type AdminAppProps = { storeName: string; store: string; role: StaffRole };
 
+const orderRouteId = () => {
+  const match = /^\/admin\/orders\/(order_[0-7][0123456789abcdefghjkmnpqrstvwxyz]{25})$/.exec(
+    window.location.pathname,
+  );
+  const id = v.safeParse(OrderIdSchema, match?.[1]);
+  return id.success ? id.output : undefined;
+};
+
 const Dashboard = (props: AdminAppProps) => (
   <div class="grid min-h-screen grid-cols-1 md:grid-cols-[15rem_1fr]">
     <aside
@@ -362,27 +372,37 @@ const Dashboard = (props: AdminAppProps) => (
       </a>
     </aside>
     <main id="admin-content" class="min-w-0 p-6 sm:p-10 lg:p-20" tabindex="-1">
-      <header class="mb-8 flex flex-col items-start justify-between gap-4 md:mb-20 md:flex-row md:items-center">
-        <div>
-          <p class="mb-2 text-xs font-extrabold tracking-widest text-(--muted) uppercase">
-            Удирдлага
-          </p>
-          <h1 class="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
-            {props.role === "owner" ? "Store-ийн баг" : "Удирдлагын самбар"}
-          </h1>
-        </div>
-        <div class="flex items-center gap-3 text-sm text-(--muted)">
-          <span>Систем</span>
-          <HealthStatus />
-        </div>
-      </header>
-      <CmsManagement store={props.store} />
-      <CatalogManagement />
-      <BundleManagement />
-      <GroupingManagement />
-      <DiscountManagement />
-      <Show when={resolveAdminSurface(props.role) === "staff_management"}>
-        <StaffManagement />
+      <Show
+        when={orderRouteId()}
+        keyed
+        fallback={
+          <>
+            <header class="mb-8 flex flex-col items-start justify-between gap-4 md:mb-20 md:flex-row md:items-center">
+              <div>
+                <p class="mb-2 text-xs font-extrabold tracking-widest text-(--muted) uppercase">
+                  Удирдлага
+                </p>
+                <h1 class="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
+                  {props.role === "owner" ? "Store-ийн баг" : "Удирдлагын самбар"}
+                </h1>
+              </div>
+              <div class="flex items-center gap-3 text-sm text-(--muted)">
+                <span>Систем</span>
+                <HealthStatus />
+              </div>
+            </header>
+            <CmsManagement store={props.store} />
+            <CatalogManagement />
+            <BundleManagement />
+            <GroupingManagement />
+            <DiscountManagement />
+            <Show when={resolveAdminSurface(props.role) === "staff_management"}>
+              <StaffManagement />
+            </Show>
+          </>
+        }
+      >
+        {(id) => <OrderDetail id={id} role={props.role} />}
       </Show>
     </main>
   </div>

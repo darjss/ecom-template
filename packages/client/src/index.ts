@@ -68,8 +68,10 @@ export {
 } from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export {
+  adminOrderQueryOptions,
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
+  orderMutationOptions,
   orderStatusQueryOptions,
 } from "./query/order";
 export { discountMutationOptions, discountQueryOptions } from "./query/discount";
@@ -89,7 +91,13 @@ export {
   type CustomerAuthMutation,
   type CustomerAuthMutationResult,
 } from "./customer/request";
-export { requestCustomerOrders, requestOrderStatus } from "./order/request";
+export {
+  requestAdminOrder,
+  requestCustomerOrders,
+  requestOrderMutation,
+  requestOrderStatus,
+  type OrderMutation,
+} from "./order/request";
 export { requestHealth } from "./request";
 export {
   requestCatalogSearch,

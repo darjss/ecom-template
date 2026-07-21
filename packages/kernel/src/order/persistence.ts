@@ -1,5 +1,5 @@
-import type { CustomerId } from "@ecom/contracts";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import type { CustomerId, OrderFulfillmentState, OrderId, StaffId } from "@ecom/contracts";
+import { and, asc, desc, eq, exists, inArray, sql } from "drizzle-orm";
 import { database } from "../db/database";
 import { fulfillments, orderLines, orders, payments } from "../db/schema";
 
@@ -78,6 +78,15 @@ const readByStatusTokenHash = async (statusTokenHash: string) => {
   return readOrderDetails(orderRows);
 };
 
+const readById = async (id: OrderId) => {
+  const orderRows = await database()
+    .select(orderSelection)
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  return readOrderDetails(orderRows);
+};
+
 const listByCustomer = async (customerId: CustomerId) => {
   const orderRows = await database()
     .select(orderSelection)
@@ -87,4 +96,68 @@ const listByCustomer = async (customerId: CustomerId) => {
   return readOrderDetails(orderRows);
 };
 
-export const orderQueries = { readByStatusTokenHash, listByCustomer };
+const confirmBankTransfer = async (orderId: OrderId, staffId: StaffId, now: Date) => {
+  const changed = await database()
+    .update(payments)
+    .set({
+      state: "confirmed",
+      confirmedAmountMnt: sql`${payments.expectedAmountMnt}`,
+      confirmedBy: staffId,
+      confirmedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(payments.orderId, orderId),
+        eq(payments.method, "bank_transfer"),
+        eq(payments.state, "awaiting_confirmation"),
+      ),
+    )
+    .returning({ id: payments.id });
+  return changed.length > 0;
+};
+
+const advanceFulfillment = async (
+  orderId: OrderId,
+  currentState: OrderFulfillmentState,
+  nextState: OrderFulfillmentState,
+  completesOrder: boolean,
+  now: Date,
+) => {
+  const db = database();
+  const fulfillmentUpdate = db
+    .update(fulfillments)
+    .set({ state: nextState, updatedAt: now })
+    .where(and(eq(fulfillments.orderId, orderId), eq(fulfillments.state, currentState)))
+    .returning({ id: fulfillments.id });
+  if (!completesOrder) {
+    return (await fulfillmentUpdate).length > 0;
+  }
+  const [changed] = await db.batch([
+    fulfillmentUpdate,
+    db
+      .update(orders)
+      .set({ state: "completed" })
+      .where(
+        and(
+          eq(orders.id, orderId),
+          eq(orders.state, "placed"),
+          exists(
+            db
+              .select({ id: fulfillments.id })
+              .from(fulfillments)
+              .where(and(eq(fulfillments.orderId, orderId), eq(fulfillments.state, nextState))),
+          ),
+        ),
+      ),
+  ] as const);
+  return changed.length > 0;
+};
+
+export const orderQueries = {
+  readByStatusTokenHash,
+  readById,
+  listByCustomer,
+  confirmBankTransfer,
+  advanceFulfillment,
+};
