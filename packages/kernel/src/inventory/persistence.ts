@@ -15,7 +15,6 @@ import {
 } from "../db/schema";
 import type { StaffActor } from "../staff/operations";
 import { findCatalogProductById } from "../catalog-reader/persistence";
-import { recordRejectedAttempt } from "../catalog/persistence";
 
 export const inventoryQueries = {
   async adjust(actor: StaffActor, id: ProductId, input: InventoryAdjustmentInput) {
@@ -108,36 +107,15 @@ export const inventoryQueries = {
       0,
     );
     if (activeReservedQuantityValue !== refreshed.reservedQuantity) {
-      await recordRejectedAttempt(
-        actor,
-        "inventory.adjust",
-        "stock_item",
-        refreshed.stockItemId,
-        "inventory_inconsistent",
-      );
       return { kind: "inventory_inconsistent" as const, blockers };
     }
     if (
       refreshed.onHandQuantity + input.delta < 0 ||
       refreshed.onHandQuantity + input.delta > 1_000_000
     ) {
-      await recordRejectedAttempt(
-        actor,
-        "inventory.adjust",
-        "stock_item",
-        refreshed.stockItemId,
-        "inventory_limit",
-      );
       return { kind: "inventory_limit" as const };
     }
     if (refreshed.onHandQuantity + input.delta < refreshed.reservedQuantity) {
-      await recordRejectedAttempt(
-        actor,
-        "inventory.adjust",
-        "stock_item",
-        refreshed.stockItemId,
-        "reservation_blocked",
-      );
       return { kind: "reservation_blocked" as const, blockers };
     }
     return { kind: "conflict" as const };

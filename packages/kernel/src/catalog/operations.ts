@@ -78,7 +78,7 @@ export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
 
 export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
   execute(actor, async () => {
-    const result = await catalogQueries.update(actor, id, input);
+    const result = await catalogQueries.update(id, input);
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
       : Result.err<never, CatalogOperationFailure>({
@@ -92,7 +92,7 @@ export const transitionProduct = (
   transition: "publish" | "archive" | "reactivate",
 ) =>
   execute(actor, async () => {
-    const result = await catalogQueries.transition(actor, id, transition);
+    const result = await catalogQueries.transition(id, transition);
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
       : Result.err<never, CatalogOperationFailure>({

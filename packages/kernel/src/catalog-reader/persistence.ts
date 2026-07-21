@@ -12,7 +12,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
+import { catalogCachePurgeDebts, catalogItems, stockItems, variants } from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import {
   readProductOptionConfiguration,
@@ -47,7 +47,7 @@ const productSelection = {
   name: catalogItems.name,
   description: catalogItems.description,
   priceMnt: catalogItems.priceMnt,
-  sku: skus.sku,
+  sku: variants.sku,
   onHandQuantity: stockItems.onHandQuantity,
   reservedQuantity: stockItems.reservedQuantity,
   cachePurgeAttemptCount: catalogCachePurgeDebts.attemptCount,
@@ -62,7 +62,6 @@ const productQuery = () =>
     .select(productSelection)
     .from(catalogItems)
     .innerJoin(variants, and(eq(variants.productId, catalogItems.id), eq(variants.isDefault, true)))
-    .innerJoin(skus, eq(skus.variantId, variants.id))
     .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
     .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
 

@@ -1,5 +1,4 @@
 import {
-  createAuditEventId,
   createStaffId,
   StaffMemberSchema,
   type StaffId,
@@ -8,23 +7,11 @@ import {
   type StaffStatus,
 } from "@ecom/contracts";
 import * as v from "valibot";
-import {
-  and,
-  asc,
-  eq,
-  exists,
-  isNotNull,
-  isNull,
-  ne,
-  notExists,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, eq, exists, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { staff_auth_users } from "../auth/staff.generated";
 import { database } from "../db/database";
-import { auditEvents, staffMembers } from "../db/schema";
+import { staffMembers } from "../db/schema";
 
 export type StaffRecord = StaffMember & {
   readonly authUserId: string | null;
@@ -151,7 +138,6 @@ const resolveApplicant = async (authUserId: string, email: string) => {
 
 export type StaffCommandContext = {
   readonly actor: { readonly staffId: StaffId; readonly role: StaffRole };
-  readonly correlationId: string;
 };
 
 const actingStaff = alias(staffMembers, "acting_staff");
@@ -185,39 +171,6 @@ const anotherActiveOwner = (staffId: StaffId) =>
       ),
   );
 
-const insertAudit = (
-  context: StaffCommandContext,
-  action: string,
-  id: StaffId,
-  now: number,
-  metadataJson: SQL<string>,
-  predicate: SQL | undefined,
-) =>
-  database()
-    .insert(auditEvents)
-    .select(
-      database()
-        .select({
-          id: sql<string>`${createAuditEventId()}`.as("id"),
-          actorKind: sql<"staff">`${"staff"}`.as("actor_kind"),
-          actorId: sql<string>`${context.actor.staffId}`.as("actor_id"),
-          staffRole: sql<StaffRole>`${context.actor.role}`.as("staff_role"),
-          telegramOperatorLabel: sql<null>`null`.as("telegram_operator_label"),
-          telegramUserId: sql<null>`null`.as("telegram_user_id"),
-          sourceChannel: sql<"admin">`${"admin"}`.as("source_channel"),
-          action: sql<string>`${action}`.as("action"),
-          outcome: sql<"accepted">`${"accepted"}`.as("outcome"),
-          entityKind: sql<string>`${"staff_member"}`.as("entity_kind"),
-          entityId: sql<string>`${id}`.as("entity_id"),
-          reason: sql<null>`null`.as("reason"),
-          commandCorrelationId: sql<string>`${context.correlationId}`.as("command_correlation_id"),
-          metadataJson: metadataJson.as("metadata_json"),
-          createdAt: sql<Date>`${now}`.as("created_at"),
-        })
-        .from(staffMembers)
-        .where(and(predicate, actingOwner(context.actor.staffId))),
-    );
-
 export const staffQueries = {
   findById,
   resolveApplicant,
@@ -235,65 +188,38 @@ export const staffQueries = {
     const id = current?.id ?? createStaffId();
     const now = Date.now();
     const db = database();
-    const [provisionedRows] = await db.batch([
-      db
-        .insert(staffMembers)
-        .values({
-          id,
-          normalizedEmail,
+    const provisionedRows = await db
+      .insert(staffMembers)
+      .values({
+        id,
+        normalizedEmail,
+        status: "active",
+        role: "owner",
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+        approvedAt: new Date(now),
+      })
+      .onConflictDoUpdate({
+        target: staffMembers.normalizedEmail,
+        set: {
           status: "active",
           role: "owner",
-          createdAt: new Date(now),
-          updatedAt: new Date(now),
           approvedAt: new Date(now),
-        })
-        .onConflictDoUpdate({
-          target: staffMembers.normalizedEmail,
-          set: {
-            status: "active",
-            role: "owner",
-            approvedAt: new Date(now),
-            revokedAt: null,
-            updatedAt: new Date(now),
-          },
-          where:
-            and(
-              isNull(staffMembers.authUserId),
-              or(
-                ne(staffMembers.status, "active"),
-                ne(staffMembers.role, "owner"),
-                isNull(staffMembers.approvedAt),
-                isNotNull(staffMembers.revokedAt),
-              ),
-            ) ?? isNull(staffMembers.authUserId),
-        })
-        .returning(selection),
-      db.insert(auditEvents).select(
-        db
-          .select({
-            id: sql<string>`${createAuditEventId()}`.as("id"),
-            actorKind: sql<"system">`${"system"}`.as("actor_kind"),
-            actorId: sql<null>`null`.as("actor_id"),
-            staffRole: sql<null>`null`.as("staff_role"),
-            telegramOperatorLabel: sql<null>`null`.as("telegram_operator_label"),
-            telegramUserId: sql<null>`null`.as("telegram_user_id"),
-            sourceChannel: sql<"provisioning">`${"provisioning"}`.as("source_channel"),
-            action: sql<string>`${"staff.provision_owner"}`.as("action"),
-            outcome: sql<"accepted">`${"accepted"}`.as("outcome"),
-            entityKind: sql<string>`${"staff_member"}`.as("entity_kind"),
-            entityId: staffMembers.id,
-            reason: sql<null>`null`.as("reason"),
-            commandCorrelationId: sql<string>`${crypto.randomUUID()}`.as("command_correlation_id"),
-            metadataJson: sql<string>`${JSON.stringify({
-              before: current ? { status: current.status, role: current.role } : null,
-              after: { status: "active", role: "owner" },
-            })}`.as("metadata_json"),
-            createdAt: sql<Date>`${now}`.as("created_at"),
-          })
-          .from(staffMembers)
-          .where(and(eq(staffMembers.id, id), eq(staffMembers.updatedAt, new Date(now)))),
-      ),
-    ] as const);
+          revokedAt: null,
+          updatedAt: new Date(now),
+        },
+        where:
+          and(
+            isNull(staffMembers.authUserId),
+            or(
+              ne(staffMembers.status, "active"),
+              ne(staffMembers.role, "owner"),
+              isNull(staffMembers.approvedAt),
+              isNotNull(staffMembers.revokedAt),
+            ),
+          ) ?? isNull(staffMembers.authUserId),
+      })
+      .returning(selection);
     const provisioned = provisionedRows.at(0);
     if (provisioned) {
       return { kind: "provisioned" as const, member: projectStaff(provisioned) };
@@ -309,42 +235,32 @@ export const staffQueries = {
     const normalizedEmail = normalizeEmail(email);
     const now = Date.now();
     const db = database();
-    const [created] = await db.batch([
-      db
-        .insert(staffMembers)
-        .select(
-          db
-            .select({
-              id: sql<string>`${id}`.as("id"),
-              normalizedEmail: sql<string>`${normalizedEmail}`.as("normalized_email"),
-              authUserId: sql<null>`null`.as("auth_user_id"),
-              status: sql<"active">`${"active"}`.as("status"),
-              role: sql<StaffRole>`${role}`.as("role"),
-              createdAt: sql<Date>`${now}`.as("created_at"),
-              updatedAt: sql<Date>`${now}`.as("updated_at"),
-              approvedAt: sql<Date>`${now}`.as("approved_at"),
-              revokedAt: sql<null>`null`.as("revoked_at"),
-            })
-            .from(actingStaff)
-            .where(
-              and(
-                eq(actingStaff.id, context.actor.staffId),
-                eq(actingStaff.status, "active"),
-                eq(actingStaff.role, "owner"),
-              ),
+    const created = await db
+      .insert(staffMembers)
+      .select(
+        db
+          .select({
+            id: sql<string>`${id}`.as("id"),
+            normalizedEmail: sql<string>`${normalizedEmail}`.as("normalized_email"),
+            authUserId: sql<null>`null`.as("auth_user_id"),
+            status: sql<"active">`${"active"}`.as("status"),
+            role: sql<StaffRole>`${role}`.as("role"),
+            createdAt: sql<Date>`${now}`.as("created_at"),
+            updatedAt: sql<Date>`${now}`.as("updated_at"),
+            approvedAt: sql<Date>`${now}`.as("approved_at"),
+            revokedAt: sql<null>`null`.as("revoked_at"),
+          })
+          .from(actingStaff)
+          .where(
+            and(
+              eq(actingStaff.id, context.actor.staffId),
+              eq(actingStaff.status, "active"),
+              eq(actingStaff.role, "owner"),
             ),
-        )
-        .onConflictDoNothing({ target: staffMembers.normalizedEmail })
-        .returning(selection),
-      insertAudit(
-        context,
-        "staff.create",
-        id,
-        now,
-        sql<string>`json_object('before', null, 'after', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}))`,
-        eq(staffMembers.id, id),
-      ),
-    ]);
+          ),
+      )
+      .onConflictDoNothing({ target: staffMembers.normalizedEmail })
+      .returning(selection);
     const row = created.at(0);
     return row ? projectStaff(row) : undefined;
   },
@@ -392,28 +308,17 @@ export const staffQueries = {
   async approve(context: StaffCommandContext, id: StaffId, role: StaffRole) {
     const now = Date.now();
     const predicate = and(eq(staffMembers.id, id), eq(staffMembers.status, "pending"));
-    const db = database();
-    const [, changedRows] = await db.batch([
-      insertAudit(
-        context,
-        "staff.approve",
-        id,
-        now,
-        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"active"}, 'role', ${role}))`,
-        predicate,
-      ),
-      db
-        .update(staffMembers)
-        .set({
-          status: "active",
-          role,
-          approvedAt: new Date(now),
-          revokedAt: null,
-          updatedAt: new Date(now),
-        })
-        .where(and(predicate, actingOwner(context.actor.staffId)))
-        .returning(selection),
-    ]);
+    const changedRows = await database()
+      .update(staffMembers)
+      .set({
+        status: "active",
+        role,
+        approvedAt: new Date(now),
+        revokedAt: null,
+        updatedAt: new Date(now),
+      })
+      .where(and(predicate, actingOwner(context.actor.staffId)))
+      .returning(selection);
     const changed = changedRows.at(0);
     return changed
       ? { changed: projectStaff(changed), current: undefined }
@@ -428,25 +333,14 @@ export const staffQueries = {
       ne(staffMembers.role, role),
       role === "owner" ? undefined : or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
-    const db = database();
-    const [, changedRows] = await db.batch([
-      insertAudit(
-        context,
-        "staff.role_change",
-        id,
-        now,
-        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${staffMembers.status}, 'role', ${role}))`,
-        predicate,
-      ),
-      db
-        .update(staffMembers)
-        .set({
-          role,
-          updatedAt: new Date(now),
-        })
-        .where(and(predicate, actingOwner(context.actor.staffId)))
-        .returning(selection),
-    ]);
+    const changedRows = await database()
+      .update(staffMembers)
+      .set({
+        role,
+        updatedAt: new Date(now),
+      })
+      .where(and(predicate, actingOwner(context.actor.staffId)))
+      .returning(selection);
     const changed = changedRows.at(0);
     return changed
       ? { changed: projectStaff(changed), current: undefined }
@@ -460,26 +354,15 @@ export const staffQueries = {
       eq(staffMembers.status, "active"),
       or(ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
-    const db = database();
-    const [, changedRows] = await db.batch([
-      insertAudit(
-        context,
-        "staff.revoke",
-        id,
-        now,
-        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', json_object('status', ${"revoked"}, 'role', ${staffMembers.role}))`,
-        predicate,
-      ),
-      db
-        .update(staffMembers)
-        .set({
-          status: "revoked",
-          revokedAt: new Date(now),
-          updatedAt: new Date(now),
-        })
-        .where(and(predicate, actingOwner(context.actor.staffId)))
-        .returning(selection),
-    ]);
+    const changedRows = await database()
+      .update(staffMembers)
+      .set({
+        status: "revoked",
+        revokedAt: new Date(now),
+        updatedAt: new Date(now),
+      })
+      .where(and(predicate, actingOwner(context.actor.staffId)))
+      .returning(selection);
     const changed = changedRows.at(0);
     return changed
       ? { changed: projectStaff(changed), current: undefined }
@@ -487,26 +370,14 @@ export const staffQueries = {
   },
 
   async remove(context: StaffCommandContext, id: StaffId) {
-    const now = Date.now();
     const predicate = and(
       eq(staffMembers.id, id),
       or(ne(staffMembers.status, "active"), ne(staffMembers.role, "owner"), anotherActiveOwner(id)),
     );
-    const db = database();
-    const [, removedRows] = await db.batch([
-      insertAudit(
-        context,
-        "staff.remove",
-        id,
-        now,
-        sql<string>`json_object('before', json_object('status', ${staffMembers.status}, 'role', ${staffMembers.role}), 'after', null)`,
-        predicate,
-      ),
-      db
-        .delete(staffMembers)
-        .where(and(predicate, actingOwner(context.actor.staffId)))
-        .returning(selection),
-    ]);
+    const removedRows = await database()
+      .delete(staffMembers)
+      .where(and(predicate, actingOwner(context.actor.staffId)))
+      .returning(selection);
     const removed = removedRows.at(0);
     return removed
       ? { removed: projectStaff(removed), current: undefined }

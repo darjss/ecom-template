@@ -7,7 +7,7 @@ import {
   type CatalogSearchResponse,
 } from "@ecom/contracts";
 import { env } from "cloudflare:workers";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import { compactSku } from "../catalog/sku";
@@ -18,7 +18,6 @@ import {
   catalogItems,
   categories,
   collections,
-  skus,
   variants,
 } from "../db/schema";
 import {
@@ -125,33 +124,41 @@ const searchRows = async (
 
 const exactSku = async (query: string, category?: string, collection?: string) => {
   const db = database();
-  const rows = await db
-    .select({
-      itemId: catalogItems.id,
-      kind: catalogItems.kind,
-      slug: catalogItems.slug,
-      name: catalogItems.name,
-      description: catalogItems.description,
-      priceMnt: catalogItems.priceMnt,
-    })
-    .from(skus)
-    .leftJoin(variants, eq(variants.id, skus.variantId))
-    .innerJoin(
-      catalogItems,
-      or(eq(catalogItems.id, variants.productId), eq(catalogItems.id, skus.bundleId)),
-    )
-    .where(
-      and(
-        eq(skus.skuCompact, compactSku(query)),
-        eq(catalogItems.state, "published"),
-        or(
-          eq(skus.ownerKind, "bundle"),
-          and(eq(skus.ownerKind, "variant"), eq(variants.state, "active")),
+  const selection = {
+    itemId: catalogItems.id,
+    kind: catalogItems.kind,
+    slug: catalogItems.slug,
+    name: catalogItems.name,
+    description: catalogItems.description,
+    priceMnt: catalogItems.priceMnt,
+  };
+  const skuCompact = compactSku(query);
+  const [bundleRows, variantRows] = await db.batch([
+    db
+      .select(selection)
+      .from(catalogItems)
+      .where(
+        and(
+          eq(catalogItems.kind, "bundle"),
+          eq(catalogItems.skuCompact, skuCompact),
+          eq(catalogItems.state, "published"),
         ),
-      ),
-    )
-    .limit(1);
-  const row = rows.at(0);
+      )
+      .limit(1),
+    db
+      .select(selection)
+      .from(variants)
+      .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+      .where(
+        and(
+          eq(variants.skuCompact, skuCompact),
+          eq(variants.state, "active"),
+          eq(catalogItems.state, "published"),
+        ),
+      )
+      .limit(1),
+  ] as const);
+  const row = variantRows.at(0) ?? bundleRows.at(0);
   if (!row) {
     return undefined;
   }
