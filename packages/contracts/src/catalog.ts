@@ -81,24 +81,11 @@ export const MediaUploadFieldsSchema = v.strictObject({
   position: MediaPositionSchema,
   altText: MediaAltTextSchema,
 });
-export const CachePurgeRequestIdSchema = v.nullable(
-  v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-);
 export const MediaUploadResponseSchema = v.strictObject({
-  data: v.strictObject({
-    image: CatalogImageSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ image: CatalogImageSchema }),
 });
 export const MediaUploadMaxBytes = 8 * 1024 * 1024;
 export const MediaUploadMultipartMaxBytes = MediaUploadMaxBytes + 64 * 1024;
-
-export const CachePurgeDebtSchema = v.strictObject({
-  attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
-  requestId: CachePurgeRequestIdSchema,
-  lastAttemptedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
-});
 
 export const OptionKeySchema = v.pipe(
   v.string(),
@@ -157,7 +144,6 @@ export const ProductSchema = v.strictObject({
   sku: SkuSchema,
   onHandQuantity: InventoryQuantitySchema,
   reservedQuantity: InventoryQuantitySchema,
-  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   images: v.array(CatalogImageSchema),
   optionConfiguration: ProductOptionConfigurationSchema,
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
@@ -166,11 +152,7 @@ export const ProductSchema = v.strictObject({
 
 export const CatalogListResponseSchema = v.strictObject({ data: v.array(ProductSchema) });
 export const CatalogProductResponseSchema = v.strictObject({
-  data: v.strictObject({
-    product: ProductSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ product: ProductSchema }),
 });
 export const CreateProductInputSchema = v.strictObject({
   name: CatalogNameSchema,
@@ -238,7 +220,6 @@ export const CatalogFailureReasonSchema = v.picklist([
   "reservation_blocked",
   "inventory_inconsistent",
   "inventory_limit",
-  "committed_but_not_purged",
   "unsupported_media_type",
   "invalid_media_bytes",
   "media_too_large",

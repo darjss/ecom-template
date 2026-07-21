@@ -3,7 +3,6 @@ export { CartProvider, useCart } from "./cart";
 export {
   discountMutationOptions,
   discountQueryOptions,
-  groupingCachePurgeMutationOptions,
   groupingMutationOptions,
   groupingQueryOptions,
   healthQueryOptions,
@@ -14,7 +13,6 @@ export {
   catalogQueryOptions,
 } from "./catalog";
 export {
-  cmsCachePurgeMutationOptions,
   cmsMutationOptions,
   cmsQueryOptions,
   commerceSettingsMutationOptions,

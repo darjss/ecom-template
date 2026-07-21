@@ -176,6 +176,13 @@
       "when": 1784478420252,
       "tag": "0024_slippery_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1784567102708,
+      "tag": "0025_silent_vanisher",
+      "breakpoints": true
     }
   ]
 }

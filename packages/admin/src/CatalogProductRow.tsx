@@ -146,26 +146,6 @@ export const CatalogProductRow = (props: { product: Product }) => {
       <Show when={mutation.error} keyed>
         {(error) => <p role="alert">{mutationErrorMessage(error)}</p>}
       </Show>
-      <Show when={props.product.cachePurgeDebt} keyed>
-        {(debt) => (
-          <div role="alert">
-            <p>
-              Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Оролдлого: {debt.attemptCount}
-            </p>
-            <Show when={debt.requestId} keyed>
-              {(requestId) => <p>Cloudflare хүсэлтийн ID: {requestId}</p>}
-            </Show>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate({ kind: "retry-cache-purge", id: props.product.id })}
-            >
-              Cache цэвэрлэгээг дахин оролдох
-            </Button>
-          </div>
-        )}
-      </Show>
       <CatalogImageForm item={props.product} />
       <ProductVariantsForm product={props.product} />
       <InventoryAdjustmentForm product={props.product} />

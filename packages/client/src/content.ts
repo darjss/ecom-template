@@ -1,6 +1,5 @@
 import {
   CmsApiErrorSchema,
-  CmsCachePurgeResponseSchema,
   CmsDocumentListResponseSchema,
   CmsDocumentResponseSchema,
   CommerceSettingsMutationResponseSchema,
@@ -43,14 +42,6 @@ const requestCmsMutation = (mutation: CmsMutation) => {
   );
 };
 
-const requestCmsCachePurge = () =>
-  requestResult(
-    () => createApiClient().api.cms["cache-purge"].retry.post(),
-    CmsCachePurgeResponseSchema,
-    CmsApiErrorSchema,
-    "Invalid CMS cache-purge response",
-  );
-
 const requestCommerceSettings = () =>
   requestResult(
     () => createApiClient().api["commerce-settings"].get(),
@@ -69,7 +60,6 @@ const requestCommerceSettingsMutation = (settings: CommerceSettings) =>
 
 type CmsResult = Awaited<ReturnType<typeof requestCmsDocuments>>;
 type CmsMutationResult = Awaited<ReturnType<typeof requestCmsMutation>>;
-type CmsCachePurgeResult = Awaited<ReturnType<typeof requestCmsCachePurge>>;
 type SettingsResult = Awaited<ReturnType<typeof requestCommerceSettings>>;
 type SettingsMutationResult = Awaited<ReturnType<typeof requestCommerceSettingsMutation>>;
 
@@ -86,11 +76,6 @@ export const cmsMutationOptions = (queryClient: QueryClient) =>
       await queryClient.invalidateQueries({ queryKey: cmsQueryKey, refetchType: "none" });
       await queryClient.refetchQueries({ queryKey: cmsQueryKey, type: "active" });
     },
-  });
-
-export const cmsCachePurgeMutationOptions = () =>
-  mutationOptions<InferOk<CmsCachePurgeResult>, InferErr<CmsCachePurgeResult>, void>({
-    mutationFn: async () => unwrapRequestResult(await requestCmsCachePurge()),
   });
 
 export const commerceSettingsQueryOptions = () =>

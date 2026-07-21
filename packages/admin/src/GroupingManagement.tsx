@@ -1,8 +1,4 @@
-import {
-  groupingCachePurgeMutationOptions,
-  groupingMutationOptions,
-  groupingQueryOptions,
-} from "@ecom/client";
+import { groupingMutationOptions, groupingQueryOptions } from "@ecom/client";
 import type { Category, Grouping, GroupingState } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
@@ -223,33 +219,6 @@ const GroupingList = (props: {
   </section>
 );
 
-const CatalogCachePurgeWarning = (props: { attemptCount: number; requestId: string | null }) => {
-  const queryClient = useQueryClient();
-  const mutation = useMutation(() => groupingCachePurgeMutationOptions(queryClient));
-  return (
-    <div class="my-5 border border-amber-700 bg-amber-50 p-4 text-amber-950" role="alert">
-      <p class="mt-0">
-        Өөрчлөлт хадгалагдсан боловч public catalog cache шинэчлэгдээгүй. Оролдлого:{" "}
-        {props.attemptCount}
-      </p>
-      <Show when={props.requestId} keyed>
-        {(requestId) => <p>Cloudflare хүсэлтийн ID: {requestId}</p>}
-      </Show>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate(undefined)}
-      >
-        Public cache шинэчлэлтийг дахин оролдох
-      </Button>
-      <Show when={mutation.error} keyed>
-        {(error) => <p>{groupingErrorMessage(error)}</p>}
-      </Show>
-    </div>
-  );
-};
-
 export const GroupingManagement = () => {
   const query = useQuery(() => groupingQueryOptions());
   return (
@@ -282,14 +251,6 @@ export const GroupingManagement = () => {
         <Show when={query.data} keyed fallback={<p role="status">Бүлгүүдийг ачаалж байна…</p>}>
           {(data) => (
             <>
-              <Show when={data.data.cachePurgeDebt} keyed>
-                {(debt) => (
-                  <CatalogCachePurgeWarning
-                    attemptCount={debt.attemptCount}
-                    requestId={debt.requestId}
-                  />
-                )}
-              </Show>
               <CreateCategoryForm categories={data.data.categories} />
               <CreateCollectionForm />
               <CreateTagForm />

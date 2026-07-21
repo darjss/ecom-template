@@ -13,13 +13,12 @@ import {
   type TagId,
   type TagInput,
 } from "@ecom/contracts";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   catalogItemCategories,
   catalogItemCollections,
   catalogItems,
   catalogItemTags,
-  catalogListingCachePurgeDebt,
   categories,
   collections,
   tags,
@@ -88,33 +87,6 @@ const membershipIds = (
   memberships
     .filter((membership) => membership.groupingId === groupingId)
     .map((membership) => membership.catalogItemId);
-
-const catalogDebtStatement = (now: Date) => {
-  const revision = crypto.randomUUID();
-  return database()
-    .insert(catalogListingCachePurgeDebt)
-    .values({
-      key: "catalog",
-      revision,
-      attemptCount: 0,
-      requestId: null,
-      commandCommittedAt: now,
-      lastAttemptedAt: null,
-    })
-    .onConflictDoUpdate({
-      target: catalogListingCachePurgeDebt.key,
-      set: {
-        revision,
-        attemptCount: 0,
-        requestId: null,
-        commandCommittedAt: now,
-        lastAttemptedAt: null,
-      },
-    });
-};
-type BatchStatement = Parameters<ReturnType<typeof database>["batch"]>[0][number];
-const batchCatalogChange = (statements: readonly [BatchStatement, ...BatchStatement[]]) =>
-  database().batch([...statements, catalogDebtStatement(new Date())]);
 
 const categoryCatalogItemIds = async (id: CategoryId) =>
   (
@@ -242,7 +214,6 @@ export const groupingQueries = {
       collectionRows,
       tagRows,
       catalogItemRows,
-      cacheDebtRows,
       categoryMemberships,
       collectionMemberships,
       tagMemberships,
@@ -262,7 +233,6 @@ export const groupingQueries = {
         })
         .from(catalogItems)
         .orderBy(asc(catalogItems.name), asc(catalogItems.id)),
-      database().select().from(catalogListingCachePurgeDebt).limit(1),
       database()
         .select({
           groupingId: catalogItemCategories.categoryId,
@@ -291,13 +261,6 @@ export const groupingQueries = {
       ),
       tags: tagRows.map((row) => tagDto(row, membershipIds(row.id, tagMemberships))),
       catalogItems: catalogItemRows,
-      cachePurgeDebt: cacheDebtRows[0]
-        ? {
-            attemptCount: cacheDebtRows[0].attemptCount,
-            requestId: cacheDebtRows[0].requestId,
-            lastAttemptedAt: timestamp(cacheDebtRows[0].lastAttemptedAt),
-          }
-        : null,
     };
   },
 
@@ -311,7 +274,7 @@ export const groupingQueries = {
     }
     const id = createCategoryId();
     const now = new Date();
-    await batchCatalogChange([
+    await database().batch([
       database()
         .insert(categories)
         .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
@@ -325,7 +288,7 @@ export const groupingQueries = {
     }
     const id = createCollectionId();
     const now = new Date();
-    await batchCatalogChange([
+    await database().batch([
       database()
         .insert(collections)
         .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
@@ -340,7 +303,7 @@ export const groupingQueries = {
     }
     const id = createTagId();
     const now = new Date();
-    await batchCatalogChange([
+    await database().batch([
       database().insert(tags).values({
         id,
         label: input.label,
@@ -368,7 +331,7 @@ export const groupingQueries = {
     if (await categorySlugExists(input.slug, id)) {
       return { kind: "duplicate_slug" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(categories)
         .set({ ...input, updatedAt: new Date() })
@@ -391,7 +354,7 @@ export const groupingQueries = {
     if (await collectionSlugExists(input.slug, id)) {
       return { kind: "duplicate_slug" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(collections)
         .set({ ...input, updatedAt: new Date() })
@@ -408,7 +371,7 @@ export const groupingQueries = {
     if (await tagLabelExists(normalizedLabel, id)) {
       return { kind: "duplicate_label" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(tags)
         .set({ label: input.label, normalizedLabel, updatedAt: new Date() })
@@ -425,7 +388,7 @@ export const groupingQueries = {
     if (!current) {
       return { kind: "not_found" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(categories)
         .set(stateDates(current, state, new Date()))
@@ -442,7 +405,7 @@ export const groupingQueries = {
     if (!current) {
       return { kind: "not_found" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(collections)
         .set(stateDates(current, state, new Date()))
@@ -456,7 +419,7 @@ export const groupingQueries = {
     if (!current) {
       return { kind: "not_found" };
     }
-    await batchCatalogChange([
+    await database().batch([
       database()
         .update(tags)
         .set(stateDates(current, state, new Date()))
@@ -478,7 +441,7 @@ export const groupingQueries = {
     const remove = database()
       .delete(catalogItemCategories)
       .where(eq(catalogItemCategories.categoryId, id));
-    await batchCatalogChange(
+    await database().batch(
       input.catalogItemIds.length === 0
         ? [remove]
         : [
@@ -506,7 +469,7 @@ export const groupingQueries = {
     const remove = database()
       .delete(catalogItemCollections)
       .where(eq(catalogItemCollections.collectionId, id));
-    await batchCatalogChange(
+    await database().batch(
       input.catalogItemIds.length === 0
         ? [remove]
         : [
@@ -536,7 +499,7 @@ export const groupingQueries = {
       return { kind: "catalog_item_not_found" };
     }
     const remove = database().delete(catalogItemTags).where(eq(catalogItemTags.tagId, id));
-    await batchCatalogChange(
+    await database().batch(
       input.catalogItemIds.length === 0
         ? [remove]
         : [
@@ -547,50 +510,6 @@ export const groupingQueries = {
           ],
     );
     return changed(await findTag(id));
-  },
-
-  async findCatalogCachePurgeDebt() {
-    const [row] = await database()
-      .select({ revision: catalogListingCachePurgeDebt.revision })
-      .from(catalogListingCachePurgeDebt)
-      .where(eq(catalogListingCachePurgeDebt.key, "catalog"))
-      .limit(1);
-    return row;
-  },
-
-  async recordCatalogCachePurgeOutcome(
-    revision: string,
-    outcome: "purged" | "failed",
-    requestId: string | null,
-  ) {
-    if (outcome === "purged") {
-      const rows = await database()
-        .delete(catalogListingCachePurgeDebt)
-        .where(
-          and(
-            eq(catalogListingCachePurgeDebt.key, "catalog"),
-            eq(catalogListingCachePurgeDebt.revision, revision),
-          ),
-        )
-        .returning({ key: catalogListingCachePurgeDebt.key });
-      return rows.length === 1;
-    }
-    const rows = await database()
-      .update(catalogListingCachePurgeDebt)
-      .set({
-        attemptCount: sql`${catalogListingCachePurgeDebt.attemptCount} + 1`,
-        requestId,
-        lastAttemptedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(catalogListingCachePurgeDebt.key, "catalog"),
-          eq(catalogListingCachePurgeDebt.revision, revision),
-          sql`${catalogListingCachePurgeDebt.attemptCount} < 1000000`,
-        ),
-      )
-      .returning({ key: catalogListingCachePurgeDebt.key });
-    return rows.length === 1;
   },
 
   async listPublicGroupings() {

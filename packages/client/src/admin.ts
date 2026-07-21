@@ -3,7 +3,6 @@ import {
   DiscountListResponseSchema,
   DiscountMutationResponseSchema,
   GroupingApiErrorSchema,
-  GroupingCachePurgeResponseSchema,
   GroupingListResponseSchema,
   GroupingMutationResponseSchema,
   HealthApiErrorSchema,
@@ -135,17 +134,8 @@ const requestGroupingMutation = (mutation: GroupingMutation) => {
   );
 };
 
-const requestGroupingCachePurge = () =>
-  requestResult(
-    () => createApiClient().api.catalog.groupings["cache-purge"].retry.post(),
-    GroupingCachePurgeResponseSchema,
-    GroupingApiErrorSchema,
-    "Invalid grouping cache-purge response",
-  );
-
 type GroupingResult = Awaited<ReturnType<typeof requestGroupings>>;
 type GroupingMutationResult = Awaited<ReturnType<typeof requestGroupingMutation>>;
-type GroupingCachePurgeResult = Awaited<ReturnType<typeof requestGroupingCachePurge>>;
 
 const refreshGroupings = async (queryClient: QueryClient) => {
   await queryClient.invalidateQueries({ queryKey: groupingQueryKey, refetchType: "none" });
@@ -165,12 +155,6 @@ export const groupingMutationOptions = (queryClient: QueryClient) =>
     GroupingMutation
   >({
     mutationFn: async (mutation) => unwrapRequestResult(await requestGroupingMutation(mutation)),
-    onSuccess: async () => refreshGroupings(queryClient),
-  });
-
-export const groupingCachePurgeMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<InferOk<GroupingCachePurgeResult>, InferErr<GroupingCachePurgeResult>, void>({
-    mutationFn: async () => unwrapRequestResult(await requestGroupingCachePurge()),
     onSuccess: async () => refreshGroupings(queryClient),
   });
 

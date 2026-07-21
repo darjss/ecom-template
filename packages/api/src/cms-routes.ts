@@ -1,6 +1,5 @@
 import {
   CmsApiErrorSchema,
-  CmsCachePurgeResponseSchema,
   CmsDocumentKindSchema,
   CmsDocumentListResponseSchema,
   CmsDocumentResponseSchema,
@@ -13,7 +12,6 @@ import {
   listCmsDocuments,
   publishCmsDocument,
   readCommerceSettings,
-  retryCmsCachePurge,
   saveCmsDraft,
   saveCommerceSettings,
   type CmsOperationFailure,
@@ -143,16 +141,6 @@ export const createCmsRoutes = (definition: StoreDefinition, authorize: Authoriz
       return result.isErr()
         ? error(result.error, status)
         : v.parse(CmsDocumentResponseSchema, { data: result.value });
-    })
-    .post("/cms/cache-purge/retry", async ({ request, status }) => {
-      const authorization = await authorize(request, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await retryCmsCachePurge(authorization.actor);
-      return result.isErr()
-        ? error(result.error, status)
-        : v.parse(CmsCachePurgeResponseSchema, { data: result.value });
     })
     .get("/commerce-settings", async ({ request, status }) => {
       const authorization = await authorize(request, status);

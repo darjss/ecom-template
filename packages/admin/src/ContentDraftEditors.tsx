@@ -145,16 +145,12 @@ const ContentActions = (props: {
     try {
       const document = props.document();
       await mutation.mutateAsync({ kind: "save-draft", document });
-      const result = await mutation.mutateAsync({
+      await mutation.mutateAsync({
         kind: "publish",
         documentKind: document.kind,
       });
       props.clearLocal();
-      setMessage(
-        result.data.cache === "purged"
-          ? "Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ."
-          : "Нийтлэгдсэн боловч кэш цэвэрлэгдээгүй. Дахин оролдоно уу.",
-      );
+      setMessage("Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ.");
     } catch {
       setMessage("Нийтлэхийн өмнө талбар болон холбоосоо шалгана уу.");
     }
