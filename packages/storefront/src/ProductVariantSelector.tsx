@@ -1,4 +1,5 @@
 import type { PublicProductDetail } from "@ecom/contracts";
+import { Button } from "@ecom/ui";
 import { For, Show } from "solid-js";
 import { selectVariant } from "./variant-selection";
 
@@ -36,8 +37,9 @@ export const ProductVariantSelector = (props: {
                   const selected = () => selectedValueId(group.id) === value.id;
                   const impossible = () => variantsContaining(group.id, value.id).length === 0;
                   return (
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
                       class="min-h-11 rounded-lg border px-4 py-2 text-sm font-bold transition-colors motion-reduce:transition-none"
                       classList={{
                         "border-(--tomato) bg-(--tomato) text-white": selected(),
@@ -48,7 +50,7 @@ export const ProductVariantSelector = (props: {
                       onClick={() => selectValue(group.id, value.id)}
                     >
                       {value.label}
-                    </button>
+                    </Button>
                   );
                 }}
               </For>

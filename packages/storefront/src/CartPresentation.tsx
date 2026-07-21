@@ -1,6 +1,6 @@
 import { availabilityFreshnessMs, availabilityQueryOptions, useCart } from "@ecom/client";
 import type { CartLine } from "@ecom/contracts";
-import { Button } from "@ecom/ui";
+import { Button, Input } from "@ecom/ui";
 import { useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
 import { CheckoutQuote } from "./CheckoutQuote";
@@ -109,8 +109,8 @@ export const CartPresentation = () => {
               </span>
               <label class="grid gap-1 text-sm font-bold">
                 Тоо
-                <input
-                  class="h-11 w-20 rounded-lg border border-black/30 bg-white px-3 tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+                <Input
+                  class="h-11 w-20 tabular-nums"
                   type="number"
                   min="1"
                   max="999"

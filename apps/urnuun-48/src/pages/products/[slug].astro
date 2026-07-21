@@ -41,58 +41,69 @@ const imageSrcset = (mediaAssetId: string, format: "avif" | "webp") =>
 <StoreLayout title={`${product.name} · ${storeName}`} description={product.description || product.name}>
   <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
   <StoreShell shell={shell} currentPath={Astro.url.pathname} fallbackName={storeName}>
-  <main id="content">
-    <article class="featured" aria-labelledby="product-title">
-      <div class="product-visual">
-        <span class="bay-number">Каталог</span>
-        {product.images.length === 0
-          ? <div class="grid aspect-square place-items-center bg-(--surface) p-6 text-center text-(--muted)">Зураг оруулаагүй байна</div>
-          : <div class="grid gap-3 sm:grid-cols-2">
-              {product.images.map((image, index) => (
-                <picture class={index === 0 ? "sm:col-span-2" : undefined}>
-                  <source
-                    type="image/avif"
-                    srcset={imageSrcset(image.mediaAssetId, "avif")}
-                    sizes="(max-width: 767px) 100vw, 50vw"
-                  />
-                  <img
-                    class="aspect-square w-full object-cover"
-                    src={`/media/${image.mediaAssetId}/960.webp`}
-                    srcset={imageSrcset(image.mediaAssetId, "webp")}
-                    sizes="(max-width: 767px) 100vw, 50vw"
-                    alt={image.altText}
-                    width="960"
-                    height="960"
-                    loading={index === 0 ? "eager" : "lazy"}
-                    fetchpriority={index === 0 ? "high" : "auto"}
-                    decoding="async"
-                  />
-                </picture>
-              ))}
-            </div>}
-      </div>
-      <div class="product-copy">
-        <p class="kicker">Нийтлэгдсэн бүтээгдэхүүн</p>
-        <h1 id="product-title">{product.name}</h1>
-        {product.description && <p>{product.description}</p>}
-        {selectedCatalogVariant && (
-          <PurchaseFallback
-            priceMnt={selectedCatalogVariant.priceMnt}
-            sku={selectedCatalogVariant.sku}
-            optionGroups={fallbackOptionGroups}
-            personalizations={personalizations}
-          />
-        )}
-        <PurchaseIsland
-          kind="product"
-          product={product}
-          personalizations={personalizations}
-          storageKey="cart:urnuun-48:v1"
-          client:only="solid-js"
-        />
-      </div>
-    </article>
-    <OrderingNotices document={orderingNotices} placement="product" />
-  </main>
+    <main id="content" class="product-page">
+      <nav class="product-breadcrumb" aria-label="Байршил">
+        <a href="/">Дэлгүүр</a><span aria-hidden="true">/</span><span aria-current="page">{product.name}</span>
+      </nav>
+      <article class="product-detail" aria-labelledby="product-title">
+        <div class="product-gallery">
+          <span class="product-gallery__marker">Тавиур · бүтээгдэхүүн</span>
+          {product.images.length === 0
+            ? <div class="product-gallery__placeholder"><b>48</b><span>Зураг оруулаагүй байна</span></div>
+            : <div class="product-gallery__grid">
+                {product.images.map((image, index) => (
+                  <picture class={index === 0 ? "product-gallery__primary" : "product-gallery__secondary"}>
+                    <source
+                      type="image/avif"
+                      srcset={imageSrcset(image.mediaAssetId, "avif")}
+                      sizes="(max-width: 767px) 100vw, 58vw"
+                    />
+                    <img
+                      src={`/media/${image.mediaAssetId}/960.webp`}
+                      srcset={imageSrcset(image.mediaAssetId, "webp")}
+                      sizes="(max-width: 767px) 100vw, 58vw"
+                      alt={image.altText}
+                      width="960"
+                      height="960"
+                      loading={index === 0 ? "eager" : "lazy"}
+                      fetchpriority={index === 0 ? "high" : "auto"}
+                      decoding="async"
+                    />
+                  </picture>
+                ))}
+              </div>}
+        </div>
+        <div class="product-purchase">
+          <header class="product-purchase__heading">
+            <span>Өрнүүн 48 · өдөр тутмын сонголт</span>
+            <h1 id="product-title">{product.name}</h1>
+            {product.description && <p>{product.description}</p>}
+          </header>
+          <section class="purchase-boundary" aria-label="Худалдан авах хэсэг">
+            {selectedCatalogVariant && (
+              <PurchaseFallback
+                priceMnt={selectedCatalogVariant.priceMnt}
+                sku={selectedCatalogVariant.sku}
+                optionGroups={fallbackOptionGroups}
+                personalizations={personalizations}
+              />
+            )}
+            <PurchaseIsland
+              kind="product"
+              product={product}
+              personalizations={personalizations}
+              storageKey="cart:urnuun-48:v1"
+              client:only="solid-js"
+            />
+          </section>
+        </div>
+      </article>
+      <aside class="product-trust" aria-label="Худалдан авалтын мэдээлэл">
+        <div><span>Үнэ</span><strong>Сонголт бүрээр шинэчилнэ</strong></div>
+        <div><span>Төлбөр</span><strong>Банкны шилжүүлэг</strong></div>
+        <div><span>Хүргэлт</span><strong>Улаанбаатар хотод</strong></div>
+      </aside>
+      <OrderingNotices document={orderingNotices} placement="product" />
+    </main>
   </StoreShell>
 </StoreLayout>
