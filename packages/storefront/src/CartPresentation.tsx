@@ -3,7 +3,6 @@ import type { CartLine } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, Show } from "solid-js";
-import { CheckoutQuote } from "./CheckoutQuote";
 import { resolveCartEditDemand } from "./purchase-demand";
 
 export const CartPresentation = () => {
@@ -136,7 +135,14 @@ export const CartPresentation = () => {
       <p class="sr-only" aria-live="polite" aria-atomic="true">
         {announcement()}
       </p>
-      <CheckoutQuote />
+      <Show when={cart.lines().length > 0}>
+        <a
+          class="ui-button ui-button--primary mt-5 inline-flex items-center justify-center no-underline"
+          href="/checkout"
+        >
+          Захиалга баталгаажуулах
+        </a>
+      </Show>
     </section>
   );
 };
