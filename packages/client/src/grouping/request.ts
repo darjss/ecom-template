@@ -1,6 +1,5 @@
 import {
   GroupingApiErrorSchema,
-  GroupingCachePurgeResponseSchema,
   GroupingListResponseSchema,
   GroupingMutationResponseSchema,
   type CategoryId,
@@ -111,12 +110,4 @@ export const requestReplaceTagMembership = (id: TagId, input: GroupingMembership
     GroupingMutationResponseSchema,
     GroupingApiErrorSchema,
     invalidMutation,
-  );
-
-export const requestGroupingCachePurgeRetry = () =>
-  requestResult(
-    () => createApiClient().api.catalog.groupings["cache-purge"].retry.post(),
-    GroupingCachePurgeResponseSchema,
-    GroupingApiErrorSchema,
-    "Invalid grouping cache-purge response",
   );

@@ -319,13 +319,7 @@ export const createStorefrontReader = (
     if (!bundle) {
       return undefined;
     }
-    const {
-      state: _state,
-      cachePurgeDebt: _cachePurgeDebt,
-      createdAt: _createdAt,
-      updatedAt: _updatedAt,
-      ...publicBundle
-    } = bundle;
+    const { state: _state, createdAt: _createdAt, updatedAt: _updatedAt, ...publicBundle } = bundle;
     return v.parse(PublicBundleDetailSchema, {
       ...publicBundle,
       images: bundle.images.map(({ mediaAsset, position, altText }) => ({

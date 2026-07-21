@@ -274,19 +274,8 @@ export const CmsDocumentRecordSchema = v.strictObject({
   publishedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
 });
 export const CmsDocumentListResponseSchema = v.strictObject({ data: v.array(CmsDocumentSchema) });
-const CmsCacheOutcomeSchema = v.picklist(["not_required", "purged", "committed_but_not_purged"]);
 export const CmsDocumentResponseSchema = v.strictObject({
-  data: v.strictObject({
-    document: CmsDocumentSchema,
-    cache: CmsCacheOutcomeSchema,
-    cachePurgeRequestId: v.nullable(v.string()),
-  }),
-});
-export const CmsCachePurgeResponseSchema = v.strictObject({
-  data: v.strictObject({
-    cache: CmsCacheOutcomeSchema,
-    cachePurgeRequestId: v.nullable(v.string()),
-  }),
+  data: v.strictObject({ document: CmsDocumentSchema }),
 });
 export const CmsApiErrorSchema = v.strictObject({
   error: v.strictObject({
@@ -327,11 +316,7 @@ export const CommerceSettingsSchema = v.strictObject({
 });
 export const CommerceSettingsResponseSchema = v.strictObject({ data: CommerceSettingsSchema });
 export const CommerceSettingsMutationResponseSchema = v.strictObject({
-  data: v.strictObject({
-    settings: CommerceSettingsSchema,
-    cache: v.picklist(["purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: v.nullable(v.string()),
-  }),
+  data: v.strictObject({ settings: CommerceSettingsSchema }),
 });
 
 export type CmsDocumentKind = v.InferOutput<typeof CmsDocumentKindSchema>;

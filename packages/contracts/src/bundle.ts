@@ -3,8 +3,6 @@ import * as v from "valibot";
 import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   BundleIdSchema,
-  CachePurgeDebtSchema,
-  CachePurgeRequestIdSchema,
   CatalogDescriptionSchema,
   CatalogImageSchema,
   CatalogNameSchema,
@@ -137,11 +135,7 @@ export const PersonalizationListResponseSchema = v.strictObject({
   data: PersonalizationDefinitionsSchema,
 });
 export const PersonalizationMutationResponseSchema = v.strictObject({
-  data: v.strictObject({
-    definitions: PersonalizationDefinitionsSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ definitions: PersonalizationDefinitionsSchema }),
 });
 
 export const BundleComponentSchema = v.strictObject({
@@ -158,7 +152,6 @@ export const BundleSchema = v.strictObject({
   description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
-  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   components: v.pipe(v.array(BundleComponentSchema), v.maxLength(24)),
   personalizations: PersonalizationDefinitionsSchema,
   images: v.array(CatalogImageSchema),
@@ -167,11 +160,7 @@ export const BundleSchema = v.strictObject({
 });
 export const BundleListResponseSchema = v.strictObject({ data: v.array(BundleSchema) });
 export const BundleMutationResponseSchema = v.strictObject({
-  data: v.strictObject({
-    bundle: BundleSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ bundle: BundleSchema }),
 });
 export const CreateBundleInputSchema = v.strictObject({
   name: CatalogNameSchema,
@@ -204,7 +193,6 @@ export const BundleFailureReasonSchema = v.picklist([
   "published_bundle_dependency",
   "published_cms_dependency",
   "invalid_personalization",
-  "committed_but_not_purged",
 ]);
 export const BundleApiErrorSchema = v.strictObject({
   error: v.strictObject({

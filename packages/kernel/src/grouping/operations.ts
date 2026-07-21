@@ -10,7 +10,6 @@ import type {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { uniq } from "es-toolkit";
-import { createLogger } from "evlog";
 import { purgeCatalogListingCache } from "../catalog/cache";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { groupingQueries } from "./persistence";
@@ -35,8 +34,6 @@ export type GroupingOperationFailure = {
 
 export type GroupingMutationResult = {
   readonly grouping: Grouping;
-  readonly cache: "not_required" | "purged" | "committed_but_not_purged";
-  readonly cachePurgeRequestId: string | null;
 };
 
 const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
@@ -51,35 +48,6 @@ export const listGroupings = async (actor: StaffActor) => {
     return Result.ok(await groupingQueries.listAll());
   } catch {
     return failure("infrastructure_unavailable");
-  }
-};
-
-const purgeCommittedCatalogChange = async () => {
-  try {
-    const debt = await groupingQueries.findCatalogCachePurgeDebt();
-    if (!debt) {
-      return { cache: "not_required" as const, cachePurgeRequestId: null };
-    }
-    const purge = await purgeCatalogListingCache();
-    const outcomeRecorded = await groupingQueries.recordCatalogCachePurgeOutcome(
-      debt.revision,
-      purge.kind,
-      purge.requestId,
-    );
-    const log = createLogger({ action: "grouping.cache_purge" });
-    log.set({
-      cachePurge: { outcome: purge.kind, outcomeRecorded, requestId: purge.requestId },
-    });
-    log.emit();
-    return {
-      cache:
-        purge.kind === "purged" && outcomeRecorded
-          ? ("purged" as const)
-          : ("committed_but_not_purged" as const),
-      cachePurgeRequestId: purge.requestId,
-    };
-  } catch {
-    return { cache: "committed_but_not_purged" as const, cachePurgeRequestId: null };
   }
 };
 
@@ -102,10 +70,8 @@ const completeMutation = async (result: PersistenceMutationResult) => {
     if (!result.value) {
       return failure("infrastructure_unavailable");
     }
-    return Result.ok<GroupingMutationResult, never>({
-      grouping: result.value,
-      ...(await purgeCommittedCatalogChange()),
-    });
+    await purgeCatalogListingCache();
+    return Result.ok<GroupingMutationResult, never>({ grouping: result.value });
   }
   if (result.kind === "catalog_item_not_found") {
     return failure("not_found");
@@ -236,15 +202,4 @@ export const replaceTagMembership = (
   return duplicateMembership(input)
     ? failure("duplicate_membership")
     : runAuthorizedMutation(actor, () => groupingQueries.replaceTagMembership(id, input));
-};
-
-export const retryGroupingCachePurge = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
-  try {
-    return Result.ok(await purgeCommittedCatalogChange());
-  } catch {
-    return failure("infrastructure_unavailable");
-  }
 };

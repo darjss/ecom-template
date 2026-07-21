@@ -1,5 +1,4 @@
 import {
-  cmsCachePurgeMutationOptions,
   cmsMutationOptions,
   cmsQueryOptions,
   commerceSettingsMutationOptions,
@@ -39,15 +38,11 @@ const CmsActions = (props: { document: () => CmsDocument }) => {
   };
   const publish = async () => {
     try {
-      const result = await mutation.mutateAsync({
+      await mutation.mutateAsync({
         kind: "publish",
         documentKind: props.document().kind,
       });
-      setMessage(
-        result.data.cache === "purged"
-          ? "Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ."
-          : "Нийтлэгдсэн боловч кэш цэвэрлэгдээгүй. Дахин оролдоно уу.",
-      );
+      setMessage("Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ.");
     } catch {
       setMessage("Нийтлэхийн өмнө document JSON болон талбарын утгуудыг шалгана уу.");
     }
@@ -309,13 +304,9 @@ const SettingsForm = () => {
               {mutation.isPending ? "Хадгалж байна…" : "Тохиргоо хадгалах"}
             </Button>
             <Show when={mutation.data}>
-              {(result) => (
-                <p class="m-0 text-sm" role="status">
-                  {result().data.cache === "purged"
-                    ? "Тохиргоо нийтлэгдэж, кэш шинэчлэгдлээ."
-                    : "Тохиргоо хадгалагдсан боловч кэш цэвэрлэгдээгүй."}
-                </p>
-              )}
+              <p class="m-0 text-sm" role="status">
+                Тохиргоо нийтлэгдэж, кэш шинэчлэгдлээ.
+              </p>
             </Show>
             <Show when={mutation.error}>
               <p class="m-0 text-sm text-red-800" role="alert">
@@ -341,7 +332,6 @@ const sections: readonly { kind: CmsDocumentKind | "settings"; label: string }[]
 ];
 export const CmsManagement = (props: { store: string }) => {
   const query = useQuery(() => cmsQueryOptions());
-  const cachePurge = useMutation(() => cmsCachePurgeMutationOptions());
   const [active, setActive] =
     createSignal<(typeof sections)[number]["kind"]>("storefront_identity");
   const document = (kind: CmsDocumentKind) => query.data?.data.find((entry) => entry.kind === kind);
@@ -453,32 +443,6 @@ export const CmsManagement = (props: { store: string }) => {
       <p class="mt-2 max-w-prose text-(--muted)">
         Ноорог нь нийтэд харагдахгүй. Нийтэлсний дараа Store-ийн SSR хуудас шууд шинэчлэгдэнэ.
       </p>
-      <div class="mt-4 flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={cachePurge.isPending}
-          onClick={() => cachePurge.mutate()}
-        >
-          {cachePurge.isPending ? "Кэш цэвэрлэж байна…" : "Кэш цэвэрлэгээг дахин оролдох"}
-        </Button>
-        <Show when={cachePurge.data}>
-          {(result) => (
-            <p class="m-0 text-sm" role="status">
-              {result().data.cache === "purged"
-                ? "Дэлгүүрийн кэш шинэчлэгдлээ."
-                : result().data.cache === "not_required"
-                  ? "Хүлээгдэж буй кэш цэвэрлэгээ алга."
-                  : "Кэш цэвэрлэгдээгүй. Дахин оролдоно уу."}
-            </p>
-          )}
-        </Show>
-        <Show when={cachePurge.error}>
-          <p class="m-0 text-sm text-red-800" role="alert">
-            Кэш цэвэрлэгээг дахин эхлүүлж чадсангүй.
-          </p>
-        </Show>
-      </div>
       <div
         class="my-6 flex max-w-full gap-2 overflow-x-auto pb-2"
         role="tablist"

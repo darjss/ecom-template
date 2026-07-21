@@ -39,8 +39,6 @@ export type BundleOperationFailure = {
 
 export type BundleMutationResult = {
   readonly bundle: Bundle;
-  readonly cache: "not_required" | "purged" | "committed_but_not_purged";
-  readonly cachePurgeRequestId: string | null;
 };
 
 const authorized = (actor: StaffActor) =>
@@ -52,43 +50,11 @@ const resolveBundle = async (id: BundleId, purge: boolean) => {
   if (!bundle) {
     return Result.err<never, BundleOperationFailure>({ code: "not_found" });
   }
-  if (!purge) {
-    return Result.ok<BundleMutationResult, never>({
-      bundle,
-      cache: "not_required",
-      cachePurgeRequestId: null,
-    });
+  if (purge && bundle.state !== "draft") {
+    await purgeCatalogItemCache(id);
   }
-  const debt = await bundleQueries.findCachePurgeDebt(id);
-  if (!debt) {
-    return Result.ok<BundleMutationResult, never>({
-      bundle,
-      cache: "not_required",
-      cachePurgeRequestId: null,
-    });
-  }
-  const purgeResult = await purgeCatalogItemCache(id);
-  const recorded = await bundleQueries.recordCachePurgeOutcome(
-    id,
-    debt.revision,
-    purgeResult.kind,
-    purgeResult.requestId,
-  );
-  const refreshed = await bundleQueries.findById(id);
-  if (!refreshed) {
-    return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-  return Result.ok<BundleMutationResult, never>({
-    bundle: refreshed,
-    cache:
-      purgeResult.kind === "purged" && recorded && refreshed.cachePurgeDebt === null
-        ? "purged"
-        : "committed_but_not_purged",
-    cachePurgeRequestId: purgeResult.requestId,
-  });
+  return Result.ok<BundleMutationResult, never>({ bundle });
 };
-
-export const resolvePendingBundleCachePurge = async (id: BundleId) => resolveBundle(id, true);
 
 export const listBundles = async (actor: StaffActor) => {
   if (!authorized(actor)) {
@@ -112,22 +78,7 @@ export const createBundle = async (actor: StaffActor, input: CreateBundleInput) 
         code: result.kind === "duplicate_slug" ? "duplicate_slug" : "infrastructure_unavailable",
       });
     }
-    return Result.ok<BundleMutationResult, never>({
-      bundle: result.bundle,
-      cache: "not_required",
-      cachePurgeRequestId: null,
-    });
-  } catch {
-    return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const retryBundleCachePurge = async (actor: StaffActor, id: BundleId) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
-  try {
-    return await resolveBundle(id, true);
+    return Result.ok<BundleMutationResult, never>({ bundle: result.bundle });
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
   }
@@ -227,25 +178,10 @@ export const saveCatalogItemPersonalizations = async (
     if (!definitions) {
       return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
     }
-    const debt = await bundleQueries.findCachePurgeDebt(catalogItemId);
-    if (!debt) {
-      return Result.ok({ definitions, cache: "not_required" as const, cachePurgeRequestId: null });
+    if (result.purge) {
+      await purgeCatalogItemCache(catalogItemId);
     }
-    const purgeResult = await purgeCatalogItemCache(catalogItemId);
-    const recorded = await bundleQueries.recordCachePurgeOutcome(
-      catalogItemId,
-      debt.revision,
-      purgeResult.kind,
-      purgeResult.requestId,
-    );
-    return Result.ok({
-      definitions,
-      cache:
-        purgeResult.kind === "purged" && recorded
-          ? ("purged" as const)
-          : ("committed_but_not_purged" as const),
-      cachePurgeRequestId: purgeResult.requestId,
-    });
+    return Result.ok({ definitions });
   } catch {
     return Result.err<never, BundleOperationFailure>({ code: "infrastructure_unavailable" });
   }
