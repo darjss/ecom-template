@@ -1,8 +1,30 @@
-import type { MongolianPhone, OrderStatusToken } from "@ecom/contracts";
+import {
+  CustomerOrdersResponseSchema,
+  OrderAccessApiErrorSchema,
+  OrderStatusResponseSchema,
+  type MongolianPhone,
+  type OrderStatusToken,
+} from "@ecom/contracts";
 import { queryOptions } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
-import { requestCustomerOrders, requestOrderStatus } from "../order/request";
-import { unwrapRequestResult } from "../request";
+import { createApiClient } from "./eden";
+import { requestResult, unwrapRequestResult } from "./request";
+
+const requestOrderStatus = (token: OrderStatusToken) =>
+  requestResult(
+    () => createApiClient().api.orders.status({ token }).get(),
+    OrderStatusResponseSchema,
+    OrderAccessApiErrorSchema,
+    "Invalid Order status response",
+  );
+
+const requestCustomerOrders = () =>
+  requestResult(
+    () => createApiClient().api.customer.orders.get(),
+    CustomerOrdersResponseSchema,
+    OrderAccessApiErrorSchema,
+    "Invalid Customer Order history response",
+  );
 
 export const customerOrdersQueryKey = ["customer", "orders"] as const;
 const orderStatusKey = (token: OrderStatusToken) => ["order", "status", token] as const;
