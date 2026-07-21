@@ -18,10 +18,6 @@ export const DeliveryStaffIdSchema = v.pipe(
   v.string(),
   v.regex(/^staff_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/),
 );
-export const DeliveryAuditEventIdSchema = v.pipe(
-  v.string(),
-  v.regex(/^audit_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/),
-);
 
 export const DeploymentTargetSchema = v.strictObject({
   kind: v.picklist(["local", "prospect-demo", "canary", "production"]),
