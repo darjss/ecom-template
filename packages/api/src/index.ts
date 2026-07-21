@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   CatalogApiErrorSchema,
+  CatalogItemListResponseSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CatalogSearchApiErrorSchema,
@@ -42,6 +43,7 @@ import {
   createStaffAuth,
   createStorefrontReader,
   listCatalog,
+  listCatalogItems,
   listStaff,
   readCatalogMedia,
   readDatabaseHealth,
@@ -419,6 +421,16 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       return result.isErr()
         ? mapFailure(result.error, status)
         : v.parse(StaffMutationResponseSchema, { data: result.value });
+    })
+    .get("/catalog/items", async ({ request, status }) => {
+      const authorization = await authorizeRoute(request, definition, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await listCatalogItems(authorization.actor);
+      return result.isErr()
+        ? catalogError(result.error, status)
+        : v.parse(CatalogItemListResponseSchema, { data: result.value });
     })
     .get("/catalog/products", async ({ request, status }) => {
       const authorization = await authorizeRoute(request, definition, status);

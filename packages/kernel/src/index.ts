@@ -24,6 +24,7 @@ export {
   adjustProductInventory,
   createProduct,
   listCatalog,
+  listCatalogItems,
   retryProductCachePurge,
   transitionProduct,
   updateProduct,

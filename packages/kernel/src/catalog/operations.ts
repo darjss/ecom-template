@@ -66,6 +66,9 @@ const unchangedCache = (product: Product): CatalogMutationResult => ({
 export const listCatalog = (actor: StaffActor) =>
   execute(actor, async () => Result.ok(await catalogQueries.listAll()));
 
+export const listCatalogItems = (actor: StaffActor) =>
+  execute(actor, async () => Result.ok(await catalogQueries.listPublishedCatalogItems()));
+
 export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
   execute(actor, async () => {
     const result = await catalogQueries.create(actor, input);

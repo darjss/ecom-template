@@ -45,7 +45,11 @@ export {
   checkoutQuoteMutationOptions,
   orderPlacementMutationOptions,
 } from "./query/checkout";
-export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
+export {
+  catalogItemsQueryOptions,
+  catalogMutationOptions,
+  catalogQueryOptions,
+} from "./query/catalog";
 export {
   cmsCachePurgeMutationOptions,
   cmsMutationOptions,

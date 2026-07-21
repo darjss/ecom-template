@@ -1,5 +1,6 @@
 import {
   CatalogApiErrorSchema,
+  CatalogItemListResponseSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   type CreateProductInput,
@@ -19,6 +20,14 @@ export const requestCatalog = () =>
     CatalogListResponseSchema,
     CatalogApiErrorSchema,
     "Invalid Catalog response",
+  );
+
+export const requestCatalogItems = () =>
+  requestResult(
+    () => createApiClient().api.catalog.items.get(),
+    CatalogItemListResponseSchema,
+    CatalogApiErrorSchema,
+    "Invalid Catalog Item response",
   );
 
 export type CatalogMutation =
