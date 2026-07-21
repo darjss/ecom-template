@@ -24,10 +24,6 @@ export type CatalogVariantFailure = {
   [Code in CatalogVariantFailureCode]: { readonly code: Code };
 }[CatalogVariantFailureCode];
 
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
-
 const changedProduct = async (productId: ProductId, purge: boolean) => {
   const product = await findCatalogProductById(productId);
   if (!product) {
@@ -40,13 +36,10 @@ const changedProduct = async (productId: ProductId, purge: boolean) => {
 };
 
 export const saveProductOptions = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   input: SaveProductOptionsInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.saveConfiguration(productId, input);
     return result.kind === "changed"
@@ -58,14 +51,11 @@ export const saveProductOptions = async (
 };
 
 export const updateVariantPresentation = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   variantId: VariantId,
   input: UpdateVariantPresentationInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.updatePresentation(productId, variantId, input);
     return result.kind === "changed"
@@ -77,14 +67,11 @@ export const updateVariantPresentation = async (
 };
 
 export const setVariantState = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   variantId: VariantId,
   state: "active" | "archived",
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.transition(productId, variantId, state);
     return result.kind === "changed"

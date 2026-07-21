@@ -4,7 +4,7 @@ import { provisionOwner } from "../staff/operations";
 import { createStaffAuth } from "./runtime";
 
 type LocalStaffLoginFailure = {
-  readonly code: "linked_identity" | "infrastructure_unavailable";
+  readonly code: "infrastructure_unavailable";
 };
 
 export const createLocalOwnerSession = async (

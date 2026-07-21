@@ -5,7 +5,6 @@ import {
   resolveStaffRequest,
   resolveStoreRequestOrigin,
   servePublicMedia,
-  staffPresentationRoleHeader,
 } from "@ecom/api";
 import { isPublicCacheTagHeader } from "@ecom/storefront/cache";
 import { api } from "./api";
@@ -120,7 +119,6 @@ const dispatchStoreRequest = async (
   }
 
   const pathname = new URL(request.url).pathname;
-  let presentationRequest: Request = request;
   if (isPublicMediaPath(pathname)) {
     return privateResponse(request, await servePublicMedia(request));
   }
@@ -140,10 +138,6 @@ const dispatchStoreRequest = async (
         profile: storeDefinition.profile,
         providers: storeDefinition.providers,
       });
-      if (staff.kind === "awaiting_approval") {
-        const awaitingRequest = new Request(new URL("/admin/awaiting", origin), request);
-        return privateResponse(request, await handle(awaitingRequest, environment, context));
-      }
       if (staff.kind === "unavailable") {
         return privateResponse(
           request,
@@ -162,9 +156,6 @@ const dispatchStoreRequest = async (
           },
         });
       }
-      const presentationHeaders = new Headers(request.headers);
-      presentationHeaders.set(staffPresentationRoleHeader, staff.actor.role);
-      presentationRequest = new Request(request, { headers: presentationHeaders });
     } catch {
       return privateResponse(
         request,
@@ -175,7 +166,7 @@ const dispatchStoreRequest = async (
       );
     }
   }
-  return classifyResponse(request, await handle(presentationRequest, environment, context));
+  return classifyResponse(request, await handle(request, environment, context));
 };
 
 const isAnonymousCacheCandidate = (request: Request) => {

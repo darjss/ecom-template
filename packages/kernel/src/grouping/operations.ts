@@ -30,7 +30,6 @@ export type GroupingMutationResult = {
   readonly grouping: Grouping;
 };
 
-const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
 const failure = (code: GroupingOperationFailure["code"]) =>
   Result.err<never, GroupingOperationFailure>({ code });
 
@@ -99,12 +98,12 @@ export const createCollection = (actor: StaffActor, input: CollectionInput) =>
 export const updateCollection = (actor: StaffActor, id: CollectionId, input: CollectionInput) =>
   runMutation(actor, () => groupingQueries.updateCollection(id, input));
 export const setCollectionState = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CollectionId,
   state: "active" | "archived",
 ) => runMutation(actor, () => groupingQueries.setCollectionState(id, state));
 export const replaceCollectionMembership = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CollectionId,
   input: GroupingMembershipInput,
 ) =>
@@ -117,7 +116,7 @@ export const updateTag = (actor: StaffActor, id: TagId, input: TagInput) =>
 export const setTagState = (actor: StaffActor, id: TagId, state: "active" | "archived") =>
   runMutation(actor, () => groupingQueries.setTagState(id, state));
 export const replaceTagMembership = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: TagId,
   input: GroupingMembershipInput,
 ) => runMembershipMutation(actor, input, () => groupingQueries.replaceTagMembership(id, input));

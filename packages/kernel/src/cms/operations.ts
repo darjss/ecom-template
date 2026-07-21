@@ -26,8 +26,6 @@ export type CmsMutationResult = {
   readonly document: CmsDocument;
 };
 
-const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
-
 const validateDocument = async (
   document: CmsDocument,
   publication = false,
@@ -154,10 +152,7 @@ const validateNavigation = (
   return valid ? undefined : { code: "invalid_reference" };
 };
 
-export const listCmsDocuments = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const listCmsDocuments = async (_actor: StaffActor) => {
   try {
     const [drafts, published] = await Promise.all([
       cmsQueries.list("draft"),
@@ -170,10 +165,7 @@ export const listCmsDocuments = async (actor: StaffActor) => {
   }
 };
 
-export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const saveCmsDraft = async (_actor: StaffActor, document: CmsDocument) => {
   try {
     const failure = await validateDocument(document);
     if (failure) {
@@ -212,10 +204,7 @@ export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKin
   }
 };
 
-export const readCommerceSettings = async (actor?: StaffActor) => {
-  if (actor && !authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const readCommerceSettings = async (_actor?: StaffActor) => {
   try {
     return Result.ok(await cmsQueries.readSettings());
   } catch {
@@ -224,13 +213,10 @@ export const readCommerceSettings = async (actor?: StaffActor) => {
 };
 
 export const saveCommerceSettings = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   capabilities: StoreDefinition["profile"]["capabilities"],
   settings: CommerceSettings,
 ) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
   const requested = [
     [settings.bankTransferEnabled, capabilities.bankTransfer],
     [settings.cashOnDeliveryEnabled, capabilities.cashOnDelivery],

@@ -40,4 +40,3 @@ export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/avail
 export { createStoreQueryClient } from "./query/client";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export { catalogSearchQueryOptions } from "./search";
-export { staffMutationOptions, staffQueryOptions } from "./staff";

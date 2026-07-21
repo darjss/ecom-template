@@ -83,9 +83,6 @@ export const attachCatalogImage = async (
   catalogItemId: ProductId,
   input: AttachCatalogImageInput,
 ) => {
-  if (!hasStaffCapability(actor.role, "catalog_cms")) {
-    return Result.err<never, CatalogMediaFailure>({ code: "forbidden" });
-  }
   if (input.bytes.byteLength > MediaUploadMaxBytes) {
     return Result.err<never, CatalogMediaFailure>({ code: "media_too_large" });
   }

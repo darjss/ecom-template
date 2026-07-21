@@ -31,26 +31,15 @@ export type CatalogMutationResult = {
   readonly product: Product;
 };
 
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
-
-const execute = async <Value>(
-  actor: StaffActor,
-  operation: () => Promise<Result<Value, CatalogOperationFailure>>,
-) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  return (await Result.tryPromise(operation))
+const execute = async <Value>(operation: () => Promise<Result<Value, CatalogOperationFailure>>) =>
+  (await Result.tryPromise(operation))
     .mapError((): CatalogOperationFailure => ({ code: "infrastructure_unavailable" }))
     .andThen((result) => result);
-};
 
 const changedProduct = (product: Product): CatalogMutationResult => ({ product });
 
-export const listCatalog = (actor: StaffActor) =>
-  execute(actor, async () => Result.ok(await catalogQueries.listAll()));
+export const listCatalog = (_actor: StaffActor) =>
+  execute(async () => Result.ok(await catalogQueries.listAll()));
 
 export const listCatalogItems = (actor: StaffActor) =>
   execute(actor, async () => Result.ok(await catalogQueries.listPublishedCatalogItems()));
