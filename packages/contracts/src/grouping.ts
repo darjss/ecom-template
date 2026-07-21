@@ -135,14 +135,9 @@ export const GroupingFailureReasonSchema = v.picklist([
   "duplicate_slug",
   "duplicate_label",
   "not_found",
-  "invalid_lifecycle",
   "slug_locked",
   "parent_not_found",
   "category_cycle",
-  "active_child",
-  "active_discount_dependency",
-  "inactive_ancestor",
-  "concurrent_parent_change",
   "duplicate_membership",
 ]);
 export const GroupingApiErrorSchema = v.strictObject({
