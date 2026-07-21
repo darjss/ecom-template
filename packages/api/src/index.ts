@@ -284,11 +284,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     })
     .use(createAvailabilityRoutes())
     .use(createCustomerAuthRoutes(definition, smsGateway))
-    .use(
-      createOrderRoutes(definition, (request, status) =>
-        authorizeRoute(request, definition, status),
-      ),
-    )
+    .use(createOrderRoutes(definition))
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )

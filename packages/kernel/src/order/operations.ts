@@ -3,27 +3,16 @@ import {
   OrderStatusTokenSchema,
   OrderSummarySchema,
   type CustomerId,
-  type OrderFulfillmentMode,
-  type OrderFulfillmentState,
-  type OrderId,
   type OrderStatusPath,
   type OrderStatusToken,
   type OrderSummary,
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { orderQueries } from "./persistence";
 
 export type OrderAccessFailure =
   | { readonly code: "not_found" }
-  | { readonly code: "infrastructure_unavailable" };
-export type OrderOperationFailure =
-  | { readonly code: "forbidden" }
-  | { readonly code: "not_found" }
-  | { readonly code: "payment_not_confirmable" }
-  | { readonly code: "payment_required" }
-  | { readonly code: "fulfillment_not_advanceable" }
   | { readonly code: "infrastructure_unavailable" };
 export type OrderStatusAccess = {
   readonly statusTokenHash: string;
@@ -92,133 +81,6 @@ const projectOrders = (rows: OrderRows): OrderSummary[] | undefined => {
     );
   }
   return projected;
-};
-
-const fulfillmentNextState = (
-  mode: OrderFulfillmentMode,
-  state: OrderFulfillmentState,
-): { readonly state: OrderFulfillmentState; readonly completesOrder: boolean } | undefined => {
-  if (state === "unfulfilled") {
-    return { state: "processing", completesOrder: false };
-  }
-  if (state === "processing") {
-    return { state: "ready", completesOrder: false };
-  }
-  if (mode === "delivery" && state === "ready") {
-    return { state: "handed_off", completesOrder: false };
-  }
-  if (mode === "delivery" && state === "handed_off") {
-    return { state: "fulfilled", completesOrder: true };
-  }
-  return mode === "pickup" && state === "ready"
-    ? { state: "picked_up", completesOrder: true }
-    : undefined;
-};
-
-const readProjectedOrders = async (id: OrderId) => projectOrders(await orderQueries.readById(id));
-
-export const readStaffOrder = async (
-  actor: StaffActor,
-  id: OrderId,
-): Promise<Result<OrderSummary, OrderOperationFailure>> => {
-  if (!hasStaffCapability(actor.role, "orders_fulfillment")) {
-    return Result.err({ code: "forbidden" });
-  }
-  try {
-    const orders = await readProjectedOrders(id);
-    if (!orders) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const order = orders.at(0);
-    return order ? Result.ok(order) : Result.err({ code: "not_found" });
-  } catch {
-    return Result.err({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const confirmOrderPayment = async (
-  actor: StaffActor,
-  id: OrderId,
-): Promise<Result<OrderSummary, OrderOperationFailure>> => {
-  if (!hasStaffCapability(actor.role, "financial")) {
-    return Result.err({ code: "forbidden" });
-  }
-  try {
-    const orders = await readProjectedOrders(id);
-    if (!orders) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const order = orders.at(0);
-    if (!order) {
-      return Result.err({ code: "not_found" });
-    }
-    if (order.state !== "placed" || order.payment?.method !== "bank_transfer") {
-      return Result.err({ code: "payment_not_confirmable" });
-    }
-    if (order.payment.state === "confirmed") {
-      return Result.ok(order);
-    }
-    if (order.payment.state !== "awaiting_confirmation") {
-      return Result.err({ code: "payment_not_confirmable" });
-    }
-    await orderQueries.confirmBankTransfer(id, actor.staffId, new Date());
-    const confirmedOrders = await readProjectedOrders(id);
-    if (!confirmedOrders) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const confirmed = confirmedOrders.at(0);
-    return confirmed?.payment?.state === "confirmed"
-      ? Result.ok(confirmed)
-      : Result.err({ code: "payment_not_confirmable" });
-  } catch {
-    return Result.err({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const advanceOrderFulfillment = async (
-  actor: StaffActor,
-  id: OrderId,
-): Promise<Result<OrderSummary, OrderOperationFailure>> => {
-  if (!hasStaffCapability(actor.role, "orders_fulfillment")) {
-    return Result.err({ code: "forbidden" });
-  }
-  try {
-    const orders = await readProjectedOrders(id);
-    if (!orders) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const order = orders.at(0);
-    if (!order) {
-      return Result.err({ code: "not_found" });
-    }
-    if (order.payment?.state !== "confirmed") {
-      return Result.err({ code: "payment_required" });
-    }
-    const next =
-      order.state === "placed"
-        ? fulfillmentNextState(order.fulfillment.mode, order.fulfillment.state)
-        : undefined;
-    if (!next) {
-      return Result.err({ code: "fulfillment_not_advanceable" });
-    }
-    await orderQueries.advanceFulfillment(
-      id,
-      order.fulfillment.state,
-      next.state,
-      next.completesOrder,
-      new Date(),
-    );
-    const advancedOrders = await readProjectedOrders(id);
-    if (!advancedOrders) {
-      return Result.err({ code: "infrastructure_unavailable" });
-    }
-    const advanced = advancedOrders.at(0);
-    return advanced?.fulfillment.state === next.state
-      ? Result.ok(advanced)
-      : Result.err({ code: "fulfillment_not_advanceable" });
-  } catch {
-    return Result.err({ code: "infrastructure_unavailable" });
-  }
 };
 
 export const readOrderByStatusToken = async (

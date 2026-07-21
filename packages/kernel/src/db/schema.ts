@@ -1057,7 +1057,6 @@ export const payments = sqliteTable(
     })
       .notNull()
       .default("none"),
-    confirmedBy: text("confirmed_by"),
     confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
     rejectedAt: integer("rejected_at", { mode: "timestamp_ms" }),
     expiredAt: integer("expired_at", { mode: "timestamp_ms" }),

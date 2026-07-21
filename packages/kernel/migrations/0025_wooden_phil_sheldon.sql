@@ -1,1 +1,0 @@
-ALTER TABLE `payments` ADD `confirmed_by` text;
