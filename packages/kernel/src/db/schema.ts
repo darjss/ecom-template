@@ -874,6 +874,8 @@ export const orders = sqliteTable(
   "orders",
   {
     id: text("id").primaryKey(),
+    placementKey: text("placement_key").notNull().unique(),
+    placementIntentDigest: text("placement_intent_digest").notNull(),
     orderNumber: integer("order_number").notNull().unique(),
     state: text("state", { enum: ["placed", "completed", "cancelled"] }).notNull(),
     customerId: text("customer_id").references(() => customers.id, { onDelete: "restrict" }),
@@ -902,6 +904,11 @@ export const orders = sqliteTable(
   },
   (table) => [
     check("orders_number_check", sql`${table.orderNumber} > 0`),
+    check("orders_placement_key_check", sql`length(${table.placementKey}) = 36`),
+    check(
+      "orders_placement_digest_check",
+      sql`length(${table.placementIntentDigest}) = 64 AND ${table.placementIntentDigest} NOT GLOB '*[^0123456789abcdef]*'`,
+    ),
     check("orders_state_check", sql`${table.state} IN ('placed', 'completed', 'cancelled')`),
     check("orders_currency_check", sql`${table.currency} = 'MNT'`),
     check(
@@ -1191,25 +1198,6 @@ export const fulfillments = sqliteTable(
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("fulfillments_state_idx").on(table.state, table.createdAt)],
-);
-
-export const placementIdempotency = sqliteTable(
-  "placement_idempotency",
-  {
-    key: text("key").primaryKey(),
-    intentDigest: text("intent_digest").notNull(),
-    resultJson: text("result_json").notNull(),
-    orderId: text("order_id")
-      .notNull()
-      .unique()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check("placement_idempotency_key_check", sql`length(${table.key}) BETWEEN 1 AND 64`),
-    check("placement_idempotency_digest_check", sql`length(${table.intentDigest}) = 64`),
-    check("placement_idempotency_result_check", sql`json_valid(${table.resultJson})`),
-  ],
 );
 
 export const inventoryReservations = sqliteTable(

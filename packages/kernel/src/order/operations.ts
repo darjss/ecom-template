@@ -22,15 +22,15 @@ export type OrderStatusAccess = {
 const toHex = (bytes: Uint8Array) =>
   [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
-const hashOrderStatusToken = async (token: OrderStatusToken) => {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+const hashText = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return toHex(new Uint8Array(digest));
 };
 
-export const createOrderStatusAccess = async () => {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  const token = v.parse(OrderStatusTokenSchema, toHex(bytes));
+const hashOrderStatusToken = (token: OrderStatusToken) => hashText(token);
+
+export const createOrderStatusAccess = async (placementKey: string) => {
+  const token = v.parse(OrderStatusTokenSchema, await hashText(placementKey));
   return {
     statusTokenHash: await hashOrderStatusToken(token),
     statusPath: v.parse(OrderStatusPathSchema, `/orders/status/${token}`),
