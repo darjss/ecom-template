@@ -1,18 +1,18 @@
 export { requestAvailability } from "./availability/request";
 export { CartProvider, useCart } from "./cart";
 export {
-  bundleMutationOptions,
-  bundleQueryOptions,
   discountMutationOptions,
   discountQueryOptions,
   groupingCachePurgeMutationOptions,
   groupingMutationOptions,
   groupingQueryOptions,
   healthQueryOptions,
-  personalizationMutationOptions,
-  personalizationQueryOptions,
 } from "./admin";
-export { catalogMutationOptions, catalogQueryOptions } from "./catalog";
+export {
+  catalogItemsQueryOptions,
+  catalogMutationOptions,
+  catalogQueryOptions,
+} from "./catalog";
 export {
   cmsCachePurgeMutationOptions,
   cmsMutationOptions,

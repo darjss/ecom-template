@@ -1,8 +1,4 @@
 import {
-  BundleApiErrorSchema,
-  BundleIdSchema,
-  BundleListResponseSchema,
-  BundleMutationResponseSchema,
   DiscountApiErrorSchema,
   DiscountListResponseSchema,
   DiscountMutationResponseSchema,
@@ -12,32 +8,21 @@ import {
   GroupingMutationResponseSchema,
   HealthApiErrorSchema,
   HealthResponseSchema,
-  PersonalizationListResponseSchema,
-  PersonalizationMutationResponseSchema,
-  type BundleId,
-  type CatalogItemId,
   type CategoryId,
   type CategoryInput,
   type CollectionId,
   type CollectionInput,
-  type CreateBundleInput,
   type DiscountRuleId,
   type DiscountRuleInput,
   type GroupingMembershipInput,
-  type SaveBundleComponentsInput,
-  type SavePersonalizationsInput,
   type TagId,
   type TagInput,
-  type UpdateBundleInput,
 } from "@ecom/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
-import * as v from "valibot";
 import { createApiClient } from "./eden";
-import { catalogQueryKey } from "./query/catalog";
 import { requestResult, unwrapRequestResult } from "./request";
 
-const bundleQueryKey = ["catalog", "bundles"] as const;
 const groupingQueryKey = ["catalog", "groupings"] as const;
 const discountQueryKey = ["discounts"] as const;
 
@@ -56,122 +41,6 @@ export const healthQueryOptions = () =>
     queryKey: ["health"],
     queryFn: async () => unwrapRequestResult(await requestHealth()),
     staleTime: 30_000,
-  });
-
-type BundleMutation =
-  | ({ readonly kind: "create" } & CreateBundleInput)
-  | ({ readonly kind: "update"; readonly id: BundleId } & UpdateBundleInput)
-  | ({ readonly kind: "save-components"; readonly id: BundleId } & SaveBundleComponentsInput)
-  | { readonly kind: "retry-cache-purge"; readonly id: BundleId }
-  | { readonly kind: "publish" | "archive" | "reactivate"; readonly id: BundleId };
-
-const requestBundles = () =>
-  requestResult(
-    () => createApiClient().api.catalog.bundles.get(),
-    BundleListResponseSchema,
-    BundleApiErrorSchema,
-    "Invalid Bundle response",
-  );
-
-const requestBundleMutation = (mutation: BundleMutation) => {
-  const client = createApiClient();
-  const request = () =>
-    mutation.kind === "create"
-      ? client.api.catalog.bundles.post({
-          name: mutation.name,
-          slug: mutation.slug,
-          description: mutation.description,
-          priceMnt: mutation.priceMnt,
-        })
-      : mutation.kind === "update"
-        ? client.api.catalog.bundles({ id: mutation.id }).patch({
-            name: mutation.name,
-            slug: mutation.slug,
-            description: mutation.description,
-            priceMnt: mutation.priceMnt,
-          })
-        : mutation.kind === "save-components"
-          ? client.api.catalog.bundles({ id: mutation.id }).components.put({
-              components: mutation.components,
-            })
-          : mutation.kind === "retry-cache-purge"
-            ? client.api.catalog.bundles({ id: mutation.id })["cache-purge"].retry.post()
-            : client.api.catalog.bundles({ id: mutation.id })({ action: mutation.kind }).post();
-  return requestResult(
-    request,
-    BundleMutationResponseSchema,
-    BundleApiErrorSchema,
-    "Invalid Bundle mutation response",
-  );
-};
-
-const requestPersonalizations = (id: CatalogItemId) =>
-  requestResult(
-    () => createApiClient().api.catalog.items({ id }).personalizations.get(),
-    PersonalizationListResponseSchema,
-    BundleApiErrorSchema,
-    "Invalid Personalization response",
-  );
-
-const requestPersonalizationMutation = (id: CatalogItemId, input: SavePersonalizationsInput) =>
-  requestResult(
-    () => createApiClient().api.catalog.items({ id }).personalizations.put(input),
-    PersonalizationMutationResponseSchema,
-    BundleApiErrorSchema,
-    "Invalid Personalization mutation response",
-  );
-
-type BundleResult = Awaited<ReturnType<typeof requestBundles>>;
-type BundleMutationResult = Awaited<ReturnType<typeof requestBundleMutation>>;
-
-const personalizationQueryKey = (id: CatalogItemId) => ["catalog", "personalizations", id] as const;
-
-export const refreshCatalogItemOwner = async (queryClient: QueryClient, id: CatalogItemId) => {
-  const bundleId = v.safeParse(BundleIdSchema, id);
-  const authoritativeKey = bundleId.success ? bundleQueryKey : catalogQueryKey;
-  await queryClient.invalidateQueries({ queryKey: authoritativeKey, refetchType: "none" });
-  await queryClient.refetchQueries({ queryKey: authoritativeKey, type: "active" });
-};
-
-export const bundleQueryOptions = () =>
-  queryOptions<InferOk<BundleResult>, InferErr<BundleResult>>({
-    queryKey: bundleQueryKey,
-    queryFn: async () => unwrapRequestResult(await requestBundles()),
-  });
-
-export const bundleMutationOptions = (queryClient: QueryClient) =>
-  mutationOptions<InferOk<BundleMutationResult>, InferErr<BundleMutationResult>, BundleMutation>({
-    mutationFn: async (mutation) => unwrapRequestResult(await requestBundleMutation(mutation)),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: bundleQueryKey, refetchType: "none" }),
-        queryClient.invalidateQueries({ queryKey: catalogQueryKey, refetchType: "none" }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: bundleQueryKey, type: "active" });
-    },
-  });
-
-export const personalizationQueryOptions = (id: CatalogItemId, enabled = true) =>
-  queryOptions({
-    queryKey: personalizationQueryKey(id),
-    queryFn: async () => unwrapRequestResult(await requestPersonalizations(id)),
-    enabled,
-  });
-
-export const personalizationMutationOptions = (queryClient: QueryClient, id: CatalogItemId) =>
-  mutationOptions({
-    mutationFn: async (input: SavePersonalizationsInput) =>
-      unwrapRequestResult(await requestPersonalizationMutation(id, input)),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: personalizationQueryKey(id),
-        refetchType: "none",
-      });
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: personalizationQueryKey(id), type: "active" }),
-        refreshCatalogItemOwner(queryClient, id),
-      ]);
-    },
   });
 
 type GroupingMutation =

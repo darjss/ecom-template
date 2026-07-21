@@ -16,7 +16,6 @@ import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tan
 import { createSignal, For, Show } from "solid-js";
 import * as v from "valibot";
 import { resolveAdminSurface } from "./access";
-import { BundleManagement } from "./BundleManagement";
 import { CatalogManagement } from "./CatalogManagement";
 import { CmsManagement } from "./CmsManagement";
 import { DiscountManagement } from "./DiscountManagement";
@@ -378,7 +377,6 @@ const Dashboard = (props: AdminAppProps) => (
       </header>
       <CmsManagement store={props.store} />
       <CatalogManagement />
-      <BundleManagement />
       <GroupingManagement />
       <DiscountManagement />
       <Show when={resolveAdminSurface(props.role) === "staff_management"}>

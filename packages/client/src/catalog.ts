@@ -1,5 +1,6 @@
 import {
   CatalogApiErrorSchema,
+  CatalogItemListResponseSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   type CreateProductInput,
@@ -16,6 +17,7 @@ import { createApiClient } from "./eden";
 import { requestResult, unwrapRequestResult } from "./request";
 
 export const catalogQueryKey = ["catalog", "products"] as const;
+export const catalogItemsQueryKey = ["catalog", "items"] as const;
 
 type CatalogMutation =
   | ({ readonly kind: "create" } & CreateProductInput)
@@ -40,6 +42,14 @@ const requestCatalog = () =>
     CatalogListResponseSchema,
     CatalogApiErrorSchema,
     "Invalid Catalog response",
+  );
+
+const requestCatalogItems = () =>
+  requestResult(
+    () => createApiClient().api.catalog.items.get(),
+    CatalogItemListResponseSchema,
+    CatalogApiErrorSchema,
+    "Invalid Catalog Item response",
   );
 
 const requestInventoryAdjustment = (
@@ -108,6 +118,7 @@ const requestCatalogMutation = (mutation: CatalogMutation) => {
 };
 
 type CatalogResult = Awaited<ReturnType<typeof requestCatalog>>;
+type CatalogItemsResult = Awaited<ReturnType<typeof requestCatalogItems>>;
 type CatalogMutationResult = Awaited<ReturnType<typeof requestCatalogMutation>>;
 
 export const catalogQueryOptions = () =>
@@ -116,13 +127,25 @@ export const catalogQueryOptions = () =>
     queryFn: async () => unwrapRequestResult(await requestCatalog()),
   });
 
+export const catalogItemsQueryOptions = () =>
+  queryOptions<InferOk<CatalogItemsResult>, InferErr<CatalogItemsResult>>({
+    queryKey: catalogItemsQueryKey,
+    queryFn: async () => unwrapRequestResult(await requestCatalogItems()),
+  });
+
 export const catalogMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<InferOk<CatalogMutationResult>, InferErr<CatalogMutationResult>, CatalogMutation>(
     {
       mutationFn: async (mutation) => unwrapRequestResult(await requestCatalogMutation(mutation)),
       onSuccess: async () => {
-        await queryClient.invalidateQueries({ queryKey: catalogQueryKey, refetchType: "none" });
-        await queryClient.refetchQueries({ queryKey: catalogQueryKey, type: "active" });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: catalogQueryKey, refetchType: "none" }),
+          queryClient.invalidateQueries({ queryKey: catalogItemsQueryKey, refetchType: "none" }),
+        ]);
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: catalogQueryKey, type: "active" }),
+          queryClient.refetchQueries({ queryKey: catalogItemsQueryKey, type: "active" }),
+        ]);
       },
     },
   );

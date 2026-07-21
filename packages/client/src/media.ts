@@ -1,13 +1,13 @@
 import {
   CatalogApiErrorSchema,
   MediaUploadResponseSchema,
-  type CatalogItemId,
   type MediaUploadFields,
+  type ProductId,
 } from "@ecom/contracts";
 import { mutationOptions, type QueryClient } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
 import * as v from "valibot";
-import { refreshCatalogItemOwner } from "./admin";
+import { catalogItemsQueryKey, catalogQueryKey } from "./catalog";
 import { createApiClient } from "./eden";
 import { requestResult, unwrapRequestResult } from "./request";
 
@@ -27,7 +27,7 @@ const MediaApiErrorSchema = v.union([
 ]);
 
 type CatalogImageUpload = MediaUploadFields & {
-  readonly catalogItemId: CatalogItemId;
+  readonly catalogItemId: ProductId;
   readonly file: File;
 };
 
@@ -49,7 +49,14 @@ type CatalogImageResult = Awaited<ReturnType<typeof requestCatalogImageUpload>>;
 export const catalogImageMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<InferOk<CatalogImageResult>, InferErr<CatalogImageResult>, CatalogImageUpload>({
     mutationFn: async (upload) => unwrapRequestResult(await requestCatalogImageUpload(upload)),
-    onSuccess: async (_data, upload) => {
-      await refreshCatalogItemOwner(queryClient, upload.catalogItemId);
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: catalogQueryKey, refetchType: "none" }),
+        queryClient.invalidateQueries({ queryKey: catalogItemsQueryKey, refetchType: "none" }),
+      ]);
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: catalogQueryKey, type: "active" }),
+        queryClient.refetchQueries({ queryKey: catalogItemsQueryKey, type: "active" }),
+      ]);
     },
   });

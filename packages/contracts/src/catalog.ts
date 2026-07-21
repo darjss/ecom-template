@@ -272,6 +272,9 @@ export const PublicCatalogItemSummarySchema = v.strictObject({
   priceMnt: PriceMntSchema,
   images: v.array(PublicCatalogImageSchema),
 });
+export const CatalogItemListResponseSchema = v.strictObject({
+  data: v.array(PublicCatalogItemSummarySchema),
+});
 export const PublicProductSummarySchema = v.strictObject({
   id: ProductIdSchema,
   slug: CatalogSlugSchema,
