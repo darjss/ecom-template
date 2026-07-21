@@ -32,6 +32,9 @@ export {
 export { createApiClient } from "./eden";
 export { catalogImageMutationOptions } from "./media";
 export {
+  adminOrderQueryOptions,
+  adminOrdersQueryKey,
+  adminOrdersQueryOptions,
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
   orderStatusQueryOptions,

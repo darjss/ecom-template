@@ -83,13 +83,41 @@ export const OrderSummarySchema = v.strictObject({
     state: OrderFulfillmentStateSchema,
   }),
 });
+export const AdminOrderSchema = v.strictObject({
+  ...OrderSummarySchema.entries,
+  recipient: v.strictObject({
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(120)),
+    phone: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+  }),
+  destination: v.variant("mode", [
+    v.strictObject({
+      mode: v.literal("delivery"),
+      address: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+    }),
+    v.strictObject({
+      mode: v.literal("pickup"),
+      name: v.pipe(v.string(), v.minLength(1), v.maxLength(120)),
+      address: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+    }),
+  ]),
+});
 export const OrderStatusResponseSchema = v.strictObject({ data: OrderSummarySchema });
 export const CustomerOrdersResponseSchema = v.strictObject({
   data: v.strictObject({ orders: v.array(OrderSummarySchema) }),
 });
+export const AdminOrdersResponseSchema = v.strictObject({
+  data: v.strictObject({ orders: v.array(AdminOrderSchema) }),
+});
+export const AdminOrderResponseSchema = v.strictObject({ data: AdminOrderSchema });
 export const OrderAccessApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.picklist(["unauthorized", "not_found", "unavailable"]),
+    message: v.string(),
+  }),
+});
+export const AdminOrderApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.picklist(["unauthorized", "forbidden", "not_found", "validation", "unavailable"]),
     message: v.string(),
   }),
 });
@@ -98,11 +126,20 @@ export const OrderAccessClientErrorSchema = v.variant("kind", [
   ContractClientErrorSchema,
   v.strictObject({ kind: v.literal("api"), error: OrderAccessApiErrorSchema.entries.error }),
 ]);
+export const AdminOrderClientErrorSchema = v.variant("kind", [
+  NetworkClientErrorSchema,
+  ContractClientErrorSchema,
+  v.strictObject({ kind: v.literal("api"), error: AdminOrderApiErrorSchema.entries.error }),
+]);
 
 export type OrderId = v.InferOutput<typeof OrderIdSchema>;
 export type OrderStatusToken = v.InferOutput<typeof OrderStatusTokenSchema>;
 export type OrderStatusPath = v.InferOutput<typeof OrderStatusPathSchema>;
 export type OrderSummary = v.InferOutput<typeof OrderSummarySchema>;
+export type OrderPaymentState = v.InferOutput<typeof OrderPaymentStateSchema>;
+export type OrderFulfillmentState = v.InferOutput<typeof OrderFulfillmentStateSchema>;
+export type AdminOrder = v.InferOutput<typeof AdminOrderSchema>;
 export type OrderAccessClientError = v.InferOutput<typeof OrderAccessClientErrorSchema>;
+export type AdminOrderClientError = v.InferOutput<typeof AdminOrderClientErrorSchema>;
 
 export const createOrderId = () => typeidUnboxed("order");

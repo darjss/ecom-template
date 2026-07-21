@@ -1,19 +1,24 @@
 import {
+  AdminOrderSchema,
   OrderStatusPathSchema,
   OrderStatusTokenSchema,
   OrderSummarySchema,
+  type AdminOrder,
   type CustomerId,
+  type OrderId,
   type OrderStatusPath,
   type OrderStatusToken,
   type OrderSummary,
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import * as v from "valibot";
+import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { orderQueries } from "./persistence";
 
 export type OrderAccessFailure =
   | { readonly code: "not_found" }
   | { readonly code: "infrastructure_unavailable" };
+export type AdminOrderFailure = OrderAccessFailure | { readonly code: "forbidden" };
 export type OrderStatusAccess = {
   readonly statusTokenHash: string;
   readonly statusPath: OrderStatusPath;
@@ -38,45 +43,83 @@ export const createOrderStatusAccess = async (placementKey: string) => {
 };
 
 type OrderRows = Awaited<ReturnType<typeof orderQueries.readByStatusTokenHash>>;
+type OrderRow = OrderRows["orderRows"][number];
+
+const projectOrder = (order: OrderRow, rows: OrderRows): OrderSummary | undefined => {
+  const fulfillment = rows.fulfillmentRows.find(({ orderId }) => orderId === order.id);
+  if (!fulfillment) {
+    return undefined;
+  }
+  const payment = rows.paymentRows.find(({ orderId }) => orderId === order.id);
+  return v.parse(OrderSummarySchema, {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    state: order.state,
+    placedAt: order.placedAt.toISOString(),
+    subtotalMnt: order.subtotalMnt,
+    discountTotalMnt: order.discountTotalMnt,
+    deliveryFeeMnt: order.deliveryFeeMnt,
+    totalMnt: order.grandTotalMnt,
+    lines: rows.lineRows
+      .filter(({ orderId }) => orderId === order.id)
+      .map(({ name, sku, quantity, unitPriceMnt, discountMnt, totalMnt }) => ({
+        name,
+        sku,
+        quantity,
+        unitPriceMnt,
+        discountMnt,
+        totalMnt,
+      })),
+    payment: payment
+      ? {
+          method: payment.method,
+          state: payment.state,
+          expectedAmountMnt: payment.expectedAmountMnt,
+          confirmedAmountMnt: payment.confirmedAmountMnt,
+          refundedAmountMnt: payment.refundedAmountMnt,
+        }
+      : null,
+    fulfillment: { mode: fulfillment.mode, state: fulfillment.state },
+  });
+};
 
 const projectOrders = (rows: OrderRows): OrderSummary[] | undefined => {
   const projected = [];
   for (const order of rows.orderRows) {
-    const fulfillment = rows.fulfillmentRows.find(({ orderId }) => orderId === order.id);
-    if (!fulfillment) {
+    const summary = projectOrder(order, rows);
+    if (!summary) {
       return undefined;
     }
-    const payment = rows.paymentRows.find(({ orderId }) => orderId === order.id);
-    projected.push(
-      v.parse(OrderSummarySchema, {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        state: order.state,
-        placedAt: order.placedAt.toISOString(),
-        subtotalMnt: order.subtotalMnt,
-        discountTotalMnt: order.discountTotalMnt,
-        deliveryFeeMnt: order.deliveryFeeMnt,
-        totalMnt: order.grandTotalMnt,
-        lines: rows.lineRows
-          .filter(({ orderId }) => orderId === order.id)
-          .map(({ name, sku, quantity, unitPriceMnt, discountMnt, totalMnt }) => ({
-            name,
-            sku,
-            quantity,
-            unitPriceMnt,
-            discountMnt,
-            totalMnt,
-          })),
-        payment: payment
+    projected.push(summary);
+  }
+  return projected;
+};
+
+const projectAdminOrders = (rows: OrderRows): AdminOrder[] | undefined => {
+  const projected = [];
+  for (const order of rows.orderRows) {
+    const summary = projectOrder(order, rows);
+    if (!summary) {
+      return undefined;
+    }
+    const destination =
+      order.fulfillmentMode === "delivery" && order.deliveryAddress
+        ? { mode: "delivery" as const, address: order.deliveryAddress }
+        : order.fulfillmentMode === "pickup" && order.pickupName && order.pickupAddress
           ? {
-              method: payment.method,
-              state: payment.state,
-              expectedAmountMnt: payment.expectedAmountMnt,
-              confirmedAmountMnt: payment.confirmedAmountMnt,
-              refundedAmountMnt: payment.refundedAmountMnt,
+              mode: "pickup" as const,
+              name: order.pickupName,
+              address: order.pickupAddress,
             }
-          : null,
-        fulfillment: { mode: fulfillment.mode, state: fulfillment.state },
+          : undefined;
+    if (!destination) {
+      return undefined;
+    }
+    projected.push(
+      v.parse(AdminOrderSchema, {
+        ...summary,
+        recipient: { name: order.recipientName, phone: order.recipientPhone },
+        destination,
       }),
     );
   }
@@ -107,6 +150,41 @@ export const listCustomerOrders = async (
     return orders
       ? Result.ok(orders)
       : Result.err<never, OrderAccessFailure>({ code: "infrastructure_unavailable" });
+  } catch {
+    return Result.err({ code: "infrastructure_unavailable" });
+  }
+};
+
+export const listAdminOrders = async (
+  actor: StaffActor,
+): Promise<Result<readonly AdminOrder[], AdminOrderFailure>> => {
+  if (!hasStaffCapability(actor.role, "orders_fulfillment")) {
+    return Result.err({ code: "forbidden" });
+  }
+  try {
+    const orders = projectAdminOrders(await orderQueries.listRecent());
+    return orders
+      ? Result.ok(orders)
+      : Result.err<never, AdminOrderFailure>({ code: "infrastructure_unavailable" });
+  } catch {
+    return Result.err({ code: "infrastructure_unavailable" });
+  }
+};
+
+export const readAdminOrder = async (
+  actor: StaffActor,
+  id: OrderId,
+): Promise<Result<AdminOrder, AdminOrderFailure>> => {
+  if (!hasStaffCapability(actor.role, "orders_fulfillment")) {
+    return Result.err({ code: "forbidden" });
+  }
+  try {
+    const orders = projectAdminOrders(await orderQueries.readById(id));
+    if (!orders) {
+      return Result.err({ code: "infrastructure_unavailable" });
+    }
+    const order = orders.at(0);
+    return order ? Result.ok(order) : Result.err({ code: "not_found" });
   } catch {
     return Result.err({ code: "infrastructure_unavailable" });
   }
