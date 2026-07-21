@@ -3,10 +3,8 @@ import {
   LocationsDocumentSchema,
   PlaceOrderResultSchema,
   createAuditEventId,
-  createDiscountRedemptionId,
   createFulfillmentId,
   createInventoryEntryId,
-  createOrderDiscountId,
   createOrderId,
   createOrderLineId,
   createPaymentEntryId,
@@ -35,15 +33,12 @@ import {
   cmsDocuments,
   collections,
   commerceSettings,
-  discountRedemptionEntries,
   discountRules,
   fulfillments,
   inventoryEntries,
   inventoryReservationItems,
   inventoryReservations,
   optionGroups,
-  orderDiscountAdjustments,
-  orderDiscountAllocations,
   orderLines,
   orders,
   paymentEntries,
@@ -207,7 +202,6 @@ export const checkoutQueries = {
       allDefinitions,
       allValues,
       ruleRows,
-      redemptionRows,
       categoryRows,
       collectionRows,
       categoryMemberships,
@@ -226,15 +220,6 @@ export const checkoutQueries = {
         .from(discountRules)
         .where(eq(discountRules.state, "active"))
         .orderBy(asc(discountRules.id)),
-      db
-        .select({
-          discountRuleId: discountRedemptionEntries.discountRuleId,
-          count: sql<number>`coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0)`.as(
-            "checkout_redemption_count",
-          ),
-        })
-        .from(discountRedemptionEntries)
-        .groupBy(discountRedemptionEntries.discountRuleId),
       db.select({ id: categories.id, state: categories.state }).from(categories),
       db.select({ id: collections.id, state: collections.state }).from(collections),
       db.select().from(catalogItemCategories),
@@ -254,7 +239,6 @@ export const checkoutQueries = {
       resolvedItemIds.has(catalogItemId as CatalogItemId),
     );
     const locationRow = locationRows.at(0);
-    const redemptionCounts = new Map(redemptionRows.map((row) => [row.discountRuleId, row.count]));
     const TargetListSchema = v.pipe(
       v.array(DiscountTargetSchema),
       v.minLength(1),
@@ -270,7 +254,6 @@ export const checkoutQueries = {
       rules: ruleRows.map((rule) => ({
         ...rule,
         targets: v.parse(TargetListSchema, JSON.parse(rule.targetsJson)),
-        redemptionCount: redemptionCounts.get(rule.id) ?? 0,
       })),
       categoryRows,
       collectionRows,
@@ -321,7 +304,6 @@ export const commitPlacement = async (
   const paymentId = createPaymentId();
   const fulfillmentId = createFulfillmentId();
   const reservationId = createReservationId();
-  const adjustmentId = quote.discount.kind === "applied" ? createOrderDiscountId() : undefined;
   const correlationId = crypto.randomUUID();
   const now = new Date();
   const zeroTotal = quote.totalMnt === 0;
@@ -450,7 +432,7 @@ export const commitPlacement = async (
                   ? sql`${discountRules.globalLimit} IS NULL`
                   : eq(discountRules.globalLimit, commercial.discountPolicy.globalLimit),
                 eq(discountRules.targetsJson, commercial.discountPolicy.targetsJson),
-                sql`${discountRules.globalLimit} IS NULL OR (SELECT coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0) FROM ${discountRedemptionEntries} WHERE ${discountRedemptionEntries.discountRuleId} = ${discountRules.id}) < ${discountRules.globalLimit}`,
+                sql`${discountRules.globalLimit} IS NULL OR ${discountRules.redemptionCount} < ${discountRules.globalLimit}`,
               ),
             ),
         )
@@ -470,6 +452,7 @@ export const commitPlacement = async (
         AND ${discountRules.endsAt} IS ${rule.endsAt}
         AND ${discountRules.minimumSubtotalMnt} = ${rule.minimumSubtotalMnt}
         AND ${discountRules.globalLimit} IS ${rule.globalLimit}
+        AND ${discountRules.redemptionCount} = ${rule.redemptionCount}
         AND ${discountRules.targetsJson} = ${rule.targetsJson}
         AND ${discountRules.updatedAt} = ${rule.updatedAt}
     )`,
@@ -641,96 +624,13 @@ export const commitPlacement = async (
       ),
     );
   }
-  if (quote.discount.kind === "applied" && adjustmentId) {
+  if (quote.discount.kind === "applied") {
     statements.push(
-      db.insert(orderDiscountAdjustments).select(
-        db
-          .select({
-            id: sql<string>`${adjustmentId}`.as("id"),
-            orderId: orders.id,
-            discountRuleId: sql<string>`${quote.discount.ruleId}`.as("discount_rule_id"),
-            ruleName: sql<string>`${quote.discount.name}`.as("rule_name"),
-            mode: sql<
-              "automatic" | "code"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.mode : "automatic"}`.as(
-              "mode",
-            ),
-            code: sql<
-              string | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.code : null}`.as(
-              "code",
-            ),
-            calculation: sql<
-              "percentage" | "fixed_mnt"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.calculation : "fixed_mnt"}`.as(
-              "calculation",
-            ),
-            value:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.value : quote.discount.amountMnt}`.as(
-                "value",
-              ),
-            startsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.startsAt : null}`.as(
-                "starts_at",
-              ),
-            endsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.endsAt : null}`.as(
-                "ends_at",
-              ),
-            minimumSubtotalMnt:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.minimumSubtotalMnt : 0}`.as(
-                "minimum_subtotal_mnt",
-              ),
-            globalLimit: sql<
-              number | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.globalLimit : null}`.as(
-              "global_limit",
-            ),
-            targetsJson:
-              sql<string>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.targetsJson : "[]"}`.as(
-                "targets_json",
-              ),
-            submittedCode: sql<string | null>`${quote.discount.submittedCode}`.as("submitted_code"),
-            codeAccepted: sql<boolean>`${quote.discount.codeAccepted}`.as("code_accepted"),
-            reason: sql<string>`'checkout_discount'`.as("reason"),
-            amountMnt: sql<number>`${quote.discount.amountMnt}`.as("amount_mnt"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
-      db.insert(discountRedemptionEntries).select(
-        db
-          .select({
-            id: sql<string>`${createDiscountRedemptionId()}`.as("id"),
-            discountRuleId: sql<string>`${quote.discount.ruleId}`.as("discount_rule_id"),
-            orderId: orders.id,
-            kind: sql<"claim">`'claim'`.as("kind"),
-            quantityDelta: sql<number>`1`.as("quantity_delta"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
+      db
+        .update(discountRules)
+        .set({ redemptionCount: sql`${discountRules.redemptionCount} + 1` })
+        .where(and(eq(discountRules.id, quote.discount.ruleId), orderExists)),
     );
-    for (const line of quote.lines.filter(({ discountMnt }) => discountMnt > 0)) {
-      const lineId = lineIds.get(line.position);
-      if (!lineId) {
-        throw new Error("Discount allocation Order Line identity missing");
-      }
-      statements.push(
-        db.insert(orderDiscountAllocations).select(
-          db
-            .select({
-              adjustmentId: sql<string>`${adjustmentId}`.as("adjustment_id"),
-              orderLineId: sql<string>`${lineId}`.as("order_line_id"),
-              amountMnt: sql<number>`${line.discountMnt}`.as("amount_mnt"),
-            })
-            .from(orders)
-            .where(eq(orders.id, orderId)),
-        ),
-      );
-    }
   }
   statements.push(
     db.insert(inventoryReservations).select(

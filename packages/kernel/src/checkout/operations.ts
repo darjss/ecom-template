@@ -612,6 +612,7 @@ const calculateCheckout = async (input: CheckoutQuoteInput) => {
           endsAt: rule.endsAt?.getTime() ?? null,
           minimumSubtotalMnt: rule.minimumSubtotalMnt,
           globalLimit: rule.globalLimit,
+          redemptionCount: rule.redemptionCount,
           targetsJson: rule.targetsJson,
           updatedAt: rule.updatedAt.getTime(),
         })),
