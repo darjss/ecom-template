@@ -12,7 +12,7 @@ import { Result } from "better-result";
 import { uniq } from "es-toolkit";
 import { createLogger } from "evlog";
 import { purgeCatalogListingCache } from "../catalog/cache";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { groupingQueries } from "./persistence";
 
 export type GroupingOperationFailure = {
@@ -39,14 +39,10 @@ export type GroupingMutationResult = {
   readonly cachePurgeRequestId: string | null;
 };
 
-const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
 const failure = (code: GroupingOperationFailure["code"]) =>
   Result.err<never, GroupingOperationFailure>({ code });
 
-export const listGroupings = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
+export const listGroupings = async (_actor: StaffActor) => {
   try {
     return Result.ok(await groupingQueries.listAll());
   } catch {
@@ -116,13 +112,7 @@ const completeMutation = async (result: PersistenceMutationResult) => {
 const duplicateMembership = (input: GroupingMembershipInput) =>
   uniq(input.catalogItemIds).length !== input.catalogItemIds.length;
 
-const runAuthorizedMutation = async (
-  actor: StaffActor,
-  operation: () => Promise<PersistenceMutationResult>,
-) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
+const runMutation = async (operation: () => Promise<PersistenceMutationResult>) => {
   try {
     return await completeMutation(await operation());
   } catch {
@@ -130,10 +120,7 @@ const runAuthorizedMutation = async (
   }
 };
 
-export const createCategory = async (actor: StaffActor, input: CategoryInput) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
+export const createCategory = async (_actor: StaffActor, input: CategoryInput) => {
   try {
     const parent = await groupingQueries.validateCategoryParent(undefined, input.parentId);
     return parent.kind === "valid"
@@ -144,10 +131,7 @@ export const createCategory = async (actor: StaffActor, input: CategoryInput) =>
   }
 };
 
-export const updateCategory = async (actor: StaffActor, id: CategoryId, input: CategoryInput) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
+export const updateCategory = async (_actor: StaffActor, id: CategoryId, input: CategoryInput) => {
   try {
     const parent = await groupingQueries.validateCategoryParent(id, input.parentId);
     return parent.kind === "valid"
@@ -159,13 +143,10 @@ export const updateCategory = async (actor: StaffActor, id: CategoryId, input: C
 };
 
 export const setCategoryState = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CategoryId,
   state: "active" | "archived",
 ) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
   try {
     const category = await groupingQueries.findCategory(id);
     if (!category) {
@@ -185,63 +166,51 @@ export const setCategoryState = async (
 };
 
 export const replaceCategoryMembership = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CategoryId,
   input: GroupingMembershipInput,
 ) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
   return duplicateMembership(input)
     ? failure("duplicate_membership")
-    : runAuthorizedMutation(actor, () => groupingQueries.replaceCategoryMembership(id, input));
+    : runMutation(() => groupingQueries.replaceCategoryMembership(id, input));
 };
 
-export const createCollection = (actor: StaffActor, input: CollectionInput) =>
-  runAuthorizedMutation(actor, () => groupingQueries.createCollection(input));
-export const updateCollection = (actor: StaffActor, id: CollectionId, input: CollectionInput) =>
-  runAuthorizedMutation(actor, () => groupingQueries.updateCollection(id, input));
+export const createCollection = (_actor: StaffActor, input: CollectionInput) =>
+  runMutation(() => groupingQueries.createCollection(input));
+export const updateCollection = (_actor: StaffActor, id: CollectionId, input: CollectionInput) =>
+  runMutation(() => groupingQueries.updateCollection(id, input));
 export const setCollectionState = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CollectionId,
   state: "active" | "archived",
-) => runAuthorizedMutation(actor, () => groupingQueries.transitionCollection(id, state));
+) => runMutation(() => groupingQueries.transitionCollection(id, state));
 export const replaceCollectionMembership = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: CollectionId,
   input: GroupingMembershipInput,
 ) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
   return duplicateMembership(input)
     ? failure("duplicate_membership")
-    : runAuthorizedMutation(actor, () => groupingQueries.replaceCollectionMembership(id, input));
+    : runMutation(() => groupingQueries.replaceCollectionMembership(id, input));
 };
 
-export const createTag = (actor: StaffActor, input: TagInput) =>
-  runAuthorizedMutation(actor, () => groupingQueries.createTag(input));
-export const updateTag = (actor: StaffActor, id: TagId, input: TagInput) =>
-  runAuthorizedMutation(actor, () => groupingQueries.updateTag(id, input));
-export const setTagState = (actor: StaffActor, id: TagId, state: "active" | "archived") =>
-  runAuthorizedMutation(actor, () => groupingQueries.transitionTag(id, state));
+export const createTag = (_actor: StaffActor, input: TagInput) =>
+  runMutation(() => groupingQueries.createTag(input));
+export const updateTag = (_actor: StaffActor, id: TagId, input: TagInput) =>
+  runMutation(() => groupingQueries.updateTag(id, input));
+export const setTagState = (_actor: StaffActor, id: TagId, state: "active" | "archived") =>
+  runMutation(() => groupingQueries.transitionTag(id, state));
 export const replaceTagMembership = (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: TagId,
   input: GroupingMembershipInput,
 ) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
   return duplicateMembership(input)
     ? failure("duplicate_membership")
-    : runAuthorizedMutation(actor, () => groupingQueries.replaceTagMembership(id, input));
+    : runMutation(() => groupingQueries.replaceTagMembership(id, input));
 };
 
-export const retryGroupingCachePurge = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
+export const retryGroupingCachePurge = async (_actor: StaffActor) => {
   try {
     return Result.ok(await purgeCommittedCatalogChange());
   } catch {

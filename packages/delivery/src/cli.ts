@@ -220,12 +220,7 @@ export default {
     if (result.isOk()) {
       return new Response("ok");
     }
-    return new Response(
-      result.error.code === "linked_identity"
-        ? "Use Staff Admin to change authority for a linked identity"
-        : "Owner provisioning is unavailable",
-      { status: result.error.code === "linked_identity" ? 409 : 503 },
-    );
+    return new Response("Owner provisioning is unavailable", { status: 503 });
   },
 };
 `;

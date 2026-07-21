@@ -62,7 +62,6 @@ export const TelegramUserIdSchema = v.pipe(
   v.maxValue(Number.MAX_SAFE_INTEGER),
 );
 export const StaffRoleSchema = v.picklist(["owner", "manager", "staff"]);
-export const StaffStatusSchema = v.picklist(["pending", "active", "revoked"]);
 
 export const AuditActorSchema = v.variant("kind", [
   v.strictObject({
@@ -86,88 +85,6 @@ export const AuditActorSchema = v.variant("kind", [
     telegramOperatorLabel: v.null(),
     telegramUserId: v.null(),
   }),
-]);
-
-const StaffTimestampSchema = v.pipe(v.string(), v.isoTimestamp());
-export const StaffMemberSchema = v.pipe(
-  v.variant("status", [
-    v.strictObject({
-      id: StaffIdSchema,
-      email: v.pipe(v.string(), v.email()),
-      status: v.literal("pending"),
-      role: v.nullable(StaffRoleSchema),
-      createdAt: StaffTimestampSchema,
-      updatedAt: StaffTimestampSchema,
-      approvedAt: v.null(),
-      revokedAt: v.null(),
-    }),
-    v.strictObject({
-      id: StaffIdSchema,
-      email: v.pipe(v.string(), v.email()),
-      status: v.literal("active"),
-      role: StaffRoleSchema,
-      createdAt: StaffTimestampSchema,
-      updatedAt: StaffTimestampSchema,
-      approvedAt: StaffTimestampSchema,
-      revokedAt: v.null(),
-    }),
-    v.strictObject({
-      id: StaffIdSchema,
-      email: v.pipe(v.string(), v.email()),
-      status: v.literal("revoked"),
-      role: v.nullable(StaffRoleSchema),
-      createdAt: StaffTimestampSchema,
-      updatedAt: StaffTimestampSchema,
-      approvedAt: StaffTimestampSchema,
-      revokedAt: StaffTimestampSchema,
-    }),
-  ]),
-  v.check((member) => {
-    const createdAt = Date.parse(member.createdAt);
-    const updatedAt = Date.parse(member.updatedAt);
-    const approvedAt = member.approvedAt === null ? createdAt : Date.parse(member.approvedAt);
-    const revokedAt = member.revokedAt === null ? approvedAt : Date.parse(member.revokedAt);
-    return createdAt <= approvedAt && approvedAt <= revokedAt && revokedAt <= updatedAt;
-  }, "Invalid Staff lifecycle timestamps"),
-);
-
-export const StaffListResponseSchema = v.strictObject({
-  data: v.strictObject({ members: v.array(StaffMemberSchema) }),
-});
-
-export const StaffCreateInputSchema = v.strictObject({
-  email: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  role: StaffRoleSchema,
-});
-
-export const StaffMutationInputSchema = v.strictObject({
-  role: StaffRoleSchema,
-});
-
-export const StaffMutationResponseSchema = v.strictObject({ data: StaffMemberSchema });
-
-export const StaffLifecycleApiErrorSchema = v.strictObject({
-  error: v.strictObject({
-    code: v.picklist([
-      "unauthorized",
-      "forbidden",
-      "not_found",
-      "validation",
-      "conflict",
-      "unavailable",
-    ]),
-    reason: v.optional(
-      v.picklist(["final_owner", "invalid_transition", "session_revocation_failed"]),
-    ),
-    message: v.string(),
-  }),
-});
-
-export const StaffSessionStateSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal("active"), role: StaffRoleSchema }),
-  v.strictObject({ kind: v.literal("awaiting_approval") }),
-  v.strictObject({ kind: v.literal("identity_conflict") }),
-  v.strictObject({ kind: v.literal("unauthorized") }),
 ]);
 
 export const MongolianPhoneSchema = v.pipe(v.string(), v.regex(/^\+976[5-9]\d{7}$/));
@@ -246,15 +163,6 @@ export type AuditActor = v.InferOutput<typeof AuditActorSchema>;
 export type TelegramOperatorLabel = v.InferOutput<typeof TelegramOperatorLabelSchema>;
 export type TelegramUserId = v.InferOutput<typeof TelegramUserIdSchema>;
 export type StaffRole = v.InferOutput<typeof StaffRoleSchema>;
-export type StaffStatus = v.InferOutput<typeof StaffStatusSchema>;
-export type StaffMember = v.InferOutput<typeof StaffMemberSchema>;
-export type StaffCreateInput = v.InferOutput<typeof StaffCreateInputSchema>;
-export type StaffListResponse = v.InferOutput<typeof StaffListResponseSchema>;
-export type StaffMutationResponse = v.InferOutput<typeof StaffMutationResponseSchema>;
-export type StaffClientError = ClientRequestError<
-  v.InferOutput<typeof StaffLifecycleApiErrorSchema>["error"]
->;
-export type StaffSessionState = v.InferOutput<typeof StaffSessionStateSchema>;
 export type MongolianPhone = v.InferOutput<typeof MongolianPhoneSchema>;
 export type CustomerOtpRequest = v.InferOutput<typeof CustomerOtpRequestSchema>;
 export type CustomerOtpVerify = v.InferOutput<typeof CustomerOtpVerifySchema>;

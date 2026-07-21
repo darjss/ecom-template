@@ -95,20 +95,7 @@ export {
   type DiscountOperationFailure,
 } from "./discount/operations";
 export { readDatabaseHealth } from "./db/health";
-export {
-  approveStaff,
-  changeStaffRole,
-  createStaff,
-  hasStaffCapability,
-  listStaff,
-  provisionOwner,
-  removeStaff,
-  revokeStaff,
-  type OwnerProvisioningFailure,
-  type StaffActor,
-  type StaffCapability,
-  type StaffOperationFailure,
-} from "./staff/operations";
+export { provisionOwner, type OwnerProvisioningFailure, type StaffActor } from "./staff/operations";
 export { catalogQueries } from "./catalog/persistence";
 export { staffQueries } from "./staff/persistence";
 export { createStorefrontReader, type StorefrontReader } from "./storefront/reader";
