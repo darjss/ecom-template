@@ -35,7 +35,6 @@ const typeIdSchema = (prefix: string) =>
 export const OrderLineIdSchema = typeIdSchema("order_line");
 export const OrderDiscountIdSchema = typeIdSchema("order_discount");
 export const PaymentIdSchema = typeIdSchema("payment");
-export const PaymentEntryIdSchema = typeIdSchema("payment_entry");
 export const FulfillmentIdSchema = typeIdSchema("fulfillment");
 export const ReservationIdSchema = typeIdSchema("reservation");
 export const CheckoutFulfillmentSchema = v.variant("kind", [
@@ -249,6 +248,5 @@ export type PlaceOrderResult = v.InferOutput<typeof PlaceOrderResultSchema>;
 export const createOrderLineId = () => typeidUnboxed("order_line");
 export const createOrderDiscountId = () => typeidUnboxed("order_discount");
 export const createPaymentId = () => typeidUnboxed("payment");
-export const createPaymentEntryId = () => typeidUnboxed("payment_entry");
 export const createFulfillmentId = () => typeidUnboxed("fulfillment");
 export const createReservationId = () => typeidUnboxed("reservation");

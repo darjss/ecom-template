@@ -182,7 +182,7 @@ export const transitionBundle = async (
     return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
   }
   try {
-    const result = await bundleQueries.transition(actor, id, action);
+    const result = await bundleQueries.transition(id, action);
     return result.kind === "changed"
       ? await resolveBundle(id, true)
       : Result.err<never, BundleOperationFailure>({ code: result.kind });
