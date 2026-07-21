@@ -8,7 +8,6 @@ export {
   type BundleMutation,
 } from "./bundle/request";
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
-export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
   requestCmsCachePurge,
   requestCmsDocuments,
@@ -53,7 +52,7 @@ export {
   checkoutQuoteMutationOptions,
   orderPlacementMutationOptions,
 } from "./checkout";
-export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
+export { catalogMutationOptions, catalogQueryOptions } from "./catalog";
 export {
   cmsCachePurgeMutationOptions,
   cmsMutationOptions,
@@ -70,7 +69,7 @@ export {
 export { discountMutationOptions, discountQueryOptions } from "./query/discount";
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
-export { catalogSearchQueryOptions } from "./query/search";
+export { catalogSearchQueryOptions } from "./search";
 export { staffMutationOptions, staffQueryOptions } from "./query/staff";
 export {
   requestStaffList,
@@ -85,8 +84,3 @@ export {
   type CustomerAuthMutationResult,
 } from "./customer/request";
 export { requestHealth } from "./request";
-export {
-  requestCatalogSearch,
-  type CatalogSearchData,
-  type CatalogSearchRequest,
-} from "./search/request";
