@@ -1,7 +1,7 @@
 import {
   ApiErrorSchema,
   CatalogApiErrorSchema,
-  CatalogItemIdSchema,
+  CatalogItemListResponseSchema,
   CatalogListResponseSchema,
   CatalogProductResponseSchema,
   CatalogSearchApiErrorSchema,
@@ -22,34 +22,21 @@ import {
   VariantIdSchema,
   UpdateProductInputSchema,
   HealthResponseSchema,
-  StaffCreateInputSchema,
-  StaffIdSchema,
-  StaffLifecycleApiErrorSchema,
-  StaffListResponseSchema,
-  StaffMutationInputSchema,
-  StaffMutationResponseSchema,
-  StaffRoleSchema,
   StoreDefinitionSchema,
   type StoreDefinition,
 } from "@ecom/contracts";
 import {
   adjustProductInventory,
-  approveStaff,
   attachCatalogImage,
-  changeStaffRole,
   createLocalOwnerSession,
   createProduct,
-  createStaff,
   createStaffAuth,
   createStorefrontReader,
   listCatalog,
-  listStaff,
   readCatalogMedia,
   readDatabaseHealth,
   readStaffAuthSession,
-  removeStaff,
   retryProductCachePurge,
-  revokeStaff,
   saveProductOptions,
   searchCatalog,
   setVariantState,
@@ -60,14 +47,12 @@ import {
   type CatalogOperationFailure,
   type CatalogVariantFailure,
   type CustomerSmsDelivery,
-  type StaffOperationFailure,
   type StorefrontReader,
 } from "@ecom/kernel";
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
 import * as v from "valibot";
 import { createAvailabilityRoutes } from "./availability-routes";
-import { createBundleRoutes } from "./bundle-routes";
 import { createCheckoutRoutes } from "./checkout-routes";
 import { createCustomerAuthRoutes } from "./customer-routes";
 import { createCmsRoutes } from "./cms-routes";
@@ -80,11 +65,6 @@ import { parseCatalogSearchParameters } from "./search-parameters";
 export { MediaUploadMultipartMaxBytes };
 export { parseCmsPreviewDocument } from "./cms-routes";
 export { parseCatalogSearchParameters } from "./search-parameters";
-
-export const staffPresentationRoleHeader = "x-ecom-authorized-staff-role";
-
-export const readStaffPresentationRole = (headers: Headers) =>
-  v.parse(StaffRoleSchema, headers.get(staffPresentationRoleHeader));
 
 const privateResponse = (response: Response) => {
   const headers = new Headers(response.headers);
@@ -101,11 +81,7 @@ const privateResponse = (response: Response) => {
 const apiError = (
   code: "unauthorized" | "forbidden" | "not_found" | "validation" | "conflict" | "unavailable",
   message: string,
-  reason?: "final_owner" | "invalid_transition" | "session_revocation_failed",
-) =>
-  v.parse(StaffLifecycleApiErrorSchema, {
-    error: { code, message, ...(reason ? { reason } : {}) },
-  });
+) => v.parse(ApiErrorSchema, { error: { code, message } });
 
 const LocalStaffLoginBodySchema = v.strictObject({
   email: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
@@ -147,8 +123,7 @@ const catalogFailureMapping = createPipeHandlers<CatalogFailure>(
   ),
   invalid_publication: catalogConflict("Product publication invariants are not satisfied"),
   invalid_lifecycle: catalogConflict("Product lifecycle transition is not valid"),
-  reservation_blocked: catalogConflict("Active reservations block this inventory adjustment"),
-  inventory_inconsistent: catalogConflict("Reserved inventory truth requires reconciliation"),
+  reservation_blocked: catalogConflict("Reserved inventory blocks this adjustment"),
   inventory_limit: catalogConflict("Inventory on-hand cannot exceed 1,000,000"),
   conflict: catalogConflict("Inventory changed concurrently"),
   unsupported_media_type: () =>
@@ -182,7 +157,6 @@ const catalogError = (
           failure.code === "forbidden"
             ? undefined
             : failure.code,
-        blockers: "blockers" in failure ? failure.blockers : undefined,
       },
     }),
   );
@@ -210,37 +184,7 @@ const readActor = async (request: Request, definition: StoreDefinition) => {
     return { kind: "rejected_host" as const };
   }
   const session = await readStaffAuthSession(request, origin);
-  return session.kind === "active"
-    ? { kind: "active" as const, origin, actor: session.actor }
-    : session;
-};
-
-const mapFailure = (
-  failure: StaffOperationFailure,
-  status: (code: number, body: unknown) => unknown,
-) => {
-  if (failure.code === "forbidden") {
-    return status(403, apiError("forbidden", "Owner authority is required"));
-  }
-  if (failure.code === "not_found") {
-    return status(404, apiError("not_found", "Staff member was not found"));
-  }
-  if (failure.code === "final_owner") {
-    return status(409, apiError("conflict", "The final active Owner is protected", "final_owner"));
-  }
-  if (failure.code === "invalid_transition") {
-    return status(
-      409,
-      apiError("conflict", "The Staff lifecycle transition is not valid", "invalid_transition"),
-    );
-  }
-  if (failure.code === "session_revocation_failed") {
-    return status(
-      503,
-      apiError("unavailable", "Staff sessions could not be revoked", "session_revocation_failed"),
-    );
-  }
-  return status(503, apiError("unavailable", "Staff authority is unavailable"));
+  return session.kind === "active" ? { kind: "active" as const, actor: session.actor } : session;
 };
 
 const authorizeRoute = async (
@@ -250,13 +194,7 @@ const authorizeRoute = async (
 ) => {
   const state = await readActor(request, definition);
   if (state.kind === "active") {
-    return { authorized: true as const, actor: state.actor, origin: state.origin };
-  }
-  if (state.kind === "awaiting_approval") {
-    return {
-      authorized: false as const,
-      response: status(403, apiError("forbidden", "Staff approval is pending")),
-    };
+    return { authorized: true as const, actor: state.actor };
   }
   if (state.kind === "rejected_host") {
     return {
@@ -284,7 +222,11 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
     })
     .use(createAvailabilityRoutes())
     .use(createCustomerAuthRoutes(definition, smsGateway))
-    .use(createOrderRoutes(definition))
+    .use(
+      createOrderRoutes(definition, (request, status) =>
+        authorizeRoute(request, definition, status),
+      ),
+    )
     .use(
       createCmsRoutes(definition, (request, status) => authorizeRoute(request, definition, status)),
     )
@@ -302,9 +244,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       }
       const result = await createLocalOwnerSession(input.output.email, origin);
       if (result.isErr()) {
-        return result.error.code === "linked_identity"
-          ? status(409, apiError("conflict", "The email is linked to another Staff identity"))
-          : status(503, apiError("unavailable", "Local Staff login is unavailable"));
+        return status(503, apiError("unavailable", "Local Staff login is unavailable"));
       }
       return new Response(null, {
         status: 303,
@@ -329,98 +269,6 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
             })
           : request;
       return privateResponse(await auth.handler(authRequest));
-    })
-    .get("/staff", async ({ request, status }) => {
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await listStaff(authorization.actor);
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffListResponseSchema, { data: result.value });
-    })
-    .post("/staff", async ({ body, request, status }) => {
-      const input = v.safeParse(StaffCreateInputSchema, body);
-      if (!input.success) {
-        return status(422, apiError("validation", "A valid Staff email and role are required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await createStaff(authorization.actor, input.output.email, input.output.role);
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffMutationResponseSchema, { data: result.value });
-    })
-    .post("/staff/:id/approve", async ({ body, params, request, status }) => {
-      const input = v.safeParse(StaffMutationInputSchema, body);
-      const id = v.safeParse(StaffIdSchema, params.id);
-      if (!input.success || !id.success) {
-        return status(422, apiError("validation", "A valid Staff ID and role are required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await approveStaff(
-        authorization.actor,
-        authorization.origin,
-        id.output,
-        input.output.role,
-      );
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffMutationResponseSchema, { data: result.value });
-    })
-    .patch("/staff/:id/role", async ({ body, params, request, status }) => {
-      const input = v.safeParse(StaffMutationInputSchema, body);
-      const id = v.safeParse(StaffIdSchema, params.id);
-      if (!input.success || !id.success) {
-        return status(422, apiError("validation", "A valid Staff ID and role are required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await changeStaffRole(
-        authorization.actor,
-        authorization.origin,
-        id.output,
-        input.output.role,
-      );
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffMutationResponseSchema, { data: result.value });
-    })
-    .post("/staff/:id/revoke", async ({ params, request, status }) => {
-      const id = v.safeParse(StaffIdSchema, params.id);
-      if (!id.success) {
-        return status(422, apiError("validation", "A valid Staff ID is required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await revokeStaff(authorization.actor, authorization.origin, id.output);
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffMutationResponseSchema, { data: result.value });
-    })
-    .delete("/staff/:id", async ({ params, request, status }) => {
-      const id = v.safeParse(StaffIdSchema, params.id);
-      if (!id.success) {
-        return status(422, apiError("validation", "A valid Staff ID is required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await removeStaff(authorization.actor, authorization.origin, id.output);
-      return result.isErr()
-        ? mapFailure(result.error, status)
-        : v.parse(StaffMutationResponseSchema, { data: result.value });
     })
     .get("/catalog/products", async ({ request, status }) => {
       const authorization = await authorizeRoute(request, definition, status);
@@ -528,7 +376,7 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
       },
     )
     .post("/catalog/items/:id/images", async ({ body, params, request, status }) => {
-      const id = v.safeParse(CatalogItemIdSchema, params.id);
+      const id = v.safeParse(ProductIdSchema, params.id);
       const multipart = v.safeParse(MediaUploadBodySchema, body);
       const fields = multipart.success
         ? v.safeParse(MediaUploadFieldsSchema, {
@@ -601,30 +449,13 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         ? catalogError(result.error, status)
         : v.parse(CatalogProductResponseSchema, { data: result.value });
     })
-    .post("/catalog/products/:id/cache-purge/retry", async ({ params, request, status }) => {
-      const id = v.safeParse(ProductIdSchema, params.id);
-      if (!id.success) {
-        return status(422, apiError("validation", "A valid Product ID is required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await retryProductCachePurge(authorization.actor, id.output);
-      return result.isErr()
-        ? catalogError(result.error, status)
-        : v.parse(CatalogProductResponseSchema, { data: result.value });
-    })
     .post(
       "/catalog/products/:id/inventory-adjustments",
       async ({ body, params, request, status }) => {
         const id = v.safeParse(ProductIdSchema, params.id);
         const input = v.safeParse(InventoryAdjustmentInputSchema, body);
         if (!id.success || !input.success) {
-          return status(
-            422,
-            apiError("validation", "A non-zero inventory delta and reason are required"),
-          );
+          return status(422, apiError("validation", "A non-zero inventory delta is required"));
         }
         const authorization = await authorizeRoute(request, definition, status);
         if (!authorization.authorized) {
@@ -636,7 +467,6 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
           : v.parse(CatalogProductResponseSchema, { data: result.value });
       },
     )
-    .use(createBundleRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createDiscountRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createGroupingRoutes((request, status) => authorizeRoute(request, definition, status)))
     .use(createCheckoutRoutes(definition))

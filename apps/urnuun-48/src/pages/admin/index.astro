@@ -1,6 +1,4 @@
 ---
-import AdminAppShell from "../../components/AdminAppShell.astro";
-
 export const prerender = false;
+return Astro.redirect("/admin/orders", 307);
 ---
-<AdminAppShell />

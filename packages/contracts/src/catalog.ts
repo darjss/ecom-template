@@ -25,8 +25,6 @@ export const OptionGroupIdSchema = typeIdSchema("option_group", "Option Group ID
 export const OptionValueIdSchema = typeIdSchema("option_value", "Option Value ID");
 export const MediaAssetIdSchema = typeIdSchema("media", "Media Asset ID");
 export const StockItemIdSchema = typeIdSchema("stock_item", "Stock Item ID");
-export const InventoryEntryIdSchema = typeIdSchema("inventory_entry", "Inventory Entry ID");
-export const InventoryReservationIdSchema = typeIdSchema("reservation", "Reservation ID");
 export const ProductStateSchema = v.picklist(["draft", "published", "archived"]);
 export const CatalogNameSchema = v.pipe(
   NormalizedTextSchema,
@@ -48,7 +46,6 @@ export const PriceMntSchema = v.pipe(
   v.minValue(1),
   v.maxValue(1_000_000_000),
 );
-export const InventoryReasonSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(240));
 export const InventoryQuantitySchema = v.pipe(
   v.number(),
   v.integer(),
@@ -81,24 +78,11 @@ export const MediaUploadFieldsSchema = v.strictObject({
   position: MediaPositionSchema,
   altText: MediaAltTextSchema,
 });
-export const CachePurgeRequestIdSchema = v.nullable(
-  v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-);
 export const MediaUploadResponseSchema = v.strictObject({
-  data: v.strictObject({
-    image: CatalogImageSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ image: CatalogImageSchema }),
 });
 export const MediaUploadMaxBytes = 8 * 1024 * 1024;
 export const MediaUploadMultipartMaxBytes = MediaUploadMaxBytes + 64 * 1024;
-
-export const CachePurgeDebtSchema = v.strictObject({
-  attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
-  requestId: CachePurgeRequestIdSchema,
-  lastAttemptedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
-});
 
 export const OptionKeySchema = v.pipe(
   v.string(),
@@ -157,7 +141,6 @@ export const ProductSchema = v.strictObject({
   sku: SkuSchema,
   onHandQuantity: InventoryQuantitySchema,
   reservedQuantity: InventoryQuantitySchema,
-  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   images: v.array(CatalogImageSchema),
   optionConfiguration: ProductOptionConfigurationSchema,
   createdAt: v.pipe(v.string(), v.isoTimestamp()),
@@ -166,11 +149,7 @@ export const ProductSchema = v.strictObject({
 
 export const CatalogListResponseSchema = v.strictObject({ data: v.array(ProductSchema) });
 export const CatalogProductResponseSchema = v.strictObject({
-  data: v.strictObject({
-    product: ProductSchema,
-    cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-    cachePurgeRequestId: CachePurgeRequestIdSchema,
-  }),
+  data: v.strictObject({ product: ProductSchema }),
 });
 export const CreateProductInputSchema = v.strictObject({
   name: CatalogNameSchema,
@@ -178,7 +157,6 @@ export const CreateProductInputSchema = v.strictObject({
   description: v.optional(CatalogDescriptionSchema, ""),
   priceMnt: PriceMntSchema,
   openingQuantity: InventoryQuantitySchema,
-  inventoryReason: InventoryReasonSchema,
 });
 export const UpdateProductInputSchema = v.strictObject({
   name: CatalogNameSchema,
@@ -188,7 +166,6 @@ export const UpdateProductInputSchema = v.strictObject({
 });
 export const InventoryAdjustmentInputSchema = v.strictObject({
   delta: InventoryDeltaSchema,
-  reason: InventoryReasonSchema,
 });
 const OptionValueDraftSchema = v.strictObject({
   id: v.optional(OptionValueIdSchema),
@@ -219,11 +196,6 @@ export const UpdateVariantPresentationInputSchema = v.strictObject({
   imageMediaAssetId: v.nullable(MediaAssetIdSchema),
 });
 
-export const InventoryBlockingReservationSchema = v.strictObject({
-  reservationId: InventoryReservationIdSchema,
-  orderReference: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-  quantity: v.pipe(v.number(), v.integer(), v.minValue(1)),
-});
 export const CatalogFailureReasonSchema = v.picklist([
   "duplicate_slug",
   "not_found",
@@ -236,9 +208,7 @@ export const CatalogFailureReasonSchema = v.picklist([
   "published_bundle_dependency",
   "published_cms_dependency",
   "reservation_blocked",
-  "inventory_inconsistent",
   "inventory_limit",
-  "committed_but_not_purged",
   "unsupported_media_type",
   "invalid_media_bytes",
   "media_too_large",
@@ -255,7 +225,6 @@ export const CatalogApiErrorSchema = v.strictObject({
     ]),
     message: v.string(),
     reason: v.optional(CatalogFailureReasonSchema),
-    blockers: v.optional(v.array(InventoryBlockingReservationSchema)),
   }),
 });
 export const PublicCatalogImageSchema = v.strictObject({
@@ -271,6 +240,9 @@ export const PublicCatalogItemSummarySchema = v.strictObject({
   description: v.string(),
   priceMnt: PriceMntSchema,
   images: v.array(PublicCatalogImageSchema),
+});
+export const CatalogItemListResponseSchema = v.strictObject({
+  data: v.array(PublicCatalogItemSummarySchema),
 });
 export const PublicProductSummarySchema = v.strictObject({
   id: ProductIdSchema,
@@ -324,7 +296,6 @@ export type OptionGroupId = v.InferOutput<typeof OptionGroupIdSchema>;
 export type OptionValueId = v.InferOutput<typeof OptionValueIdSchema>;
 export type MediaAssetId = v.InferOutput<typeof MediaAssetIdSchema>;
 export type StockItemId = v.InferOutput<typeof StockItemIdSchema>;
-export type InventoryEntryId = v.InferOutput<typeof InventoryEntryIdSchema>;
 export type Product = v.InferOutput<typeof ProductSchema>;
 export type CreateProductInput = v.InferOutput<typeof CreateProductInputSchema>;
 export type UpdateProductInput = v.InferOutput<typeof UpdateProductInputSchema>;
@@ -333,7 +304,6 @@ export type SaveProductOptionsInput = v.InferOutput<typeof SaveProductOptionsInp
 export type UpdateVariantPresentationInput = v.InferOutput<
   typeof UpdateVariantPresentationInputSchema
 >;
-export type InventoryBlockingReservation = v.InferOutput<typeof InventoryBlockingReservationSchema>;
 export type MediaContentType = v.InferOutput<typeof MediaContentTypeSchema>;
 export type MediaWidth = v.InferOutput<typeof MediaWidthSchema>;
 export type MediaFormat = v.InferOutput<typeof MediaFormatSchema>;
@@ -354,11 +324,9 @@ export const createOptionGroupId = () => typeidUnboxed("option_group");
 export const createOptionValueId = () => typeidUnboxed("option_value");
 export const createMediaAssetId = () => typeidUnboxed("media");
 export const createStockItemId = () => typeidUnboxed("stock_item");
-export const createInventoryEntryId = () => typeidUnboxed("inventory_entry");
 export const parseProductId = (value: string) => fromString(value, "product");
 export const parseVariantId = (value: string) => fromString(value, "variant");
 export const parseOptionGroupId = (value: string) => fromString(value, "option_group");
 export const parseOptionValueId = (value: string) => fromString(value, "option_value");
 export const parseMediaAssetId = (value: string) => fromString(value, "media");
 export const parseStockItemId = (value: string) => fromString(value, "stock_item");
-export const parseInventoryEntryId = (value: string) => fromString(value, "inventory_entry");

@@ -9,13 +9,12 @@ export const InventoryAdjustmentForm = (props: { product: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogMutationOptions(queryClient));
   const form = createForm(() => ({
-    defaultValues: { delta: 0, reason: "" },
+    defaultValues: { delta: 0 },
     onSubmit: async ({ value }) => {
       await mutation.mutateAsync({
         kind: "adjust",
         id: props.product.id,
         delta: value.delta,
-        reason: value.reason.trim(),
       });
       form.reset();
     },
@@ -42,20 +41,6 @@ export const InventoryAdjustmentForm = (props: { product: Product }) => {
           </label>
         )}
       </form.Field>
-      <form.Field name="reason">
-        {(field) => (
-          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
-            <span>Шалтгаан</span>
-            <input
-              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
-              required
-              maxlength={240}
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
-            />
-          </label>
-        )}
-      </form.Field>
       <Button type="submit" variant="secondary" disabled={mutation.isPending}>
         Тохируулах
       </Button>
@@ -63,7 +48,7 @@ export const InventoryAdjustmentForm = (props: { product: Product }) => {
         {(error) => (
           <p role="alert">
             {error.kind === "api" && error.error.reason === "reservation_blocked"
-              ? `Идэвхтэй захиалгын нөөц хааж байна: ${error.error.blockers?.map((blocker) => blocker.orderReference).join(", ") ?? ""}`
+              ? "Захиалгад нөөцөлсөн тооноос үлдэгдлийг бага болгож болохгүй."
               : "Нөөцийг өөрчилж чадсангүй."}
           </p>
         )}

@@ -5,9 +5,9 @@ import type {
   VariantId,
 } from "@ecom/contracts";
 import { Result } from "better-result";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { findCatalogProductById } from "../catalog-reader/persistence";
-import { resolvePendingCatalogCachePurge } from "../catalog/cache";
+import { purgeCatalogItemCache } from "../catalog/cache";
+import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { catalogVariantQueries } from "./persistence";
 
 type CatalogVariantFailureCode =
@@ -24,29 +24,22 @@ export type CatalogVariantFailure = {
   [Code in CatalogVariantFailureCode]: { readonly code: Code };
 }[CatalogVariantFailureCode];
 
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
-
 const changedProduct = async (productId: ProductId, purge: boolean) => {
   const product = await findCatalogProductById(productId);
-  return product
-    ? Result.ok(
-        purge
-          ? await resolvePendingCatalogCachePurge(product)
-          : { product, cache: "not_required" as const, cachePurgeRequestId: null },
-      )
-    : Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
+  if (!product) {
+    return Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
+  }
+  if (purge && product.state !== "draft") {
+    await purgeCatalogItemCache(productId);
+  }
+  return Result.ok({ product });
 };
 
 export const saveProductOptions = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   input: SaveProductOptionsInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.saveConfiguration(productId, input);
     return result.kind === "changed"
@@ -58,14 +51,11 @@ export const saveProductOptions = async (
 };
 
 export const updateVariantPresentation = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   variantId: VariantId,
   input: UpdateVariantPresentationInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.updatePresentation(productId, variantId, input);
     return result.kind === "changed"
@@ -77,14 +67,11 @@ export const updateVariantPresentation = async (
 };
 
 export const setVariantState = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   productId: ProductId,
   variantId: VariantId,
   state: "active" | "archived",
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogVariantFailure>({ code: "forbidden" });
-  }
   try {
     const result = await catalogVariantQueries.transition(productId, variantId, state);
     return result.kind === "changed"

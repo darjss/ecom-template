@@ -1,5 +1,5 @@
 import { catalogImageMutationOptions } from "@ecom/client";
-import type { Bundle, CatalogClientError, Product } from "@ecom/contracts";
+import type { CatalogClientError, Product } from "@ecom/contracts";
 import { Button } from "@ecom/ui";
 import { createForm } from "@tanstack/solid-form";
 import { useMutation, useQueryClient } from "@tanstack/solid-query";
@@ -18,7 +18,7 @@ const mutationErrorMessage = (error: CatalogClientError) =>
     ? error.error.message
     : "Зургийг хадгалж чадсангүй. Сүлжээг шалгаад дахин оролдоно уу.";
 
-export const CatalogImageForm = (props: { item: Bundle | Product }) => {
+export const CatalogImageForm = (props: { item: Product }) => {
   const queryClient = useQueryClient();
   const mutation = useMutation(() => catalogImageMutationOptions(queryClient));
   const defaultValues: CatalogImageFormValues = { file: null, position: 0, altText: "" };
@@ -121,12 +121,6 @@ export const CatalogImageForm = (props: { item: Bundle | Product }) => {
               {mutationErrorMessage(error)}
             </p>
           )}
-        </Show>
-        <Show when={mutation.data?.data.cache === "committed_but_not_purged"}>
-          <p class="md:col-span-full" role="alert">
-            Зураг хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Cache цэвэрлэх үйлдлийг дахин
-            оролдоно уу.
-          </p>
         </Show>
       </form>
     </section>

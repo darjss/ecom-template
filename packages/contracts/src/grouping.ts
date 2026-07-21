@@ -3,7 +3,6 @@ import * as v from "valibot";
 import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   CatalogItemIdSchema,
-  CachePurgeDebtSchema,
   CatalogItemKindSchema,
   CatalogNameSchema,
   CatalogSlugSchema,
@@ -95,21 +94,10 @@ export const GroupingListResponseSchema = v.strictObject({
     collections: v.array(CollectionSchema),
     tags: v.array(TagSchema),
     catalogItems: v.array(GroupingCatalogItemSchema),
-    cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   }),
-});
-const GroupingCachePurgeResultSchema = v.strictObject({
-  cache: v.picklist(["not_required", "purged", "committed_but_not_purged"]),
-  cachePurgeRequestId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
 });
 export const GroupingMutationResponseSchema = v.strictObject({
-  data: v.strictObject({
-    grouping: GroupingSchema,
-    ...GroupingCachePurgeResultSchema.entries,
-  }),
-});
-export const GroupingCachePurgeResponseSchema = v.strictObject({
-  data: GroupingCachePurgeResultSchema,
+  data: v.strictObject({ grouping: GroupingSchema }),
 });
 
 export const CategoryInputSchema = v.strictObject({
@@ -135,14 +123,9 @@ export const GroupingFailureReasonSchema = v.picklist([
   "duplicate_slug",
   "duplicate_label",
   "not_found",
-  "invalid_lifecycle",
   "slug_locked",
   "parent_not_found",
   "category_cycle",
-  "active_child",
-  "active_discount_dependency",
-  "inactive_ancestor",
-  "concurrent_parent_change",
   "duplicate_membership",
 ]);
 export const GroupingApiErrorSchema = v.strictObject({

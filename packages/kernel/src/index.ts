@@ -1,20 +1,5 @@
 export { signOutCustomer } from "./auth/customer-runtime";
 export { readAvailability, type AvailabilityFailure } from "./availability/operations";
-export {
-  createBundle,
-  expandBundleDemand,
-  listBundles,
-  readCatalogItemPersonalizations,
-  resolvePendingBundleCachePurge,
-  retryBundleCachePurge,
-  saveBundleComponents,
-  saveCatalogItemPersonalizations,
-  transitionBundle,
-  updateBundle,
-  validatePersonalizationAnswers,
-  type BundleMutationResult,
-  type BundleOperationFailure,
-} from "./bundles/operations";
 export { createLocalOwnerSession } from "./auth/local-staff-login";
 export { createStaffAuth, readStaffAuthSession } from "./auth/runtime";
 export {
@@ -39,7 +24,7 @@ export {
   adjustProductInventory,
   createProduct,
   listCatalog,
-  retryProductCachePurge,
+  listCatalogItems,
   transitionProduct,
   updateProduct,
   type CatalogMutationResult,
@@ -53,7 +38,6 @@ export {
   replaceCategoryMembership,
   replaceCollectionMembership,
   replaceTagMembership,
-  retryGroupingCachePurge,
   setCategoryState,
   setCollectionState,
   setTagState,
@@ -74,7 +58,6 @@ export {
   listCmsDocuments,
   publishCmsDocument,
   readCommerceSettings,
-  retryCmsCachePurge,
   saveCmsDraft,
   saveCommerceSettings,
   type CmsMutationResult,
@@ -86,7 +69,17 @@ export {
   readCheckoutOptions,
   type CheckoutFailure,
 } from "./checkout/operations";
-export { listCustomerOrders, readOrderByStatusToken, type OrderAccessFailure } from "./order";
+export {
+  advanceOrderFulfillment,
+  confirmOrderPayment,
+  listAdminOrders,
+  listCustomerOrders,
+  readAdminOrder,
+  readOrderByStatusToken,
+  type AdminOrderFailure,
+  type OrderAccessFailure,
+  type OrderOperationFailure,
+} from "./order";
 export {
   changeDiscountRule,
   createDiscountRule,
@@ -95,20 +88,7 @@ export {
   type DiscountOperationFailure,
 } from "./discount/operations";
 export { readDatabaseHealth } from "./db/health";
-export {
-  approveStaff,
-  changeStaffRole,
-  createStaff,
-  hasStaffCapability,
-  listStaff,
-  provisionOwner,
-  removeStaff,
-  revokeStaff,
-  type OwnerProvisioningFailure,
-  type StaffActor,
-  type StaffCapability,
-  type StaffOperationFailure,
-} from "./staff/operations";
+export { provisionOwner, type OwnerProvisioningFailure, type StaffActor } from "./staff/operations";
 export { catalogQueries } from "./catalog/persistence";
 export { staffQueries } from "./staff/persistence";
 export { createStorefrontReader, type StorefrontReader } from "./storefront/reader";

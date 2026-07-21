@@ -86,76 +86,6 @@ export const staffMembers = sqliteTable(
   ],
 );
 
-export const auditEvents = sqliteTable(
-  "audit_events",
-  {
-    id: text("id").primaryKey(),
-    actorKind: text("actor_kind", {
-      enum: ["system", "staff", "customer", "provider", "telegram_operator"],
-    }).notNull(),
-    actorId: text("actor_id"),
-    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
-    telegramOperatorLabel: text("telegram_operator_label"),
-    telegramUserId: integer("telegram_user_id"),
-    sourceChannel: text("source_channel", {
-      enum: ["admin", "storefront", "provider_callback", "workflow", "telegram", "provisioning"],
-    }).notNull(),
-    action: text("action").notNull(),
-    outcome: text("outcome", { enum: ["accepted", "rejected"] }).notNull(),
-    entityKind: text("entity_kind").notNull(),
-    entityId: text("entity_id").notNull(),
-    reason: text("reason"),
-    commandCorrelationId: text("command_correlation_id").notNull(),
-    metadataJson: text("metadata_json"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "audit_events_id_check",
-      sql`length(${table.id}) = 32 AND substr(${table.id}, 1, 6) = 'audit_' AND substr(${table.id}, 7, 1) GLOB '[0-7]' AND substr(${table.id}, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check(
-      "audit_events_actor_check",
-      sql`(${table.actorKind} = 'staff' AND ${table.actorId} IS NOT NULL AND ${table.staffRole} IS NOT NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL) OR (${table.actorKind} = 'telegram_operator' AND ${table.actorId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NOT NULL AND ${table.telegramUserId} IS NOT NULL) OR (${table.actorKind} NOT IN ('staff', 'telegram_operator') AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL)`,
-    ),
-    check(
-      "audit_events_actor_kind_check",
-      sql`${table.actorKind} IN ('system', 'staff', 'customer', 'provider', 'telegram_operator')`,
-    ),
-    check(
-      "audit_events_staff_actor_id_check",
-      sql`${table.actorKind} <> 'staff' OR (length(${table.actorId}) = 32 AND substr(${table.actorId}, 1, 6) = 'staff_' AND substr(${table.actorId}, 7, 1) GLOB '[0-7]' AND substr(${table.actorId}, 7) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*')`,
-    ),
-    check(
-      "audit_events_staff_role_check",
-      sql`${table.staffRole} IS NULL OR ${table.staffRole} IN ('owner', 'manager', 'staff')`,
-    ),
-    check(
-      "audit_events_telegram_operator_check",
-      sql`${table.actorKind} <> 'telegram_operator' OR (${table.telegramOperatorLabel} = trim(${table.telegramOperatorLabel}) AND length(${table.telegramOperatorLabel}) BETWEEN 1 AND 64 AND ${table.telegramUserId} > 0 AND ${table.telegramUserId} <= 9007199254740991)`,
-    ),
-    check(
-      "audit_events_source_channel_check",
-      sql`${table.sourceChannel} IN ('admin', 'storefront', 'provider_callback', 'workflow', 'telegram', 'provisioning')`,
-    ),
-    check("audit_events_outcome_check", sql`${table.outcome} IN ('accepted', 'rejected')`),
-    check(
-      "audit_events_correlation_length_check",
-      sql`length(${table.commandCorrelationId}) BETWEEN 1 AND 64`,
-    ),
-    check(
-      "audit_events_metadata_check",
-      sql`${table.metadataJson} IS NULL OR (json_valid(${table.metadataJson}) AND length(${table.metadataJson}) <= 2048)`,
-    ),
-    check(
-      "audit_events_fact_length_check",
-      sql`length(${table.action}) BETWEEN 1 AND 64 AND length(${table.entityKind}) BETWEEN 1 AND 64 AND length(${table.entityId}) BETWEEN 1 AND 128`,
-    ),
-    index("audit_events_entity_timeline_idx").on(table.entityKind, table.entityId, table.createdAt),
-    index("audit_events_actor_timeline_idx").on(table.actorKind, table.actorId, table.createdAt),
-  ],
-);
-
 export const cmsDocuments = sqliteTable(
   "cms_documents",
   {
@@ -190,23 +120,6 @@ export const cmsDocuments = sqliteTable(
       "cms_documents_lifecycle_check",
       sql`(${table.status} = 'draft' AND ${table.publishedAt} IS NULL) OR (${table.status} = 'published' AND ${table.publishedAt} IS NOT NULL)`,
     ),
-  ],
-);
-
-export const cmsCachePurgeDebt = sqliteTable(
-  "cms_cache_purge_debt",
-  {
-    key: text("key").primaryKey(),
-    revision: text("revision").notNull(),
-    attemptCount: integer("attempt_count").notNull().default(0),
-    requestId: text("request_id"),
-    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
-    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
-  },
-  (table) => [
-    check("cms_cache_purge_debt_key_check", sql`${table.key} = 'storefront'`),
-    check("cms_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
-    check("cms_cache_purge_debt_attempt_check", sql`${table.attemptCount} BETWEEN 0 AND 1000000`),
   ],
 );
 
@@ -247,6 +160,8 @@ export const catalogItems = sqliteTable(
     id: text("id").primaryKey(),
     kind: text("kind", { enum: ["product", "bundle"] }).notNull(),
     slug: text("slug").notNull().unique(),
+    sku: text("sku"),
+    skuCompact: text("sku_compact"),
     state: text("state", { enum: ["draft", "published", "archived"] }).notNull(),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
@@ -263,9 +178,16 @@ export const catalogItems = sqliteTable(
     check("catalog_items_name_check", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
     check("catalog_items_slug_check", sql`length(${table.slug}) BETWEEN 1 AND 100`),
     check(
+      "catalog_items_sku_check",
+      sql`(${table.kind} = 'product' AND ${table.sku} IS NULL AND ${table.skuCompact} IS NULL) OR (${table.kind} = 'bundle' AND length(trim(${table.sku})) BETWEEN 1 AND 64 AND length(${table.skuCompact}) BETWEEN 1 AND 256)`,
+    ),
+    check(
       "catalog_items_id_kind_check",
       sql`(${table.kind} = 'product' AND length(${table.id}) = 34 AND substr(${table.id}, 1, 8) = 'product_' AND substr(${table.id}, 9, 1) GLOB '[0-7]' AND substr(${table.id}, 9) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*') OR (${table.kind} = 'bundle' AND length(${table.id}) = 33 AND substr(${table.id}, 1, 7) = 'bundle_' AND substr(${table.id}, 8, 1) GLOB '[0-7]' AND substr(${table.id}, 8) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*')`,
     ),
+    uniqueIndex("catalog_items_sku_compact_idx")
+      .on(table.skuCompact)
+      .where(sql`${table.skuCompact} IS NOT NULL`),
     index("catalog_items_public_idx").on(table.state, table.kind, table.id),
   ],
 );
@@ -348,6 +270,7 @@ export const discountRules = sqliteTable(
     endsAt: integer("ends_at", { mode: "timestamp_ms" }),
     minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
     globalLimit: integer("global_limit"),
+    redemptionCount: integer("redemption_count").notNull().default(0),
     targetsJson: text("targets_json").notNull(),
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -380,6 +303,7 @@ export const discountRules = sqliteTable(
       "discount_rules_limit_check",
       sql`${table.globalLimit} IS NULL OR ${table.globalLimit} BETWEEN 1 AND 1000000`,
     ),
+    check("discount_rules_redemption_count_check", sql`${table.redemptionCount} >= 0`),
     check(
       "discount_rules_targets_check",
       sql`json_valid(${table.targetsJson}) AND json_type(${table.targetsJson}) = 'array' AND json_array_length(${table.targetsJson}) BETWEEN 1 AND 100`,
@@ -389,48 +313,6 @@ export const discountRules = sqliteTable(
       .on(table.code)
       .where(sql`${table.code} IS NOT NULL`),
     index("discount_rules_eligibility_idx").on(table.state, table.startsAt, table.endsAt, table.id),
-  ],
-);
-
-export const discountRedemptionEntries = sqliteTable(
-  "discount_redemption_entries",
-  {
-    id: text("id").primaryKey(),
-    discountRuleId: text("discount_rule_id")
-      .notNull()
-      .references(() => discountRules.id, { onDelete: "restrict" }),
-    orderId: text("order_id").notNull(),
-    kind: text("kind", { enum: ["claim", "release"] }).notNull(),
-    quantityDelta: integer("quantity_delta").notNull(),
-    commandCorrelationId: text("command_correlation_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "discount_redemption_entries_id_check",
-      sql`length(${table.id}) = 46 AND substr(${table.id}, 1, 20) = 'discount_redemption_' AND substr(${table.id}, 21, 1) GLOB '[0-7]' AND substr(${table.id}, 21) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check(
-      "discount_redemption_entries_kind_check",
-      sql`(${table.kind} = 'claim' AND ${table.quantityDelta} = 1) OR (${table.kind} = 'release' AND ${table.quantityDelta} = -1)`,
-    ),
-    check(
-      "discount_redemption_entries_order_check",
-      sql`length(${table.orderId}) BETWEEN 1 AND 128`,
-    ),
-    check(
-      "discount_redemption_entries_correlation_check",
-      sql`length(${table.commandCorrelationId}) BETWEEN 1 AND 64`,
-    ),
-    uniqueIndex("discount_redemption_entries_order_kind_idx").on(
-      table.discountRuleId,
-      table.orderId,
-      table.kind,
-    ),
-    index("discount_redemption_entries_rule_timeline_idx").on(
-      table.discountRuleId,
-      table.createdAt,
-    ),
   ],
 );
 
@@ -557,55 +439,6 @@ export const catalogItemImages = sqliteTable(
   ],
 );
 
-export const catalogCachePurgeDebts = sqliteTable(
-  "catalog_cache_purge_debts",
-  {
-    productId: text("product_id")
-      .primaryKey()
-      .references(() => catalogItems.id, { onDelete: "restrict" }),
-    revision: text("revision").notNull(),
-    attemptCount: integer("attempt_count").notNull().default(0),
-    requestId: text("request_id"),
-    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
-    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
-  },
-  (table) => [
-    check("catalog_cache_purge_debts_revision_check", sql`length(${table.revision}) = 36`),
-    check(
-      "catalog_cache_purge_debts_attempt_check",
-      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
-    ),
-    check(
-      "catalog_cache_purge_debts_request_check",
-      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
-    ),
-  ],
-);
-
-export const catalogListingCachePurgeDebt = sqliteTable(
-  "catalog_listing_cache_purge_debt",
-  {
-    key: text("key").primaryKey(),
-    revision: text("revision").notNull(),
-    attemptCount: integer("attempt_count").notNull().default(0),
-    requestId: text("request_id"),
-    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
-    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
-  },
-  (table) => [
-    check("catalog_listing_cache_purge_debt_key_check", sql`${table.key} = 'catalog'`),
-    check("catalog_listing_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
-    check(
-      "catalog_listing_cache_purge_debt_attempt_check",
-      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
-    ),
-    check(
-      "catalog_listing_cache_purge_debt_request_check",
-      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
-    ),
-  ],
-);
-
 export const optionGroups = sqliteTable(
   "option_groups",
   {
@@ -680,6 +513,8 @@ export const variants = sqliteTable(
       .references(() => catalogItems.id, { onDelete: "restrict" }),
     isDefault: integer("is_default", { mode: "boolean" }).notNull(),
     combinationKey: text("combination_key").notNull(),
+    sku: text("sku").notNull(),
+    skuCompact: text("sku_compact").notNull(),
     priceOverrideMnt: integer("price_override_mnt"),
     imageMediaAssetId: text("image_media_asset_id").references(() => mediaAssets.id, {
       onDelete: "restrict",
@@ -695,6 +530,8 @@ export const variants = sqliteTable(
     ),
     check("variants_default_check", sql`${table.isDefault} IN (0, 1)`),
     check("variants_combination_check", sql`length(${table.combinationKey}) BETWEEN 1 AND 512`),
+    check("variants_sku_check", sql`length(trim(${table.sku})) BETWEEN 1 AND 64`),
+    check("variants_sku_compact_check", sql`length(${table.skuCompact}) BETWEEN 1 AND 256`),
     check(
       "variants_price_override_check",
       sql`${table.priceOverrideMnt} IS NULL OR ${table.priceOverrideMnt} > 0`,
@@ -704,6 +541,7 @@ export const variants = sqliteTable(
       .on(table.productId)
       .where(sql`${table.isDefault} = 1`),
     uniqueIndex("variants_product_combination_idx").on(table.productId, table.combinationKey),
+    uniqueIndex("variants_sku_compact_idx").on(table.skuCompact),
     index("variants_product_state_idx").on(table.productId, table.state),
     index("variants_image_media_idx").on(table.imageMediaAssetId),
   ],
@@ -820,32 +658,6 @@ export const variantOptionValues = sqliteTable(
   ],
 );
 
-export const skus = sqliteTable(
-  "skus",
-  {
-    sku: text("sku").notNull().unique(),
-    skuCompact: text("sku_compact").primaryKey(),
-    ownerKind: text("owner_kind", { enum: ["variant", "bundle"] }).notNull(),
-    variantId: text("variant_id")
-      .unique()
-      .references(() => variants.id, { onDelete: "restrict" }),
-    bundleId: text("bundle_id")
-      .unique()
-      .references(() => catalogItems.id, { onDelete: "restrict" }),
-    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "skus_owner_check",
-      sql`(${table.ownerKind} = 'variant' AND ${table.variantId} IS NOT NULL AND ${table.bundleId} IS NULL) OR (${table.ownerKind} = 'bundle' AND ${table.variantId} IS NULL AND ${table.bundleId} IS NOT NULL)`,
-    ),
-    check("skus_value_check", sql`length(trim(${table.sku})) BETWEEN 1 AND 64`),
-    check("skus_compact_check", sql`length(${table.skuCompact}) BETWEEN 1 AND 256`),
-  ],
-);
-
 export const stockItems = sqliteTable(
   "stock_items",
   {
@@ -874,6 +686,8 @@ export const orders = sqliteTable(
   "orders",
   {
     id: text("id").primaryKey(),
+    placementKey: text("placement_key").notNull().unique(),
+    placementIntentDigest: text("placement_intent_digest").notNull(),
     orderNumber: integer("order_number").notNull().unique(),
     state: text("state", { enum: ["placed", "completed", "cancelled"] }).notNull(),
     customerId: text("customer_id").references(() => customers.id, { onDelete: "restrict" }),
@@ -902,6 +716,11 @@ export const orders = sqliteTable(
   },
   (table) => [
     check("orders_number_check", sql`${table.orderNumber} > 0`),
+    check("orders_placement_key_check", sql`length(${table.placementKey}) = 36`),
+    check(
+      "orders_placement_digest_check",
+      sql`length(${table.placementIntentDigest}) = 64 AND ${table.placementIntentDigest} NOT GLOB '*[^0123456789abcdef]*'`,
+    ),
     check("orders_state_check", sql`${table.state} IN ('placed', 'completed', 'cancelled')`),
     check("orders_currency_check", sql`${table.currency} = 'MNT'`),
     check(
@@ -970,55 +789,6 @@ export const orderLines = sqliteTable(
   ],
 );
 
-export const orderDiscountAdjustments = sqliteTable(
-  "order_discount_adjustments",
-  {
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    discountRuleId: text("discount_rule_id").references(() => discountRules.id, {
-      onDelete: "restrict",
-    }),
-    ruleName: text("rule_name").notNull(),
-    mode: text("mode", { enum: ["automatic", "code"] }).notNull(),
-    code: text("code"),
-    calculation: text("calculation", { enum: ["percentage", "fixed_mnt"] }).notNull(),
-    value: integer("value").notNull(),
-    startsAt: integer("starts_at", { mode: "timestamp_ms" }),
-    endsAt: integer("ends_at", { mode: "timestamp_ms" }),
-    minimumSubtotalMnt: integer("minimum_subtotal_mnt").notNull(),
-    globalLimit: integer("global_limit"),
-    targetsJson: text("targets_json").notNull(),
-    submittedCode: text("submitted_code"),
-    codeAccepted: integer("code_accepted", { mode: "boolean" }).notNull(),
-    reason: text("reason").notNull(),
-    amountMnt: integer("amount_mnt").notNull(),
-  },
-  (table) => [
-    check("order_discount_adjustments_amount_check", sql`${table.amountMnt} > 0`),
-    check("order_discount_adjustments_targets_check", sql`json_valid(${table.targetsJson})`),
-    check("order_discount_adjustments_code_accepted_check", sql`${table.codeAccepted} IN (0, 1)`),
-  ],
-);
-
-export const orderDiscountAllocations = sqliteTable(
-  "order_discount_allocations",
-  {
-    adjustmentId: text("adjustment_id")
-      .notNull()
-      .references(() => orderDiscountAdjustments.id, { onDelete: "restrict" }),
-    orderLineId: text("order_line_id")
-      .notNull()
-      .references(() => orderLines.id, { onDelete: "restrict" }),
-    amountMnt: integer("amount_mnt").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.adjustmentId, table.orderLineId] }),
-    check("order_discount_allocations_amount_check", sql`${table.amountMnt} > 0`),
-  ],
-);
-
 export const payments = sqliteTable(
   "payments",
   {
@@ -1029,7 +799,7 @@ export const payments = sqliteTable(
     attemptNumber: integer("attempt_number").notNull(),
     method: text("method", { enum: ["qpay", "bank_transfer", "cash_on_delivery"] }).notNull(),
     automatedProvider: text("automated_provider", { enum: ["byl", "direct_qpay"] }),
-    state: text("state", {
+    status: text("status", {
       enum: [
         "pending",
         "awaiting_confirmation",
@@ -1057,6 +827,7 @@ export const payments = sqliteTable(
     })
       .notNull()
       .default("none"),
+    confirmedBy: text("confirmed_by").references(() => staffMembers.id, { onDelete: "restrict" }),
     confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
     rejectedAt: integer("rejected_at", { mode: "timestamp_ms" }),
     expiredAt: integer("expired_at", { mode: "timestamp_ms" }),
@@ -1067,15 +838,15 @@ export const payments = sqliteTable(
     uniqueIndex("payments_order_attempt_idx").on(table.orderId, table.attemptNumber),
     uniqueIndex("payments_active_attempt_idx")
       .on(table.orderId)
-      .where(sql`${table.state} IN ('pending', 'awaiting_confirmation')`),
+      .where(sql`${table.status} IN ('pending', 'awaiting_confirmation')`),
     check("payments_attempt_check", sql`${table.attemptNumber} > 0`),
     check(
       "payments_method_check",
       sql`${table.method} IN ('qpay', 'bank_transfer', 'cash_on_delivery')`,
     ),
     check(
-      "payments_state_check",
-      sql`${table.state} IN ('pending', 'awaiting_confirmation', 'confirmed', 'failed', 'expired', 'rejected', 'superseded', 'released_unresolved', 'partially_refunded', 'refunded')`,
+      "payments_status_check",
+      sql`${table.status} IN ('pending', 'awaiting_confirmation', 'confirmed', 'failed', 'expired', 'rejected', 'superseded', 'released_unresolved', 'partially_refunded', 'refunded')`,
     ),
     check(
       "payments_provider_check",
@@ -1094,74 +865,7 @@ export const payments = sqliteTable(
       table.automatedProvider,
       table.providerAttemptReference,
     ),
-    index("payments_deadline_state_idx").on(table.state, table.effectiveDeadline),
-  ],
-);
-
-export const paymentEntries = sqliteTable(
-  "payment_entries",
-  {
-    id: text("id").primaryKey(),
-    paymentId: text("payment_id")
-      .notNull()
-      .references(() => payments.id, { onDelete: "restrict" }),
-    sequence: integer("sequence").notNull(),
-    kind: text("kind", {
-      enum: [
-        "expected",
-        "evidence_received",
-        "confirmed",
-        "rejected",
-        "failed",
-        "expired",
-        "superseded",
-        "released_unresolved",
-        "refunded",
-        "correction",
-      ],
-    }).notNull(),
-    expectedDeltaMnt: integer("expected_delta_mnt").notNull(),
-    confirmedDeltaMnt: integer("confirmed_delta_mnt").notNull(),
-    refundedDeltaMnt: integer("refunded_delta_mnt").notNull(),
-    actorKind: text("actor_kind", {
-      enum: ["system", "provider", "staff", "telegram_operator"],
-    }).notNull(),
-    staffId: text("staff_id"),
-    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
-    telegramOperatorLabel: text("telegram_operator_label"),
-    telegramUserId: integer("telegram_user_id"),
-    sourceChannel: text("source_channel", {
-      enum: ["storefront", "admin", "provider_callback", "workflow", "telegram"],
-    }).notNull(),
-    reason: text("reason"),
-    providerReference: text("provider_reference"),
-    observedAt: integer("observed_at", { mode: "timestamp_ms" }),
-    evidenceJson: text("evidence_json"),
-    commandCorrelationId: text("command_correlation_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    uniqueIndex("payment_entries_payment_sequence_idx").on(table.paymentId, table.sequence),
-    uniqueIndex("payment_entries_provider_reference_idx")
-      .on(table.providerReference)
-      .where(sql`${table.providerReference} IS NOT NULL`),
-    check(
-      "payment_entries_kind_check",
-      sql`${table.kind} IN ('expected', 'evidence_received', 'confirmed', 'rejected', 'failed', 'expired', 'superseded', 'released_unresolved', 'refunded', 'correction')`,
-    ),
-    check(
-      "payment_entries_actor_check",
-      sql`(${table.actorKind} = 'staff' AND ${table.staffId} IS NOT NULL AND ${table.staffRole} IN ('owner', 'manager', 'staff') AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL) OR (${table.actorKind} = 'telegram_operator' AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NOT NULL AND ${table.telegramUserId} > 0) OR (${table.actorKind} IN ('system', 'provider') AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL AND ${table.telegramOperatorLabel} IS NULL AND ${table.telegramUserId} IS NULL)`,
-    ),
-    check(
-      "payment_entries_source_check",
-      sql`${table.sourceChannel} IN ('storefront', 'admin', 'provider_callback', 'workflow', 'telegram')`,
-    ),
-    check(
-      "payment_entries_evidence_check",
-      sql`${table.evidenceJson} IS NULL OR json_valid(${table.evidenceJson})`,
-    ),
-    index("payment_entries_payment_timeline_idx").on(table.paymentId, table.createdAt, table.id),
+    index("payments_deadline_status_idx").on(table.status, table.effectiveDeadline),
   ],
 );
 
@@ -1192,116 +896,3 @@ export const fulfillments = sqliteTable(
   },
   (table) => [index("fulfillments_state_idx").on(table.state, table.createdAt)],
 );
-
-export const placementIdempotency = sqliteTable(
-  "placement_idempotency",
-  {
-    key: text("key").primaryKey(),
-    intentDigest: text("intent_digest").notNull(),
-    resultJson: text("result_json").notNull(),
-    orderId: text("order_id")
-      .notNull()
-      .unique()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check("placement_idempotency_key_check", sql`length(${table.key}) BETWEEN 1 AND 64`),
-    check("placement_idempotency_digest_check", sql`length(${table.intentDigest}) = 64`),
-    check("placement_idempotency_result_check", sql`json_valid(${table.resultJson})`),
-  ],
-);
-
-export const inventoryReservations = sqliteTable(
-  "inventory_reservations",
-  {
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .unique()
-      .references(() => orders.id, { onDelete: "restrict" }),
-    state: text("state", { enum: ["active", "consumed", "released", "expired"] }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    transitionedAt: integer("transitioned_at", { mode: "timestamp_ms" }),
-  },
-  (table) => [
-    check(
-      "inventory_reservations_id_check",
-      sql`length(${table.id}) = 38 AND substr(${table.id}, 1, 12) = 'reservation_' AND substr(${table.id}, 13, 1) GLOB '[0-7]' AND substr(${table.id}, 13) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check(
-      "inventory_reservations_state_check",
-      sql`${table.state} IN ('active', 'consumed', 'released', 'expired')`,
-    ),
-    index("inventory_reservations_state_idx").on(table.state, table.createdAt),
-  ],
-);
-
-export const inventoryReservationItems = sqliteTable(
-  "inventory_reservation_items",
-  {
-    reservationId: text("reservation_id")
-      .notNull()
-      .references(() => inventoryReservations.id, { onDelete: "restrict" }),
-    stockItemId: text("stock_item_id")
-      .notNull()
-      .references(() => stockItems.id, { onDelete: "restrict" }),
-    quantity: integer("quantity").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.reservationId, table.stockItemId] }),
-    check("inventory_reservation_items_quantity_check", sql`${table.quantity} > 0`),
-    index("inventory_reservation_items_stock_idx").on(table.stockItemId),
-  ],
-);
-
-export const inventoryEntries = sqliteTable(
-  "inventory_entries",
-  {
-    id: text("id").primaryKey(),
-    stockItemId: text("stock_item_id")
-      .notNull()
-      .references(() => stockItems.id, { onDelete: "restrict" }),
-    reservationId: text("reservation_id").references(() => inventoryReservations.id, {
-      onDelete: "restrict",
-    }),
-    orderId: text("order_id").references(() => orders.id, { onDelete: "restrict" }),
-    kind: text("kind", {
-      enum: ["opening", "adjustment", "reservation", "release", "consumption", "restoration"],
-    }).notNull(),
-    onHandDelta: integer("on_hand_delta").notNull(),
-    reservedDelta: integer("reserved_delta").notNull().default(0),
-    actorKind: text("actor_kind", { enum: ["system", "staff"] }).notNull(),
-    staffId: text("staff_id"),
-    staffRole: text("staff_role", { enum: ["owner", "manager", "staff"] }),
-    reason: text("reason").notNull(),
-    commandCorrelationId: text("command_correlation_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  },
-  (table) => [
-    check(
-      "inventory_entries_id_check",
-      sql`length(${table.id}) = 42 AND substr(${table.id}, 1, 16) = 'inventory_entry_' AND substr(${table.id}, 17, 1) GLOB '[0-7]' AND substr(${table.id}, 17) NOT GLOB '*[^0123456789abcdefghjkmnpqrstvwxyz]*'`,
-    ),
-    check(
-      "inventory_entries_kind_check",
-      sql`${table.kind} IN ('opening', 'adjustment', 'reservation', 'release', 'consumption', 'restoration')`,
-    ),
-    check(
-      "inventory_entries_actor_check",
-      sql`(${table.actorKind} = 'staff' AND ${table.staffId} IS NOT NULL AND ${table.staffRole} IN ('owner', 'manager', 'staff')) OR (${table.actorKind} = 'system' AND ${table.staffId} IS NULL AND ${table.staffRole} IS NULL)`,
-    ),
-    check("inventory_entries_reason_check", sql`length(trim(${table.reason})) BETWEEN 1 AND 240`),
-    uniqueIndex("inventory_entries_correlation_stock_idx").on(
-      table.commandCorrelationId,
-      table.stockItemId,
-    ),
-    index("inventory_entries_stock_timeline_idx").on(table.stockItemId, table.createdAt, table.id),
-  ],
-);
-
-export const systemMetadata = sqliteTable("system_metadata", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
-});

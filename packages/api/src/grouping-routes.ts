@@ -4,7 +4,6 @@ import {
   CollectionIdSchema,
   CollectionInputSchema,
   GroupingApiErrorSchema,
-  GroupingCachePurgeResponseSchema,
   GroupingListResponseSchema,
   GroupingMembershipInputSchema,
   GroupingMutationResponseSchema,
@@ -20,7 +19,6 @@ import {
   replaceCategoryMembership,
   replaceCollectionMembership,
   replaceTagMembership,
-  retryGroupingCachePurge,
   setCategoryState,
   setCollectionState,
   setTagState,
@@ -57,14 +55,9 @@ const groupingError = (failure: GroupingOperationFailure, status: Status) => {
     not_found: "Grouping or Catalog Item was not found",
     duplicate_slug: "Grouping slug is permanently reserved",
     duplicate_label: "Tag label is already in use",
-    invalid_lifecycle: "Grouping lifecycle target is not valid",
     slug_locked: "An activated grouping slug cannot change",
     parent_not_found: "Parent Category was not found",
     category_cycle: "Category parent would create a cycle",
-    active_child: "Active child Categories must be resolved before archival",
-    active_discount_dependency: "Active Discount Rules must be deactivated before archival",
-    inactive_ancestor: "Every ancestor Category must be active before activation",
-    concurrent_parent_change: "Category ancestry changed while saving; retry the edit",
     duplicate_membership: "A Catalog Item may appear only once in a grouping",
     infrastructure_unavailable: "Grouping infrastructure is unavailable",
   };
@@ -105,16 +98,6 @@ export const createGroupingRoutes = (authorize: AuthorizeGroupingRoute) =>
       return result.isErr()
         ? groupingError(result.error, status)
         : v.parse(GroupingListResponseSchema, { data: result.value });
-    })
-    .post("/catalog/groupings/cache-purge/retry", async ({ request, status }) => {
-      const authorization = await authorize(request, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await retryGroupingCachePurge(authorization.actor);
-      return result.isErr()
-        ? groupingError(result.error, status)
-        : v.parse(GroupingCachePurgeResponseSchema, { data: result.value });
     })
     .post("/catalog/categories", async ({ body, request, status }) => {
       const input = v.safeParse(CategoryInputSchema, body);

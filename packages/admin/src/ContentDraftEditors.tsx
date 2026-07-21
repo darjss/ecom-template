@@ -1,4 +1,4 @@
-import { bundleQueryOptions, catalogQueryOptions, cmsMutationOptions } from "@ecom/client";
+import { catalogItemsQueryOptions, cmsMutationOptions } from "@ecom/client";
 import {
   AnnouncementDocumentSchema,
   HomepageDocumentSchema,
@@ -145,16 +145,12 @@ const ContentActions = (props: {
     try {
       const document = props.document();
       await mutation.mutateAsync({ kind: "save-draft", document });
-      const result = await mutation.mutateAsync({
+      await mutation.mutateAsync({
         kind: "publish",
         documentKind: document.kind,
       });
       props.clearLocal();
-      setMessage(
-        result.data.cache === "purged"
-          ? "Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ."
-          : "Нийтлэгдсэн боловч кэш цэвэрлэгдээгүй. Дахин оролдоно уу.",
-      );
+      setMessage("Нийтлэгдэж, дэлгүүрийн кэш шинэчлэгдлээ.");
     } catch {
       setMessage("Нийтлэхийн өмнө талбар болон холбоосоо шалгана уу.");
     }
@@ -225,8 +221,7 @@ export const HomepageEditor = (
   const local = createLocalDraft(() => props.store, props.initial);
   const compatible = local.compatible();
   const restored = compatible.kind === "homepage" ? compatible : props.initial;
-  const catalog = useQuery(() => catalogQueryOptions());
-  const bundles = useQuery(() => bundleQueryOptions());
+  const catalog = useQuery(() => catalogItemsQueryOptions());
   const form = createForm(() => ({
     defaultValues: {
       headline: restored.content.headline,
@@ -272,25 +267,11 @@ export const HomepageEditor = (
       { defer: true },
     ),
   );
-  const items = () => [
-    ...(catalog.data?.data ?? []).map((item) => ({
-      id: item.id,
-      name: item.name,
-      state: item.state,
-      images: item.images,
-    })),
-    ...(bundles.data?.data ?? []).map((item) => ({
-      id: item.id,
-      name: item.name,
-      state: item.state,
-      images: item.images,
-    })),
-  ];
-  const publishedItems = () => items().filter(({ state }) => state === "published");
+  const items = () => catalog.data?.data ?? [];
   const media = () => {
-    const entries = publishedItems().flatMap((item) =>
+    const entries = items().flatMap((item) =>
       item.images.map((image) => ({
-        id: image.mediaAsset.id,
+        id: image.mediaAssetId,
         label: `${item.name} · ${image.altText}`,
       })),
     );
@@ -371,7 +352,7 @@ export const HomepageEditor = (
               <ol class="m-0 grid list-none gap-2 p-0">
                 <For each={field().state.value}>
                   {(id, index) => {
-                    const item = () => publishedItems().find((entry) => entry.id === id);
+                    const item = () => items().find((entry) => entry.id === id);
                     return (
                       <li class="flex flex-wrap items-center gap-2 rounded-lg border border-black/15 bg-white p-2">
                         <span class="min-w-0 flex-1 font-bold">{item()?.name ?? id}</span>
@@ -444,9 +425,7 @@ export const HomepageEditor = (
                   }}
                 >
                   <option value="">Сонгох…</option>
-                  <For
-                    each={publishedItems().filter(({ id }) => !field().state.value.includes(id))}
-                  >
+                  <For each={items().filter(({ id }) => !field().state.value.includes(id))}>
                     {(item) => <option value={item.id}>{item.name}</option>}
                   </For>
                 </select>

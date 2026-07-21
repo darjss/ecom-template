@@ -1,8 +1,0 @@
-schemaVersion: 1
-targets:
-  urnuun-canary:
-    kind: canary
-    app: "@shops/urnuun-48"
-    resourcePrefix: urnuun-canary
-    workerName: urnuun-canary
-    routes: []

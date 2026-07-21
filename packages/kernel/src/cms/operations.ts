@@ -6,8 +6,8 @@ import {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { uniq } from "es-toolkit";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { purgeCmsCache } from "../catalog/cache";
+import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { cmsQueries } from "./persistence";
 
 export type CmsOperationFailure = {
@@ -24,11 +24,7 @@ export type CmsOperationFailure = {
 
 export type CmsMutationResult = {
   readonly document: CmsDocument;
-  readonly cache: "not_required" | "purged" | "committed_but_not_purged";
-  readonly cachePurgeRequestId: string | null;
 };
-
-const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
 
 const validateDocument = async (
   document: CmsDocument,
@@ -156,10 +152,7 @@ const validateNavigation = (
   return valid ? undefined : { code: "invalid_reference" };
 };
 
-export const listCmsDocuments = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const listCmsDocuments = async (_actor: StaffActor) => {
   try {
     const [drafts, published] = await Promise.all([
       cmsQueries.list("draft"),
@@ -172,10 +165,7 @@ export const listCmsDocuments = async (actor: StaffActor) => {
   }
 };
 
-export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const saveCmsDraft = async (_actor: StaffActor, document: CmsDocument) => {
   try {
     const failure = await validateDocument(document);
     if (failure) {
@@ -183,35 +173,11 @@ export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => 
     }
     const saved = await cmsQueries.saveDraft(document);
     return saved
-      ? Result.ok<CmsMutationResult>({
-          document: saved,
-          cache: "not_required",
-          cachePurgeRequestId: null,
-        })
+      ? Result.ok<CmsMutationResult>({ document: saved })
       : Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }
-};
-
-const resolvePurge = async () => {
-  const debt = await cmsQueries.readDebt();
-  if (!debt) {
-    return { cache: "not_required" as const, cachePurgeRequestId: null };
-  }
-  const purge = await purgeCmsCache();
-  const recorded = await cmsQueries.recordPurge(
-    debt.revision,
-    purge.requestId,
-    purge.kind === "purged",
-  );
-  return {
-    cache:
-      purge.kind === "purged" && recorded
-        ? ("purged" as const)
-        : ("committed_but_not_purged" as const),
-    cachePurgeRequestId: purge.requestId,
-  };
 };
 
 export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKind) => {
@@ -228,29 +194,17 @@ export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKin
       return Result.err<never, CmsOperationFailure>(failure);
     }
     const published = await cmsQueries.publish(draft);
-    return published
-      ? Result.ok<CmsMutationResult>({ document: published, ...(await resolvePurge()) })
-      : Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
+    if (!published) {
+      return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
+    }
+    await purgeCmsCache();
+    return Result.ok<CmsMutationResult>({ document: published });
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }
 };
 
-export const retryCmsCachePurge = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
-  try {
-    return Result.ok(await resolvePurge());
-  } catch {
-    return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
-  }
-};
-
-export const readCommerceSettings = async (actor?: StaffActor) => {
-  if (actor && !authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const readCommerceSettings = async (_actor?: StaffActor) => {
   try {
     return Result.ok(await cmsQueries.readSettings());
   } catch {
@@ -259,13 +213,10 @@ export const readCommerceSettings = async (actor?: StaffActor) => {
 };
 
 export const saveCommerceSettings = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   capabilities: StoreDefinition["profile"]["capabilities"],
   settings: CommerceSettings,
 ) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
   const requested = [
     [settings.bankTransferEnabled, capabilities.bankTransfer],
     [settings.cashOnDeliveryEnabled, capabilities.cashOnDelivery],
@@ -282,24 +233,8 @@ export const saveCommerceSettings = async (
     if (!saved) {
       return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
     }
-    const debt = await cmsQueries.readDebt();
-    if (!debt) {
-      return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
-    }
-    const purge = await purgeCmsCache();
-    const recorded = await cmsQueries.recordPurge(
-      debt.revision,
-      purge.requestId,
-      purge.kind === "purged",
-    );
-    return Result.ok({
-      settings: saved,
-      cache:
-        purge.kind === "purged" && recorded
-          ? ("purged" as const)
-          : ("committed_but_not_purged" as const),
-      cachePurgeRequestId: purge.requestId,
-    });
+    await purgeCmsCache();
+    return Result.ok({ settings: saved });
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }

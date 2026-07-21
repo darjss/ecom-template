@@ -2,16 +2,10 @@ import {
   DiscountTargetSchema,
   LocationsDocumentSchema,
   PlaceOrderResultSchema,
-  createAuditEventId,
-  createDiscountRedemptionId,
   createFulfillmentId,
-  createInventoryEntryId,
-  createOrderDiscountId,
   createOrderId,
   createOrderLineId,
-  createPaymentEntryId,
   createPaymentId,
-  createReservationId,
   type CatalogItemId,
   type CustomerId,
   type CheckoutQuote,
@@ -24,9 +18,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import * as v from "valibot";
 import { database } from "../db/database";
 import type { OrderStatusAccess } from "../order";
-import type { CommercialFacts } from "./commercial";
 import {
-  auditEvents,
   bundleComponents,
   catalogItemCategories,
   catalogItemCollections,
@@ -35,28 +27,39 @@ import {
   cmsDocuments,
   collections,
   commerceSettings,
-  discountRedemptionEntries,
   discountRules,
   fulfillments,
-  inventoryEntries,
-  inventoryReservationItems,
-  inventoryReservations,
   optionGroups,
-  orderDiscountAdjustments,
-  orderDiscountAllocations,
   orderLines,
   orders,
-  paymentEntries,
   payments,
   optionValues,
   personalizationDefinitions,
   personalizationValues,
-  placementIdempotency,
-  skus,
   stockItems,
   variantOptionValues,
   variants,
 } from "../db/schema";
+
+export type PlacementPolicySnapshot = {
+  readonly discount:
+    | { readonly kind: "none" }
+    | {
+        readonly kind: "applied";
+        readonly ruleId: string;
+        readonly mode: "automatic" | "code";
+        readonly code: string | null;
+        readonly calculation: "percentage" | "fixed_mnt";
+        readonly value: number;
+        readonly startsAt: number | null;
+        readonly endsAt: number | null;
+        readonly minimumSubtotalMnt: number;
+        readonly globalLimit: number | null;
+        readonly targetsJson: string;
+      };
+  readonly freeDeliveryThresholdMnt: number | null;
+  readonly commerceSettingsUpdatedAt: number;
+};
 
 export const checkoutQueries = {
   async readOptions() {
@@ -102,7 +105,7 @@ export const checkoutQueries = {
         name: sql<string>`${catalogItems.name}`.as("checkout_variant_product_name"),
         unitPriceMnt: sql<number | null>`${variants.priceOverrideMnt}`.as("checkout_variant_price"),
         productPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_variant_product_price"),
-        sku: sql<string>`${skus.sku}`.as("checkout_variant_sku"),
+        sku: sql<string>`${variants.sku}`.as("checkout_variant_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_variant_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_variant_reserved",
@@ -110,7 +113,6 @@ export const checkoutQueries = {
       })
       .from(variants)
       .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
-      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(variants.id, variantIds));
     const bundleRowsQuery = db
@@ -125,10 +127,9 @@ export const checkoutQueries = {
         ),
         name: sql<string>`${catalogItems.name}`.as("checkout_bundle_name"),
         unitPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_bundle_price"),
-        sku: sql<string>`${skus.sku}`.as("checkout_bundle_sku"),
+        sku: sql<string>`${catalogItems.sku}`.as("checkout_bundle_sku"),
       })
       .from(catalogItems)
-      .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
       .where(inArray(catalogItems.id, bundleIds));
     const componentRowsQuery = db
       .select({
@@ -145,7 +146,7 @@ export const checkoutQueries = {
           "checkout_component_product_kind",
         ),
         name: sql<string>`${componentProducts.name}`.as("checkout_component_name"),
-        sku: sql<string>`${skus.sku}`.as("checkout_component_sku"),
+        sku: sql<string>`${variants.sku}`.as("checkout_component_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_component_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_component_reserved",
@@ -154,7 +155,6 @@ export const checkoutQueries = {
       .from(bundleComponents)
       .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
       .innerJoin(componentProducts, eq(componentProducts.id, variants.productId))
-      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(bundleComponents.bundleId, bundleIds));
     const productIds = db
@@ -207,7 +207,6 @@ export const checkoutQueries = {
       allDefinitions,
       allValues,
       ruleRows,
-      redemptionRows,
       categoryRows,
       collectionRows,
       categoryMemberships,
@@ -226,15 +225,6 @@ export const checkoutQueries = {
         .from(discountRules)
         .where(eq(discountRules.state, "active"))
         .orderBy(asc(discountRules.id)),
-      db
-        .select({
-          discountRuleId: discountRedemptionEntries.discountRuleId,
-          count: sql<number>`coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0)`.as(
-            "checkout_redemption_count",
-          ),
-        })
-        .from(discountRedemptionEntries)
-        .groupBy(discountRedemptionEntries.discountRuleId),
       db.select({ id: categories.id, state: categories.state }).from(categories),
       db.select({ id: collections.id, state: collections.state }).from(collections),
       db.select().from(catalogItemCategories),
@@ -254,7 +244,6 @@ export const checkoutQueries = {
       resolvedItemIds.has(catalogItemId as CatalogItemId),
     );
     const locationRow = locationRows.at(0);
-    const redemptionCounts = new Map(redemptionRows.map((row) => [row.discountRuleId, row.count]));
     const TargetListSchema = v.pipe(
       v.array(DiscountTargetSchema),
       v.minLength(1),
@@ -270,7 +259,6 @@ export const checkoutQueries = {
       rules: ruleRows.map((rule) => ({
         ...rule,
         targets: v.parse(TargetListSchema, JSON.parse(rule.targetsJson)),
-        redemptionCount: redemptionCounts.get(rule.id) ?? 0,
       })),
       categoryRows,
       collectionRows,
@@ -288,20 +276,55 @@ type PlacementDestination =
   | { kind: "delivery"; address: string }
   | { kind: "pickup"; locationId: string; name: string; address: string };
 
-export const readPlacement = async (key: string) => {
+type Placement = {
+  readonly intentDigest: string;
+  readonly result: PlaceOrderResult;
+};
+
+export const readPlacement = async (
+  key: string,
+  statusPath: OrderStatusAccess["statusPath"],
+): Promise<Placement | undefined> => {
   const rows = await database()
     .select({
-      intentDigest: placementIdempotency.intentDigest,
-      resultJson: placementIdempotency.resultJson,
+      intentDigest: orders.placementIntentDigest,
+      orderId: orders.id,
+      orderNumber: orders.orderNumber,
+      totalMnt: orders.grandTotalMnt,
+      paymentId: payments.id,
+      fulfillmentId: fulfillments.id,
+      fulfillmentMode: fulfillments.mode,
     })
-    .from(placementIdempotency)
-    .where(eq(placementIdempotency.key, key))
+    .from(orders)
+    .leftJoin(payments, and(eq(payments.orderId, orders.id), eq(payments.attemptNumber, 1)))
+    .innerJoin(fulfillments, eq(fulfillments.orderId, orders.id))
+    .where(eq(orders.placementKey, key))
     .limit(1);
   const row = rows.at(0);
   return row
     ? {
         intentDigest: row.intentDigest,
-        result: v.parse(PlaceOrderResultSchema, JSON.parse(row.resultJson)),
+        result: v.parse(PlaceOrderResultSchema, {
+          orderId: row.orderId,
+          orderNumber: row.orderNumber,
+          orderState: "placed",
+          statusPath,
+          totalMnt: row.totalMnt,
+          payment:
+            row.totalMnt === 0
+              ? null
+              : {
+                  id: row.paymentId,
+                  method: "bank_transfer",
+                  state: "awaiting_confirmation",
+                  expectedAmountMnt: row.totalMnt,
+                },
+          fulfillment: {
+            id: row.fulfillmentId,
+            mode: row.fulfillmentMode,
+            state: "unfulfilled",
+          },
+        }),
       }
     : undefined;
 };
@@ -309,25 +332,19 @@ export const readPlacement = async (key: string) => {
 export const commitPlacement = async (
   input: PlaceOrderInput,
   quote: CheckoutQuote,
-  commercial: CommercialFacts,
+  policy: PlacementPolicySnapshot,
   intentDigest: string,
   destination: PlacementDestination,
   customerId: CustomerId | null,
   statusAccess: OrderStatusAccess,
-): Promise<PlaceOrderResult | undefined> => {
+): Promise<Placement | undefined> => {
   const db = database();
   const orderId = createOrderId();
   const lineIds = new Map(quote.lines.map((line) => [line.position, createOrderLineId()]));
   const paymentId = createPaymentId();
   const fulfillmentId = createFulfillmentId();
-  const reservationId = createReservationId();
-  const adjustmentId = quote.discount.kind === "applied" ? createOrderDiscountId() : undefined;
-  const correlationId = crypto.randomUUID();
   const now = new Date();
   const zeroTotal = quote.totalMnt === 0;
-  const paymentResult = zeroTotal
-    ? sql`NULL`
-    : sql`json_object('id', ${paymentId}, 'method', 'bank_transfer', 'state', 'awaiting_confirmation', 'expectedAmountMnt', ${quote.totalMnt})`;
   const demand = new Map<string, number>();
   for (const line of quote.lines) {
     for (const item of line.demand) {
@@ -347,186 +364,6 @@ export const commitPlacement = async (
         ),
     ),
   );
-  const catalogCurrent = commercial.lines.flatMap((line) => {
-    const sourceCurrent =
-      line.source.kind === "variant"
-        ? sql`EXISTS (
-            SELECT 1 FROM ${variants}
-            JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
-            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
-            WHERE ${variants.id} = ${line.source.id}
-              AND ${catalogItems.id} = ${line.source.catalogItemId}
-              AND ${variants.state} = 'active'
-              AND ${catalogItems.state} = 'published'
-              AND ${catalogItems.kind} = 'product'
-              AND coalesce(${variants.priceOverrideMnt}, ${catalogItems.priceMnt}) = ${line.unitPriceMnt}
-              AND ${skus.sku} = ${line.sku}
-          )`
-        : sql`EXISTS (
-            SELECT 1 FROM ${catalogItems}
-            JOIN ${skus} ON ${skus.bundleId} = ${catalogItems.id}
-            WHERE ${catalogItems.id} = ${line.source.id}
-              AND ${catalogItems.state} = 'published'
-              AND ${catalogItems.kind} = 'bundle'
-              AND ${catalogItems.priceMnt} = ${line.unitPriceMnt}
-              AND ${skus.sku} = ${line.sku}
-          )`;
-    const optionsCurrent =
-      line.source.kind === "variant"
-        ? [
-            sql`(SELECT count(*) FROM ${variantOptionValues} WHERE ${variantOptionValues.variantId} = ${line.source.id}) = ${line.options.length}`,
-            ...line.options.map(
-              (option) => sql`EXISTS (
-            SELECT 1 FROM ${variantOptionValues}
-            JOIN ${optionValues} ON ${optionValues.id} = ${variantOptionValues.optionValueId}
-            JOIN ${optionGroups} ON ${optionGroups.id} = ${optionValues.optionGroupId}
-            WHERE ${variantOptionValues.variantId} = ${line.source.id}
-              AND ${optionGroups.id} = ${option.groupId}
-              AND ${optionGroups.key} = ${option.groupKey}
-              AND ${optionGroups.state} = 'active'
-              AND ${optionValues.id} = ${option.valueId}
-              AND ${optionValues.key} = ${option.valueKey}
-              AND ${optionValues.state} = 'active'
-          )`,
-            ),
-          ]
-        : [];
-    const componentsCurrent =
-      line.source.kind === "bundle"
-        ? [
-            sql`(SELECT count(*) FROM ${bundleComponents} WHERE ${bundleComponents.bundleId} = ${line.source.id}) = ${line.bundleComponents.length}`,
-            ...line.bundleComponents.map(
-              (component) => sql`EXISTS (
-            SELECT 1 FROM ${bundleComponents}
-            JOIN ${variants} ON ${variants.id} = ${bundleComponents.variantId}
-            JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
-            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
-            WHERE ${bundleComponents.bundleId} = ${line.source.id}
-              AND ${bundleComponents.variantId} = ${component.variantId}
-              AND ${bundleComponents.quantity} = ${component.perBundleQuantity}
-              AND ${variants.state} = 'active'
-              AND ${catalogItems.state} = 'published'
-              AND ${skus.sku} = ${component.sku}
-          )`,
-            ),
-          ]
-        : [];
-    const personalizationsCurrent = line.personalizations.map(
-      (personalization) => sql`EXISTS (
-      SELECT 1 FROM ${personalizationDefinitions}
-      WHERE ${personalizationDefinitions.id} = ${personalization.definitionId}
-        AND ${personalizationDefinitions.catalogItemId} = ${line.source.catalogItemId}
-        AND ${personalizationDefinitions.key} = ${personalization.key}
-        AND ${personalizationDefinitions.kind} = ${personalization.value.kind}
-        AND ${personalizationDefinitions.state} = 'active'
-    )`,
-    );
-    return [sourceCurrent, ...optionsCurrent, ...componentsCurrent, ...personalizationsCurrent];
-  });
-  const discountAvailable =
-    commercial.discountPolicy.kind === "applied"
-      ? exists(
-          db
-            .select({ id: discountRules.id })
-            .from(discountRules)
-            .where(
-              and(
-                eq(discountRules.id, commercial.discountPolicy.ruleId),
-                eq(discountRules.state, "active"),
-                eq(discountRules.mode, commercial.discountPolicy.mode),
-                commercial.discountPolicy.code === null
-                  ? sql`${discountRules.code} IS NULL`
-                  : eq(discountRules.code, commercial.discountPolicy.code),
-                eq(discountRules.calculation, commercial.discountPolicy.calculation),
-                eq(discountRules.value, commercial.discountPolicy.value),
-                commercial.discountPolicy.startsAt === null
-                  ? sql`${discountRules.startsAt} IS NULL`
-                  : sql`${discountRules.startsAt} = ${commercial.discountPolicy.startsAt}`,
-                commercial.discountPolicy.endsAt === null
-                  ? sql`${discountRules.endsAt} IS NULL`
-                  : sql`${discountRules.endsAt} = ${commercial.discountPolicy.endsAt}`,
-                eq(discountRules.minimumSubtotalMnt, commercial.discountPolicy.minimumSubtotalMnt),
-                commercial.discountPolicy.globalLimit === null
-                  ? sql`${discountRules.globalLimit} IS NULL`
-                  : eq(discountRules.globalLimit, commercial.discountPolicy.globalLimit),
-                eq(discountRules.targetsJson, commercial.discountPolicy.targetsJson),
-                sql`${discountRules.globalLimit} IS NULL OR (SELECT coalesce(sum(${discountRedemptionEntries.quantityDelta}), 0) FROM ${discountRedemptionEntries} WHERE ${discountRedemptionEntries.discountRuleId} = ${discountRules.id}) < ${discountRules.globalLimit}`,
-              ),
-            ),
-        )
-      : undefined;
-  const discountContextCurrent = [
-    sql`(SELECT count(*) FROM ${discountRules} WHERE ${discountRules.state} = 'active') = ${commercial.discountContext.activeRules.length}`,
-    ...commercial.discountContext.activeRules.map(
-      (rule) => sql`EXISTS (
-      SELECT 1 FROM ${discountRules}
-      WHERE ${discountRules.id} = ${rule.id}
-        AND ${discountRules.state} = 'active'
-        AND ${discountRules.mode} = ${rule.mode}
-        AND ${discountRules.code} IS ${rule.code}
-        AND ${discountRules.calculation} = ${rule.calculation}
-        AND ${discountRules.value} = ${rule.value}
-        AND ${discountRules.startsAt} IS ${rule.startsAt}
-        AND ${discountRules.endsAt} IS ${rule.endsAt}
-        AND ${discountRules.minimumSubtotalMnt} = ${rule.minimumSubtotalMnt}
-        AND ${discountRules.globalLimit} IS ${rule.globalLimit}
-        AND ${discountRules.targetsJson} = ${rule.targetsJson}
-        AND ${discountRules.updatedAt} = ${rule.updatedAt}
-    )`,
-    ),
-    sql`(SELECT count(*) FROM ${categories} WHERE ${categories.state} = 'active') = ${commercial.discountContext.activeCategoryIds.length}`,
-    ...commercial.discountContext.activeCategoryIds.map(
-      (id) =>
-        sql`EXISTS (SELECT 1 FROM ${categories} WHERE ${categories.id} = ${id} AND ${categories.state} = 'active')`,
-    ),
-    sql`(SELECT count(*) FROM ${collections} WHERE ${collections.state} = 'active') = ${commercial.discountContext.activeCollectionIds.length}`,
-    ...commercial.discountContext.activeCollectionIds.map(
-      (id) =>
-        sql`EXISTS (SELECT 1 FROM ${collections} WHERE ${collections.id} = ${id} AND ${collections.state} = 'active')`,
-    ),
-    ...commercial.lines.flatMap((line) => {
-      const categoryMemberships = commercial.discountContext.categoryMemberships.filter(
-        ({ catalogItemId }) => catalogItemId === line.source.catalogItemId,
-      );
-      const collectionMemberships = commercial.discountContext.collectionMemberships.filter(
-        ({ catalogItemId }) => catalogItemId === line.source.catalogItemId,
-      );
-      return [
-        sql`(SELECT count(*) FROM ${catalogItemCategories} WHERE ${catalogItemCategories.catalogItemId} = ${line.source.catalogItemId}) = ${categoryMemberships.length}`,
-        ...categoryMemberships.map(
-          ({ categoryId }) =>
-            sql`EXISTS (SELECT 1 FROM ${catalogItemCategories} WHERE ${catalogItemCategories.catalogItemId} = ${line.source.catalogItemId} AND ${catalogItemCategories.categoryId} = ${categoryId})`,
-        ),
-        sql`(SELECT count(*) FROM ${catalogItemCollections} WHERE ${catalogItemCollections.catalogItemId} = ${line.source.catalogItemId}) = ${collectionMemberships.length}`,
-        ...collectionMemberships.map(
-          ({ collectionId }) =>
-            sql`EXISTS (SELECT 1 FROM ${catalogItemCollections} WHERE ${catalogItemCollections.catalogItemId} = ${line.source.catalogItemId} AND ${catalogItemCollections.collectionId} = ${collectionId})`,
-        ),
-      ];
-    }),
-  ];
-  const deliveryCurrent = and(
-    eq(commerceSettings.deliveryEnabled, commercial.deliveryPolicy.deliveryEnabled),
-    eq(commerceSettings.pickupEnabled, commercial.deliveryPolicy.pickupEnabled),
-    eq(commerceSettings.deliveryFeeMnt, commercial.deliveryPolicy.deliveryFeeMnt),
-    commercial.deliveryPolicy.freeDeliveryThresholdMnt === null
-      ? sql`${commerceSettings.freeDeliveryThresholdMnt} IS NULL`
-      : eq(
-          commerceSettings.freeDeliveryThresholdMnt,
-          commercial.deliveryPolicy.freeDeliveryThresholdMnt,
-        ),
-    sql`${commerceSettings.updatedAt} = ${commercial.deliveryPolicy.updatedAt}`,
-    commercial.fulfillment.kind === "pickup"
-      ? sql`EXISTS (
-          SELECT 1 FROM ${cmsDocuments}, json_each(${cmsDocuments.contentJson}, '$.locations') AS location
-          WHERE ${cmsDocuments.kind} = 'locations'
-            AND ${cmsDocuments.status} = 'published'
-            AND json_extract(location.value, '$.id') = ${commercial.fulfillment.locationId}
-            AND json_extract(location.value, '$.active') = 1
-            AND json_extract(location.value, '$.pickupEnabled') = 1
-        )`
-      : eq(commerceSettings.deliveryEnabled, true),
-  );
   const orderExists = exists(
     db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)),
   );
@@ -534,6 +371,8 @@ export const commitPlacement = async (
     db
       .select({
         id: sql<string>`${orderId}`.as("id"),
+        placementKey: sql<string>`${input.idempotencyKey}`.as("placement_key"),
+        placementIntentDigest: sql<string>`${intentDigest}`.as("placement_intent_digest"),
         orderNumber:
           sql<number>`coalesce((SELECT max(${orders.orderNumber}) FROM ${orders}), 0) + 1`.as(
             "order_number",
@@ -554,14 +393,14 @@ export const commitPlacement = async (
           ),
         deliveryFeeMnt: sql<number>`${quote.deliveryFeeMnt}`.as("delivery_fee_mnt"),
         grandTotalMnt: sql<number>`${quote.totalMnt}`.as("grand_total_mnt"),
-        freeDeliveryThresholdMnt: sql<
-          number | null
-        >`${commercial.deliveryPolicy.freeDeliveryThresholdMnt}`.as("free_delivery_threshold_mnt"),
+        freeDeliveryThresholdMnt: sql<number | null>`${policy.freeDeliveryThresholdMnt}`.as(
+          "free_delivery_threshold_mnt",
+        ),
         freeDeliveryApplied:
-          sql<boolean>`${commercial.deliveryPolicy.freeDeliveryThresholdMnt !== null && quote.deliveryFeeMnt === 0 && quote.fulfillment.kind === "delivery"}`.as(
+          sql<boolean>`${policy.freeDeliveryThresholdMnt !== null && quote.deliveryFeeMnt === 0 && quote.fulfillment.kind === "delivery"}`.as(
             "free_delivery_applied",
           ),
-        commerceSettingsUpdatedAt: sql<Date>`${commercial.deliveryPolicy.updatedAt}`.as(
+        commerceSettingsUpdatedAt: sql<Date>`${policy.commerceSettingsUpdatedAt}`.as(
           "commerce_settings_updated_at",
         ),
         fulfillmentMode: sql<"delivery" | "pickup">`${destination.kind}`.as("fulfillment_mode"),
@@ -589,13 +428,10 @@ export const commitPlacement = async (
       .where(
         and(
           eq(commerceSettings.key, "commerce"),
+          sql`${commerceSettings.updatedAt} = ${policy.commerceSettingsUpdatedAt}`,
           zeroTotal ? undefined : eq(commerceSettings.bankTransferEnabled, true),
-          sql`NOT EXISTS (SELECT 1 FROM ${placementIdempotency} WHERE ${placementIdempotency.key} = ${input.idempotencyKey})`,
+          sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.placementKey} = ${input.idempotencyKey})`,
           ...stockAvailable,
-          ...catalogCurrent,
-          ...discountContextCurrent,
-          discountAvailable,
-          deliveryCurrent,
         ),
       ),
   );
@@ -641,148 +477,17 @@ export const commitPlacement = async (
       ),
     );
   }
-  if (quote.discount.kind === "applied" && adjustmentId) {
+  if (quote.discount.kind === "applied") {
     statements.push(
-      db.insert(orderDiscountAdjustments).select(
-        db
-          .select({
-            id: sql<string>`${adjustmentId}`.as("id"),
-            orderId: orders.id,
-            discountRuleId: sql<string>`${quote.discount.ruleId}`.as("discount_rule_id"),
-            ruleName: sql<string>`${quote.discount.name}`.as("rule_name"),
-            mode: sql<
-              "automatic" | "code"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.mode : "automatic"}`.as(
-              "mode",
-            ),
-            code: sql<
-              string | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.code : null}`.as(
-              "code",
-            ),
-            calculation: sql<
-              "percentage" | "fixed_mnt"
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.calculation : "fixed_mnt"}`.as(
-              "calculation",
-            ),
-            value:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.value : quote.discount.amountMnt}`.as(
-                "value",
-              ),
-            startsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.startsAt : null}`.as(
-                "starts_at",
-              ),
-            endsAt:
-              sql<Date | null>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.endsAt : null}`.as(
-                "ends_at",
-              ),
-            minimumSubtotalMnt:
-              sql<number>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.minimumSubtotalMnt : 0}`.as(
-                "minimum_subtotal_mnt",
-              ),
-            globalLimit: sql<
-              number | null
-            >`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.globalLimit : null}`.as(
-              "global_limit",
-            ),
-            targetsJson:
-              sql<string>`${commercial.discountPolicy.kind === "applied" ? commercial.discountPolicy.targetsJson : "[]"}`.as(
-                "targets_json",
-              ),
-            submittedCode: sql<string | null>`${quote.discount.submittedCode}`.as("submitted_code"),
-            codeAccepted: sql<boolean>`${quote.discount.codeAccepted}`.as("code_accepted"),
-            reason: sql<string>`'checkout_discount'`.as("reason"),
-            amountMnt: sql<number>`${quote.discount.amountMnt}`.as("amount_mnt"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
-      db.insert(discountRedemptionEntries).select(
-        db
-          .select({
-            id: sql<string>`${createDiscountRedemptionId()}`.as("id"),
-            discountRuleId: sql<string>`${quote.discount.ruleId}`.as("discount_rule_id"),
-            orderId: orders.id,
-            kind: sql<"claim">`'claim'`.as("kind"),
-            quantityDelta: sql<number>`1`.as("quantity_delta"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
-    );
-    for (const line of quote.lines.filter(({ discountMnt }) => discountMnt > 0)) {
-      const lineId = lineIds.get(line.position);
-      if (!lineId) {
-        throw new Error("Discount allocation Order Line identity missing");
-      }
-      statements.push(
-        db.insert(orderDiscountAllocations).select(
-          db
-            .select({
-              adjustmentId: sql<string>`${adjustmentId}`.as("adjustment_id"),
-              orderLineId: sql<string>`${lineId}`.as("order_line_id"),
-              amountMnt: sql<number>`${line.discountMnt}`.as("amount_mnt"),
-            })
-            .from(orders)
-            .where(eq(orders.id, orderId)),
-        ),
-      );
-    }
-  }
-  statements.push(
-    db.insert(inventoryReservations).select(
       db
-        .select({
-          id: sql<string>`${reservationId}`.as("id"),
-          orderId: orders.id,
-          state: sql<"active" | "consumed">`${zeroTotal ? "consumed" : "active"}`.as("state"),
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          transitionedAt: sql<Date | null>`${zeroTotal ? now.getTime() : null}`.as(
-            "transitioned_at",
-          ),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
-  );
+        .update(discountRules)
+        .set({ redemptionCount: sql`${discountRules.redemptionCount} + 1` })
+        .where(and(eq(discountRules.id, quote.discount.ruleId), orderExists)),
+    );
+  }
   for (const [variantId, quantity] of demand) {
     const stockExistsForOrder = and(eq(stockItems.variantId, variantId), orderExists);
     statements.push(
-      db.insert(inventoryReservationItems).select(
-        db
-          .select({
-            reservationId: sql<string>`${reservationId}`.as("reservation_id"),
-            stockItemId: stockItems.id,
-            quantity: sql<number>`${quantity}`.as("quantity"),
-          })
-          .from(stockItems)
-          .where(stockExistsForOrder),
-      ),
-      db.insert(inventoryEntries).select(
-        db
-          .select({
-            id: sql<string>`${createInventoryEntryId()}`.as("id"),
-            stockItemId: stockItems.id,
-            reservationId: sql<string>`${reservationId}`.as("reservation_id"),
-            orderId: sql<string>`${orderId}`.as("order_id"),
-            kind: sql<
-              "reservation" | "consumption"
-            >`${zeroTotal ? "consumption" : "reservation"}`.as("kind"),
-            onHandDelta: sql<number>`${zeroTotal ? -quantity : 0}`.as("on_hand_delta"),
-            reservedDelta: sql<number>`${zeroTotal ? 0 : quantity}`.as("reserved_delta"),
-            actorKind: sql<"system">`'system'`.as("actor_kind"),
-            staffId: sql<string | null>`NULL`.as("staff_id"),
-            staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-            reason: sql<string>`'order_placement'`.as("reason"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-          })
-          .from(stockItems)
-          .where(stockExistsForOrder),
-      ),
       db
         .update(stockItems)
         .set({
@@ -807,7 +512,7 @@ export const commitPlacement = async (
             attemptNumber: sql<number>`1`.as("attempt_number"),
             method: sql<"bank_transfer">`'bank_transfer'`.as("method"),
             automatedProvider: sql<"byl" | "direct_qpay" | null>`NULL`.as("automated_provider"),
-            state: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("state"),
+            status: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("status"),
             expectedAmountMnt: orders.grandTotalMnt,
             confirmedAmountMnt: sql<number>`0`.as("confirmed_amount_mnt"),
             refundedAmountMnt: sql<number>`0`.as("refunded_amount_mnt"),
@@ -818,37 +523,12 @@ export const commitPlacement = async (
             workflowInstanceId: sql<string | null>`NULL`.as("workflow_instance_id"),
             refundObligationAmountMnt: sql<number>`0`.as("refund_obligation_amount_mnt"),
             refundObligationState: sql<"none">`'none'`.as("refund_obligation_state"),
+            confirmedBy: sql<string | null>`NULL`.as("confirmed_by"),
             confirmedAt: sql<Date | null>`NULL`.as("confirmed_at"),
             rejectedAt: sql<Date | null>`NULL`.as("rejected_at"),
             expiredAt: sql<Date | null>`NULL`.as("expired_at"),
             createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
             updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
-      db.insert(paymentEntries).select(
-        db
-          .select({
-            id: sql<string>`${createPaymentEntryId()}`.as("id"),
-            paymentId: sql<string>`${paymentId}`.as("payment_id"),
-            sequence: sql<number>`1`.as("sequence"),
-            kind: sql<"expected">`'expected'`.as("kind"),
-            expectedDeltaMnt: orders.grandTotalMnt,
-            confirmedDeltaMnt: sql<number>`0`.as("confirmed_delta_mnt"),
-            refundedDeltaMnt: sql<number>`0`.as("refunded_delta_mnt"),
-            actorKind: sql<"system">`'system'`.as("actor_kind"),
-            staffId: sql<string | null>`NULL`.as("staff_id"),
-            staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-            telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
-            telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
-            sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
-            reason: sql<string | null>`NULL`.as("reason"),
-            providerReference: sql<string | null>`NULL`.as("provider_reference"),
-            observedAt: sql<Date | null>`NULL`.as("observed_at"),
-            evidenceJson: sql<string | null>`NULL`.as("evidence_json"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
           })
           .from(orders)
           .where(eq(orders.id, orderId)),
@@ -869,51 +549,7 @@ export const commitPlacement = async (
         .from(orders)
         .where(eq(orders.id, orderId)),
     ),
-    db.insert(auditEvents).select(
-      db
-        .select({
-          id: sql<string>`${createAuditEventId()}`.as("id"),
-          actorKind: sql<"system">`'system'`.as("actor_kind"),
-          actorId: sql<string | null>`NULL`.as("actor_id"),
-          staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-          telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
-          telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
-          sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
-          action: sql<string>`'order.place'`.as("action"),
-          outcome: sql<"accepted">`'accepted'`.as("outcome"),
-          entityKind: sql<string>`'order'`.as("entity_kind"),
-          entityId: orders.id,
-          reason: sql<string | null>`NULL`.as("reason"),
-          commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-          metadataJson: sql<string | null>`NULL`.as("metadata_json"),
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
-    db.insert(placementIdempotency).select(
-      db
-        .select({
-          key: sql<string>`${input.idempotencyKey}`.as("key"),
-          intentDigest: sql<string>`${intentDigest}`.as("intent_digest"),
-          resultJson: sql<string>`json_object(
-            'orderId', ${orders.id},
-            'orderNumber', ${orders.orderNumber},
-            'orderState', 'placed',
-            'statusPath', ${statusAccess.statusPath},
-            'totalMnt', ${orders.grandTotalMnt},
-            'payment', ${paymentResult},
-            'fulfillment', json_object('id', ${fulfillmentId}, 'mode', ${destination.kind}, 'state', 'unfulfilled'),
-            'reservation', json_object('id', ${reservationId}, 'state', ${zeroTotal ? "consumed" : "active"})
-          )`.as("result_json"),
-          orderId: orders.id,
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
   );
   await db.batch([orderStatement, ...statements]);
-  const placement = await readPlacement(input.idempotencyKey);
-  return placement?.intentDigest === intentDigest ? placement.result : undefined;
+  return readPlacement(input.idempotencyKey, statusAccess.statusPath);
 };

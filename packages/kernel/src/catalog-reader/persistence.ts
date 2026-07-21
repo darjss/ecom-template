@@ -1,18 +1,29 @@
 import {
+  BundleIdSchema,
   CatalogItemIdSchema,
+  PersonalizationDefinitionsSchema,
   ProductIdSchema,
   ProductSchema,
+  PublicBundleDetailSchema,
   PublicCatalogItemSummarySchema,
   PublicProductDetailSchema,
   PublicProductSummarySchema,
+  VariantIdSchema,
   type CatalogItemId,
   type Product,
   type ProductId,
 } from "@ecom/contracts";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
+import {
+  bundleComponents,
+  catalogItems,
+  personalizationDefinitions,
+  personalizationValues,
+  stockItems,
+  variants,
+} from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import {
   readProductOptionConfiguration,
@@ -31,9 +42,6 @@ const ReturnedProductSchema = v.strictObject({
   sku: v.string(),
   onHandQuantity: v.number(),
   reservedQuantity: v.number(),
-  cachePurgeAttemptCount: v.nullable(v.number()),
-  cachePurgeRequestId: v.nullable(v.string()),
-  cachePurgeLastAttemptedAt: v.nullable(v.date()),
   createdAt: v.date(),
   updatedAt: v.date(),
 });
@@ -47,12 +55,9 @@ const productSelection = {
   name: catalogItems.name,
   description: catalogItems.description,
   priceMnt: catalogItems.priceMnt,
-  sku: skus.sku,
+  sku: variants.sku,
   onHandQuantity: stockItems.onHandQuantity,
   reservedQuantity: stockItems.reservedQuantity,
-  cachePurgeAttemptCount: catalogCachePurgeDebts.attemptCount,
-  cachePurgeRequestId: catalogCachePurgeDebts.requestId,
-  cachePurgeLastAttemptedAt: catalogCachePurgeDebts.lastAttemptedAt,
   createdAt: catalogItems.createdAt,
   updatedAt: catalogItems.updatedAt,
 };
@@ -62,28 +67,16 @@ const productQuery = () =>
     .select(productSelection)
     .from(catalogItems)
     .innerJoin(variants, and(eq(variants.productId, catalogItems.id), eq(variants.isDefault, true)))
-    .innerJoin(skus, eq(skus.variantId, variants.id))
-    .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
-    .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
+    .innerJoin(stockItems, eq(stockItems.variantId, variants.id));
 
 const projectProduct = (
   source: unknown,
   images: Product["images"],
   optionConfiguration: Product["optionConfiguration"],
 ): Product => {
-  const row = v.parse(ReturnedProductSchema, source);
-  const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...product } =
-    row;
+  const product = v.parse(ReturnedProductSchema, source);
   return v.parse(ProductSchema, {
     ...product,
-    cachePurgeDebt:
-      cachePurgeAttemptCount === null
-        ? null
-        : {
-            attemptCount: cachePurgeAttemptCount,
-            requestId: cachePurgeRequestId,
-            lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
-          },
     images,
     optionConfiguration,
     createdAt: product.createdAt.toISOString(),
@@ -105,6 +98,51 @@ export const findCatalogProductById = async (id: ProductId) => {
     row,
     images.map(({ image }) => image),
     optionConfiguration,
+  );
+};
+
+const readPersonalizations = async (catalogItemId: CatalogItemId) => {
+  const db = database();
+  const definitions = await db
+    .select()
+    .from(personalizationDefinitions)
+    .where(eq(personalizationDefinitions.catalogItemId, catalogItemId))
+    .orderBy(asc(personalizationDefinitions.position));
+  if (definitions.length === 0) {
+    return [];
+  }
+  const values = await db
+    .select()
+    .from(personalizationValues)
+    .where(
+      inArray(
+        personalizationValues.personalizationId,
+        definitions.map(({ id }) => id),
+      ),
+    )
+    .orderBy(asc(personalizationValues.position));
+  return v.parse(
+    PersonalizationDefinitionsSchema,
+    definitions.map(
+      ({
+        catalogItemId: _catalogItemId,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...definition
+      }) => ({
+        ...definition,
+        values: values
+          .filter(({ personalizationId }) => personalizationId === definition.id)
+          .map(
+            ({
+              personalizationId: _personalizationId,
+              createdAt: _valueCreatedAt,
+              updatedAt: _valueUpdatedAt,
+              ...value
+            }) => value,
+          ),
+      }),
+    ),
   );
 };
 
@@ -269,4 +307,59 @@ export const catalogReaderQueries = {
         })),
     });
   },
+
+  async findPublishedBundleBySlug(slug: string) {
+    const db = database();
+    const rows = await db
+      .select({
+        id: catalogItems.id,
+        slug: catalogItems.slug,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        priceMnt: catalogItems.priceMnt,
+        sku: catalogItems.sku,
+      })
+      .from(catalogItems)
+      .where(
+        and(
+          eq(catalogItems.state, "published"),
+          eq(catalogItems.kind, "bundle"),
+          eq(catalogItems.slug, slug),
+        ),
+      )
+      .limit(1);
+    const row = rows.at(0);
+    if (!row) {
+      return undefined;
+    }
+    const id = v.parse(BundleIdSchema, row.id);
+    const [components, images, personalizations] = await Promise.all([
+      db
+        .select({
+          variantId: bundleComponents.variantId,
+          quantity: bundleComponents.quantity,
+          productName: catalogItems.name,
+          variantLabel: variants.sku,
+        })
+        .from(bundleComponents)
+        .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
+        .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+        .where(eq(bundleComponents.bundleId, id))
+        .orderBy(asc(bundleComponents.variantId)),
+      catalogMediaQueries.listPublicForCatalogItems([id]),
+      readPersonalizations(id),
+    ]);
+    return v.parse(PublicBundleDetailSchema, {
+      ...row,
+      id,
+      components: components.map((component) => ({
+        ...component,
+        variantId: v.parse(VariantIdSchema, component.variantId),
+      })),
+      images: images.map(({ image }) => image),
+      personalizations: personalizations.filter(({ state }) => state === "active"),
+    });
+  },
+
+  readPersonalizations,
 };

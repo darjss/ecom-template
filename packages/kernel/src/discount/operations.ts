@@ -1,7 +1,7 @@
 import type { DiscountRuleId, DiscountRuleInput } from "@ecom/contracts";
 import { Result } from "better-result";
 import { createPipeHandlers } from "dismatch";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { discountQueries, type DiscountPersistenceResult } from "./persistence";
 
 type DiscountFailureCode =
@@ -18,8 +18,6 @@ export type DiscountOperationFailure = {
 
 const failure = (code: DiscountOperationFailure["code"]) =>
   Result.err<never, DiscountOperationFailure>({ code });
-const authorized = (actor: StaffActor) => hasStaffCapability(actor.role, "inventory_discounts");
-
 const mapPersistence = createPipeHandlers<DiscountPersistenceResult>("kind").match<
   Result<unknown, DiscountOperationFailure>
 >({
@@ -30,10 +28,7 @@ const mapPersistence = createPipeHandlers<DiscountPersistenceResult>("kind").mat
   infrastructure: () => failure("infrastructure_unavailable"),
 });
 
-export const listDiscountRules = async (actor: StaffActor) => {
-  if (!authorized(actor)) {
-    return failure("forbidden");
-  }
+export const listDiscountRules = async (_actor: StaffActor) => {
   try {
     return Result.ok(await discountQueries.list());
   } catch {
@@ -42,11 +37,8 @@ export const listDiscountRules = async (actor: StaffActor) => {
 };
 
 export const createDiscountRule = async (actor: StaffActor, input: DiscountRuleInput) => {
-  if (!authorized(actor)) {
-    return failure("forbidden");
-  }
   try {
-    return mapPersistence(await discountQueries.create(actor, input));
+    return mapPersistence(await discountQueries.create(input));
   } catch {
     return failure("infrastructure_unavailable");
   }
@@ -58,11 +50,8 @@ export const changeDiscountRule = async (
   expectedRevision: number,
   input: DiscountRuleInput,
 ) => {
-  if (!authorized(actor)) {
-    return failure("forbidden");
-  }
   try {
-    const result = await discountQueries.update(actor, id, expectedRevision, input);
+    const result = await discountQueries.update(id, expectedRevision, input);
     if (result.kind === "changed") {
       return result.value ? Result.ok(result.value) : failure("infrastructure_unavailable");
     }
@@ -78,11 +67,8 @@ export const setDiscountRuleState = async (
   expectedRevision: number,
   state: "active" | "inactive",
 ) => {
-  if (!authorized(actor)) {
-    return failure("forbidden");
-  }
   try {
-    const result = await discountQueries.transition(actor, id, expectedRevision, state);
+    const result = await discountQueries.transition(id, expectedRevision, state);
     if (result.kind === "changed") {
       return result.value ? Result.ok(result.value) : failure("infrastructure_unavailable");
     }

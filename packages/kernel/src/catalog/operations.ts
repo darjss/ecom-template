@@ -6,9 +6,9 @@ import type {
   UpdateProductInput,
 } from "@ecom/contracts";
 import { Result } from "better-result";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { resolvePendingCatalogCachePurge } from "./cache";
 import { inventoryQueries } from "../inventory/persistence";
+import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import { purgeCatalogItemCache } from "./cache";
 import { catalogQueries } from "./persistence";
 
 type CatalogOperationFailureCode =
@@ -20,57 +20,35 @@ type CatalogOperationFailureCode =
   | "published_bundle_dependency"
   | "published_cms_dependency"
   | "reservation_blocked"
-  | "inventory_inconsistent"
   | "inventory_limit"
   | "conflict"
   | "infrastructure_unavailable";
 export type CatalogOperationFailure = {
-  [Code in CatalogOperationFailureCode]: {
-    readonly code: Code;
-    readonly blockers?: readonly {
-      readonly reservationId: string;
-      readonly orderReference: string;
-      readonly quantity: number;
-    }[];
-  };
+  [Code in CatalogOperationFailureCode]: { readonly code: Code };
 }[CatalogOperationFailureCode];
 
 export type CatalogMutationResult = {
   readonly product: Product;
-  readonly cache: "not_required" | "purged" | "committed_but_not_purged";
-  readonly cachePurgeRequestId: string | null;
 };
 
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
-
-const execute = async <Value>(
-  actor: StaffActor,
-  operation: () => Promise<Result<Value, CatalogOperationFailure>>,
-) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  return (await Result.tryPromise(operation))
+const execute = async <Value>(operation: () => Promise<Result<Value, CatalogOperationFailure>>) =>
+  (await Result.tryPromise(operation))
     .mapError((): CatalogOperationFailure => ({ code: "infrastructure_unavailable" }))
     .andThen((result) => result);
-};
 
-const unchangedCache = (product: Product): CatalogMutationResult => ({
-  product,
-  cache: "not_required",
-  cachePurgeRequestId: null,
-});
+const changedProduct = (product: Product): CatalogMutationResult => ({ product });
 
-export const listCatalog = (actor: StaffActor) =>
-  execute(actor, async () => Result.ok(await catalogQueries.listAll()));
+export const listCatalog = (_actor: StaffActor) =>
+  execute(async () => Result.ok(await catalogQueries.listAll()));
+
+export const listCatalogItems = (actor: StaffActor) =>
+  execute(actor, async () => Result.ok(await catalogQueries.listPublishedCatalogItems()));
 
 export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
   execute(actor, async () => {
-    const result = await catalogQueries.create(actor, input);
+    const result = await catalogQueries.create(input);
     return result.kind === "changed"
-      ? Result.ok(unchangedCache(result.product))
+      ? Result.ok(changedProduct(result.product))
       : Result.err<never, CatalogOperationFailure>({
           code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
         });
@@ -78,12 +56,16 @@ export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
 
 export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
   execute(actor, async () => {
-    const result = await catalogQueries.update(actor, id, input);
-    return result.kind === "changed"
-      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
-      : Result.err<never, CatalogOperationFailure>({
-          code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
-        });
+    const result = await catalogQueries.update(id, input);
+    if (result.kind === "changed") {
+      if (result.product.state !== "draft") {
+        await purgeCatalogItemCache(result.product.id);
+      }
+      return Result.ok(changedProduct(result.product));
+    }
+    return Result.err<never, CatalogOperationFailure>({
+      code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+    });
   });
 
 export const transitionProduct = (
@@ -92,20 +74,14 @@ export const transitionProduct = (
   transition: "publish" | "archive" | "reactivate",
 ) =>
   execute(actor, async () => {
-    const result = await catalogQueries.transition(actor, id, transition);
-    return result.kind === "changed"
-      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
-      : Result.err<never, CatalogOperationFailure>({
-          code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
-        });
-  });
-
-export const retryProductCachePurge = (actor: StaffActor, id: ProductId) =>
-  execute(actor, async () => {
-    const product = await catalogQueries.findById(id);
-    return product
-      ? Result.ok(await resolvePendingCatalogCachePurge(product))
-      : Result.err<never, CatalogOperationFailure>({ code: "not_found" });
+    const result = await catalogQueries.transition(id, transition);
+    if (result.kind === "changed") {
+      await purgeCatalogItemCache(result.product.id);
+      return Result.ok(changedProduct(result.product));
+    }
+    return Result.err<never, CatalogOperationFailure>({
+      code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
+    });
   });
 
 export const adjustProductInventory = (
@@ -114,13 +90,9 @@ export const adjustProductInventory = (
   input: InventoryAdjustmentInput,
 ) =>
   execute(actor, async () => {
-    const result = await inventoryQueries.adjust(actor, id, input);
+    const result = await inventoryQueries.adjust(id, input);
     if (result.kind === "changed") {
-      return Result.ok(unchangedCache(result.product));
+      return Result.ok(changedProduct(result.product));
     }
-    return Result.err<never, CatalogOperationFailure>(
-      result.kind === "reservation_blocked" || result.kind === "inventory_inconsistent"
-        ? { code: result.kind, blockers: result.blockers }
-        : { code: result.kind },
-    );
+    return Result.err<never, CatalogOperationFailure>({ code: result.kind });
   });
