@@ -7,10 +7,11 @@ import type {
   PublicProductDetail,
 } from "@ecom/contracts";
 import { Button, Input } from "@ecom/ui";
+import { createForm } from "@tanstack/solid-form";
+import { QueryClientProvider } from "@tanstack/solid-query";
 import { CartPresentation } from "./CartPresentation";
 import { PersonalizationControls } from "./PersonalizationControls";
 import { ProductVariantSelector } from "./ProductVariantSelector";
-import { QueryClientProvider } from "@tanstack/solid-query";
 import { createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { createPurchaseAvailability } from "./purchase-availability";
 import { resolvePurchaseDemand } from "./purchase-demand";
@@ -95,46 +96,66 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     }
     return "Авах боломжтой";
   };
-  const submit = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (availability.state() !== "ready" || !demand().withinBounds) {
-      return;
-    }
-    const form = event.currentTarget;
-    if (!(form instanceof HTMLFormElement)) {
-      return;
-    }
-    const quantityValue = Number(new FormData(form).get("quantity"));
-    if (!Number.isInteger(quantityValue) || quantityValue < 1 || quantityValue > 999) {
-      return;
-    }
-    const submittedDemand = resolvePurchaseDemand(cart.lines(), identity(), quantityValue);
-    if (!submittedDemand.withinBounds || submittedDemand.quantity !== target().quantity) {
-      return;
-    }
-    const personalizations = answersFromForm(form, definitions());
-    const current = identity();
-    const line: CartLine =
-      current.kind === "variant"
-        ? { kind: "variant", variantId: current.id, quantity: quantityValue, personalizations }
-        : { kind: "bundle", bundleId: current.id, quantity: quantityValue, personalizations };
-    const result = cart.addLine(line);
-    setAnnouncement(
-      result === "added"
-        ? "Сагсанд нэмлээ"
-        : result === "merged"
-          ? "Сагсны тоог нэмлээ"
-          : result === "quantity_exceeded"
-            ? "Нэг мөрөнд 999-өөс ихийг нэмэх боломжгүй"
-            : result === "recovery_required"
-              ? "Сагсыг шинэчилж дахин оролдоно уу"
-              : "Сагс 100 мөрийн хязгаарт хүрсэн",
-    );
-  };
+  let purchaseForm: HTMLFormElement | undefined;
+  const form = createForm(() => ({
+    defaultValues: { quantity: 1 },
+    onSubmit: ({ value }) => {
+      if (
+        !purchaseForm ||
+        availability.state() !== "ready" ||
+        !demand().withinBounds ||
+        !Number.isInteger(value.quantity) ||
+        value.quantity < 1 ||
+        value.quantity > 999
+      ) {
+        return;
+      }
+      const submittedDemand = resolvePurchaseDemand(cart.lines(), identity(), value.quantity);
+      if (!submittedDemand.withinBounds || submittedDemand.quantity !== target().quantity) {
+        return;
+      }
+      const personalizations = answersFromForm(purchaseForm, definitions());
+      const current = identity();
+      const line: CartLine =
+        current.kind === "variant"
+          ? {
+              kind: "variant",
+              variantId: current.id,
+              quantity: value.quantity,
+              personalizations,
+            }
+          : {
+              kind: "bundle",
+              bundleId: current.id,
+              quantity: value.quantity,
+              personalizations,
+            };
+      const result = cart.addLine(line);
+      setAnnouncement(
+        result === "added"
+          ? "Сагсанд нэмлээ"
+          : result === "merged"
+            ? "Сагсны тоог нэмлээ"
+            : result === "quantity_exceeded"
+              ? "Нэг мөрөнд 999-өөс ихийг нэмэх боломжгүй"
+              : result === "recovery_required"
+                ? "Сагсыг шинэчилж дахин оролдоно уу"
+                : "Сагс 100 мөрийн хязгаарт хүрсэн",
+      );
+    },
+  }));
 
   return (
     <>
-      <form class="purchase-form" onSubmit={submit} aria-label="Худалдан авах сонголт">
+      <form
+        ref={(element) => (purchaseForm = element)}
+        class="purchase-form"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          await form.handleSubmit();
+        }}
+        aria-label="Худалдан авах сонголт"
+      >
         <Show when={props.kind === "product" && props.product}>
           {(product) => (
             <ProductVariantSelector
@@ -145,24 +166,30 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           )}
         </Show>
         <PersonalizationControls definitions={definitions()} />
-        <label class="quantity-field">
-          Тоо ширхэг
-          <Input
-            class="quantity-input"
-            type="number"
-            name="quantity"
-            required
-            min="1"
-            max="999"
-            value={quantity()}
-            onInput={(event) => {
-              const value = event.currentTarget.valueAsNumber;
-              if (Number.isInteger(value) && value >= 1 && value <= 999) {
-                setQuantity(value);
-              }
-            }}
-          />
-        </label>
+        <form.Field name="quantity">
+          {(field) => (
+            <label class="quantity-field">
+              Тоо ширхэг
+              <Input
+                class="quantity-input"
+                type="number"
+                name={field().name}
+                required
+                min="1"
+                max="999"
+                value={field().state.value}
+                onBlur={field().handleBlur}
+                onInput={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isInteger(value) && value >= 1 && value <= 999) {
+                    field().handleChange(value);
+                    setQuantity(value);
+                  }
+                }}
+              />
+            </label>
+          )}
+        </form.Field>
         <div class="purchase-price" role="status" aria-live="polite" aria-atomic="true">
           <strong>{money.format(price().unitPriceMnt)} ₮</strong>
           <span>
