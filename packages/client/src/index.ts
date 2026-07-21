@@ -37,6 +37,7 @@ export {
   adminOrdersQueryOptions,
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
+  orderMutationOptions,
   orderStatusQueryOptions,
 } from "./orders";
 export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";

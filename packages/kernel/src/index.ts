@@ -70,12 +70,15 @@ export {
   type CheckoutFailure,
 } from "./checkout/operations";
 export {
+  advanceOrderFulfillment,
+  confirmOrderPayment,
   listAdminOrders,
   listCustomerOrders,
   readAdminOrder,
   readOrderByStatusToken,
   type AdminOrderFailure,
   type OrderAccessFailure,
+  type OrderOperationFailure,
 } from "./order";
 export {
   changeDiscountRule,

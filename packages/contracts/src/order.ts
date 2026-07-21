@@ -1,6 +1,10 @@
 import { fromString, typeidUnboxed } from "typeid-js";
 import * as v from "valibot";
-import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
+import {
+  ContractClientErrorSchema,
+  NetworkClientErrorSchema,
+  type ClientRequestError,
+} from "./client-error";
 import { MoneyMntSchema } from "./money";
 
 export const OrderIdSchema = v.pipe(
@@ -109,6 +113,22 @@ export const AdminOrdersResponseSchema = v.strictObject({
   data: v.strictObject({ orders: v.array(AdminOrderSchema) }),
 });
 export const AdminOrderResponseSchema = v.strictObject({ data: AdminOrderSchema });
+export const OrderOperationApiErrorSchema = v.strictObject({
+  error: v.strictObject({
+    code: v.picklist([
+      "unauthorized",
+      "forbidden",
+      "not_found",
+      "validation",
+      "conflict",
+      "unavailable",
+    ]),
+    reason: v.optional(
+      v.picklist(["payment_not_confirmable", "payment_required", "fulfillment_not_advanceable"]),
+    ),
+    message: v.string(),
+  }),
+});
 export const OrderAccessApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.picklist(["unauthorized", "not_found", "unavailable"]),
@@ -135,10 +155,13 @@ export const AdminOrderClientErrorSchema = v.variant("kind", [
 export type OrderId = v.InferOutput<typeof OrderIdSchema>;
 export type OrderStatusToken = v.InferOutput<typeof OrderStatusTokenSchema>;
 export type OrderStatusPath = v.InferOutput<typeof OrderStatusPathSchema>;
-export type OrderSummary = v.InferOutput<typeof OrderSummarySchema>;
 export type OrderPaymentState = v.InferOutput<typeof OrderPaymentStateSchema>;
+export type OrderFulfillmentMode = v.InferOutput<typeof OrderFulfillmentModeSchema>;
 export type OrderFulfillmentState = v.InferOutput<typeof OrderFulfillmentStateSchema>;
+export type OrderSummary = v.InferOutput<typeof OrderSummarySchema>;
 export type AdminOrder = v.InferOutput<typeof AdminOrderSchema>;
+export type OrderOperationApiError = v.InferOutput<typeof OrderOperationApiErrorSchema>;
+export type OrderOperationClientError = ClientRequestError<OrderOperationApiError["error"]>;
 export type OrderAccessClientError = v.InferOutput<typeof OrderAccessClientErrorSchema>;
 export type AdminOrderClientError = v.InferOutput<typeof AdminOrderClientErrorSchema>;
 

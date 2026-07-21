@@ -7,7 +7,8 @@ import { DiscountManagement } from "./DiscountManagement";
 import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
-export { AdminOrderDetail, AdminOrderInbox } from "./OrderManagement";
+export { AdminOrderInbox } from "./OrderManagement";
+export { OrderDetail as AdminOrderDetail } from "./OrderDetail";
 export { StaffLoginForm } from "./StaffLoginForm";
 
 const HealthStatus = () => {
