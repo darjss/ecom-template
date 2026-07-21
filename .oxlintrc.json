@@ -85,7 +85,7 @@
   },
   "overrides": [
     {
-      "files": ["packages/client/src/cart/index.tsx"],
+      "files": ["packages/client/src/cart.tsx"],
       "rules": {
         "solid/no-proxy-apis": "off",
         "solid/reactivity": "off"

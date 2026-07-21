@@ -6,7 +6,7 @@ import {
   type CustomerAuthMutation,
 } from "../customer/request";
 import { unwrapRequestResult } from "../request";
-import { customerOrdersQueryKey } from "./order";
+import { customerOrdersQueryKey } from "../orders";
 
 const customerSessionKey = ["customer", "session"] as const;
 

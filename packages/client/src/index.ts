@@ -1,10 +1,5 @@
 export { requestAvailability } from "./availability/request";
-export { CartProvider, useCart } from "./cart/index";
-export {
-  requestCheckoutOptions,
-  requestCheckoutQuote,
-  requestPlaceOrder,
-} from "./checkout/request";
+export { CartProvider, useCart } from "./cart";
 export {
   requestBundleMutation,
   requestBundles,
@@ -57,7 +52,7 @@ export {
   checkoutOptionsQueryOptions,
   checkoutQuoteMutationOptions,
   orderPlacementMutationOptions,
-} from "./query/checkout";
+} from "./checkout";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export {
   cmsCachePurgeMutationOptions,
@@ -71,7 +66,7 @@ export {
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
   orderStatusQueryOptions,
-} from "./query/order";
+} from "./orders";
 export { discountMutationOptions, discountQueryOptions } from "./query/discount";
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
@@ -89,7 +84,6 @@ export {
   type CustomerAuthMutation,
   type CustomerAuthMutationResult,
 } from "./customer/request";
-export { requestCustomerOrders, requestOrderStatus } from "./order/request";
 export { requestHealth } from "./request";
 export {
   requestCatalogSearch,
