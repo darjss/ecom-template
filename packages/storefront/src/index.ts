@@ -1,6 +1,12 @@
+export { applyPublicHtmlCache } from "./cache";
 export { CustomerAuthIsland } from "./CustomerAuthIsland";
 export { CustomerOrdersIsland } from "./CustomerOrdersIsland";
 export { OrderStatusIsland } from "./OrderStatusIsland";
-export { PurchaseIsland } from "./PurchaseIsland";
+export { PurchaseIsland, type PurchaseIslandProps } from "./PurchaseIsland";
 export { SearchAutocomplete } from "./SearchAutocomplete";
-export type { PersonalizationDefinition, PublicProductDetail } from "@ecom/contracts";
+export { renderPolicyMarkdown } from "./policy";
+export type {
+  PersonalizationDefinition,
+  PublicProductDetail,
+  StorefrontSummary,
+} from "@ecom/contracts";

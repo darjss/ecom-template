@@ -39,6 +39,7 @@ export const ClientErrorSchema = v.variant("kind", [
 ]);
 
 export type ClientFailure = v.InferOutput<typeof ClientFailureSchema>;
+export type ClientError = v.InferOutput<typeof ClientErrorSchema>;
 export type ClientRequestError<ApiError> =
   | ClientFailure
   | {
