@@ -1,57 +1,17 @@
 export { requestAvailability } from "./availability/request";
 export { CartProvider, useCart } from "./cart";
 export {
-  requestBundleMutation,
-  requestBundles,
-  requestPersonalizationMutation,
-  requestPersonalizations,
-  type BundleMutation,
-} from "./bundle/request";
-export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
-export {
-  requestCmsCachePurge,
-  requestCmsDocuments,
-  requestCmsMutation,
-  requestCommerceSettings,
-  requestCommerceSettingsMutation,
-  type CmsMutation,
-} from "./cms/request";
-export {
-  requestDiscountMutation,
-  requestDiscountRules,
-  type DiscountMutation,
-} from "./discount/request";
-export { createApiClient } from "./eden";
-export {
-  requestCreateCategory,
-  requestCreateCollection,
-  requestCreateTag,
-  requestGroupingCachePurgeRetry,
-  requestGroupings,
-  requestReplaceCategoryMembership,
-  requestReplaceCollectionMembership,
-  requestReplaceTagMembership,
-  requestSetCategoryState,
-  requestSetCollectionState,
-  requestSetTagState,
-  requestUpdateCategory,
-  requestUpdateCollection,
-  requestUpdateTag,
-} from "./grouping/request";
-export { createStoreQueryClient } from "./query/client";
-export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
-export {
   bundleMutationOptions,
   bundleQueryOptions,
+  discountMutationOptions,
+  discountQueryOptions,
+  groupingCachePurgeMutationOptions,
+  groupingMutationOptions,
+  groupingQueryOptions,
+  healthQueryOptions,
   personalizationMutationOptions,
   personalizationQueryOptions,
-} from "./query/bundle";
-export { catalogImageMutationOptions } from "./query/catalog-media";
-export {
-  checkoutOptionsQueryOptions,
-  checkoutQuoteMutationOptions,
-  orderPlacementMutationOptions,
-} from "./checkout";
+} from "./admin";
 export { catalogMutationOptions, catalogQueryOptions } from "./catalog";
 export {
   cmsCachePurgeMutationOptions,
@@ -59,28 +19,27 @@ export {
   cmsQueryOptions,
   commerceSettingsMutationOptions,
   commerceSettingsQueryOptions,
-} from "./query/cms";
-export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
+} from "./content";
 export {
-  customerOrdersQueryKey,
-  customerOrdersQueryOptions,
-  orderStatusQueryOptions,
-} from "./orders";
-export { discountMutationOptions, discountQueryOptions } from "./query/discount";
-export { healthQueryOptions } from "./query/health";
-export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
-export { catalogSearchQueryOptions } from "./search";
-export { staffMutationOptions, staffQueryOptions } from "./query/staff";
-export {
-  requestStaffList,
-  requestStaffMutation,
-  type StaffMutation,
-  type StaffMutationResult,
-} from "./staff/request";
+  checkoutOptionsQueryOptions,
+  checkoutQuoteMutationOptions,
+  orderPlacementMutationOptions,
+} from "./checkout";
 export {
   requestCustomerAuthMutation,
   requestCustomerSession,
   type CustomerAuthMutation,
   type CustomerAuthMutationResult,
 } from "./customer/request";
-export { requestHealth } from "./request";
+export { createApiClient } from "./eden";
+export { catalogImageMutationOptions } from "./media";
+export {
+  customerOrdersQueryKey,
+  customerOrdersQueryOptions,
+  orderStatusQueryOptions,
+} from "./orders";
+export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
+export { createStoreQueryClient } from "./query/client";
+export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
+export { catalogSearchQueryOptions } from "./search";
+export { staffMutationOptions, staffQueryOptions } from "./staff";
