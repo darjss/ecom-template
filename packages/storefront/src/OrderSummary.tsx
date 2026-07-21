@@ -26,13 +26,10 @@ type FulfillmentStateInput = {
   [State in OrderSummary["fulfillment"]["state"]]: { readonly state: State };
 }[OrderSummary["fulfillment"]["state"]];
 
-const orderState = createPipeHandlers<OrderStateInput>("state").match<{
-  readonly label: string;
-  readonly class: string;
-}>({
-  placed: () => ({ label: "Захиалга хүлээн авсан", class: "text-amber-900 bg-amber-50" }),
-  completed: () => ({ label: "Дууссан", class: "text-green-900 bg-green-50" }),
-  cancelled: () => ({ label: "Цуцлагдсан", class: "text-red-900 bg-red-50" }),
+const orderState = createPipeHandlers<OrderStateInput>("state").match<string>({
+  placed: () => "Захиалга хүлээн авсан",
+  completed: () => "Дууссан",
+  cancelled: () => "Цуцлагдсан",
 });
 const paymentMethod = createPipeHandlers<PaymentMethodInput>("method").match<string>({
   qpay: () => "QPay",
@@ -68,7 +65,7 @@ const fulfillmentState = createPipeHandlers<FulfillmentStateInput>("state").matc
 });
 
 export const OrderSummaryView = (props: { readonly order: OrderSummary }) => {
-  const state = () => orderState({ state: props.order.state });
+  const stateLabel = () => orderState({ state: props.order.state });
   return (
     <article class="overflow-hidden border border-(--wood-dark) bg-(--paper)">
       <header class="flex flex-wrap items-start justify-between gap-4 bg-(--navy) px-5 py-6 text-(--paper) sm:px-7">
@@ -78,8 +75,11 @@ export const OrderSummaryView = (props: { readonly order: OrderSummary }) => {
             Захиалга №{props.order.orderNumber}
           </h2>
         </div>
-        <span class={`rounded-full px-3 py-1 text-sm font-bold ${state().class}`}>
-          {state().label}
+        <span
+          data-state={props.order.state}
+          class="rounded-full px-3 py-1 text-sm font-bold data-[state=cancelled]:bg-red-50 data-[state=cancelled]:text-red-900 data-[state=completed]:bg-green-50 data-[state=completed]:text-green-900 data-[state=placed]:bg-amber-50 data-[state=placed]:text-amber-900"
+        >
+          {stateLabel()}
         </span>
       </header>
 

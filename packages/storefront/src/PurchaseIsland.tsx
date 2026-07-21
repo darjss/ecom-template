@@ -141,7 +141,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     <>
       <form
         ref={(element) => (purchaseForm = element)}
-        class="grid gap-5"
+        class="purchase-form"
         onSubmit={async (event) => {
           event.preventDefault();
           await form.handleSubmit();
@@ -160,16 +160,17 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
         <PersonalizationControls definitions={definitions()} />
         <form.Field name="quantity">
           {(field) => (
-            <label class="grid max-w-28 gap-1 text-sm font-bold">
+            <label class="quantity-field">
               Тоо ширхэг
               <Input
-                class="h-12 rounded-lg border border-black/30 bg-white px-3 tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+                class="quantity-input"
                 type="number"
                 name={field().name}
                 required
                 min="1"
                 max="999"
                 value={field().state.value}
+                onBlur={field().handleBlur}
                 onInput={(event) => {
                   const value = event.currentTarget.valueAsNumber;
                   if (Number.isInteger(value) && value >= 1 && value <= 999) {
@@ -181,11 +182,9 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
             </label>
           )}
         </form.Field>
-        <div role="status" aria-live="polite" aria-atomic="true">
-          <strong class="block text-2xl tabular-nums">
-            {money.format(price().unitPriceMnt)} ₮
-          </strong>
-          <span class="text-sm text-(--muted)">
+        <div class="purchase-price" role="status" aria-live="polite" aria-atomic="true">
+          <strong>{money.format(price().unitPriceMnt)} ₮</strong>
+          <span>
             {price().source === "current" ? "Шинэчилсэн үнэ" : "Каталогийн үнэ · танилцуулга"}
           </span>
         </div>
@@ -202,7 +201,7 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           {availability.state() === "checking" ? "Шалгаж байна…" : "Сагсанд нэмэх"}
         </Button>
         <p
-          class="m-0 min-h-6 text-sm font-bold text-(--paper)"
+          class="m-0 min-h-6 text-sm font-bold text-(--tomato-deep)"
           role="status"
           aria-live="polite"
           aria-atomic="true"
