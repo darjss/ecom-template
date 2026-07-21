@@ -5,13 +5,6 @@ export {
   requestCheckoutQuote,
   requestPlaceOrder,
 } from "./checkout/request";
-export {
-  requestBundleMutation,
-  requestBundles,
-  requestPersonalizationMutation,
-  requestPersonalizations,
-  type BundleMutation,
-} from "./bundle/request";
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
@@ -46,19 +39,17 @@ export {
 } from "./grouping/request";
 export { createStoreQueryClient } from "./query/client";
 export { availabilityFreshnessMs, availabilityQueryOptions } from "./query/availability";
-export {
-  bundleMutationOptions,
-  bundleQueryOptions,
-  personalizationMutationOptions,
-  personalizationQueryOptions,
-} from "./query/bundle";
 export { catalogImageMutationOptions } from "./query/catalog-media";
 export {
   checkoutOptionsQueryOptions,
   checkoutQuoteMutationOptions,
   orderPlacementMutationOptions,
 } from "./query/checkout";
-export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
+export {
+  catalogItemsQueryOptions,
+  catalogMutationOptions,
+  catalogQueryOptions,
+} from "./query/catalog";
 export {
   cmsCachePurgeMutationOptions,
   cmsMutationOptions,

@@ -1,7 +1,7 @@
 import { CartProvider, createStoreQueryClient, useCart } from "@ecom/client";
 import type {
   CartLine,
-  PersonalizationAnswer,
+  CartPersonalizationAnswer,
   PersonalizationDefinition,
   PublicBundleDetail,
   PublicProductDetail,
@@ -36,11 +36,11 @@ export type PurchaseIslandProps = ProductPurchaseProps | BundlePurchaseProps;
 const answersFromForm = (
   form: HTMLFormElement,
   definitions: readonly PersonalizationDefinition[],
-): PersonalizationAnswer[] => {
+): CartPersonalizationAnswer[] => {
   const data = new FormData(form);
   return definitions
     .filter(({ state }) => state === "active")
-    .flatMap((definition): PersonalizationAnswer[] => {
+    .flatMap((definition): CartPersonalizationAnswer[] => {
       const value = data.get(`personalization-${definition.key}`);
       if (definition.kind === "text") {
         return typeof value === "string" && value.length > 0

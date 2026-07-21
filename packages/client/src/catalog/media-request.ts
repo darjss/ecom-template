@@ -1,8 +1,8 @@
 import {
   CatalogApiErrorSchema,
   MediaUploadResponseSchema,
-  type CatalogItemId,
   type MediaUploadFields,
+  type ProductId,
 } from "@ecom/contracts";
 import * as v from "valibot";
 import { createApiClient } from "../eden";
@@ -24,7 +24,7 @@ const MediaApiErrorSchema = v.union([
 ]);
 
 export type CatalogImageUpload = MediaUploadFields & {
-  readonly catalogItemId: CatalogItemId;
+  readonly catalogItemId: ProductId;
   readonly file: File;
 };
 

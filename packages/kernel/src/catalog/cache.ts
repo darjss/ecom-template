@@ -45,7 +45,7 @@ const purgeCacheTags = async (tags: readonly string[]) => {
 
 export const purgeCatalogListingCache = () => purgeCacheTags(["catalog"]);
 
-export const purgeCatalogItemCache = (catalogItemId: string) =>
+const purgeCatalogItemCache = (catalogItemId: string) =>
   purgeCacheTags(["catalog", `product:${catalogItemId}`]);
 
 export const purgeCmsCache = () => purgeCacheTags(["store-shell", "homepage", "catalog"]);
