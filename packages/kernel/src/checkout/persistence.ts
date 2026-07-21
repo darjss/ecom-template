@@ -40,7 +40,6 @@ import {
   optionValues,
   personalizationDefinitions,
   personalizationValues,
-  placementIdempotency,
   skus,
   stockItems,
   variantOptionValues,
@@ -285,20 +284,61 @@ type PlacementDestination =
   | { kind: "delivery"; address: string }
   | { kind: "pickup"; locationId: string; name: string; address: string };
 
-export const readPlacement = async (key: string) => {
+type Placement = {
+  readonly intentDigest: string;
+  readonly result: PlaceOrderResult;
+};
+
+export const readPlacement = async (
+  key: string,
+  statusPath: OrderStatusAccess["statusPath"],
+): Promise<Placement | undefined> => {
   const rows = await database()
     .select({
-      intentDigest: placementIdempotency.intentDigest,
-      resultJson: placementIdempotency.resultJson,
+      intentDigest: orders.placementIntentDigest,
+      orderId: orders.id,
+      orderNumber: orders.orderNumber,
+      totalMnt: orders.grandTotalMnt,
+      paymentId: payments.id,
+      fulfillmentId: fulfillments.id,
+      fulfillmentMode: fulfillments.mode,
+      reservationId: inventoryReservations.id,
     })
-    .from(placementIdempotency)
-    .where(eq(placementIdempotency.key, key))
+    .from(orders)
+    .leftJoin(payments, and(eq(payments.orderId, orders.id), eq(payments.attemptNumber, 1)))
+    .innerJoin(fulfillments, eq(fulfillments.orderId, orders.id))
+    .innerJoin(inventoryReservations, eq(inventoryReservations.orderId, orders.id))
+    .where(eq(orders.placementKey, key))
     .limit(1);
   const row = rows.at(0);
   return row
     ? {
         intentDigest: row.intentDigest,
-        result: v.parse(PlaceOrderResultSchema, JSON.parse(row.resultJson)),
+        result: v.parse(PlaceOrderResultSchema, {
+          orderId: row.orderId,
+          orderNumber: row.orderNumber,
+          orderState: "placed",
+          statusPath,
+          totalMnt: row.totalMnt,
+          payment:
+            row.totalMnt === 0
+              ? null
+              : {
+                  id: row.paymentId,
+                  method: "bank_transfer",
+                  state: "awaiting_confirmation",
+                  expectedAmountMnt: row.totalMnt,
+                },
+          fulfillment: {
+            id: row.fulfillmentId,
+            mode: row.fulfillmentMode,
+            state: "unfulfilled",
+          },
+          reservation: {
+            id: row.reservationId,
+            state: row.totalMnt === 0 ? "consumed" : "active",
+          },
+        }),
       }
     : undefined;
 };
@@ -311,7 +351,7 @@ export const commitPlacement = async (
   destination: PlacementDestination,
   customerId: CustomerId | null,
   statusAccess: OrderStatusAccess,
-): Promise<PlaceOrderResult | undefined> => {
+): Promise<Placement | undefined> => {
   const db = database();
   const orderId = createOrderId();
   const lineIds = new Map(quote.lines.map((line) => [line.position, createOrderLineId()]));
@@ -320,9 +360,6 @@ export const commitPlacement = async (
   const correlationId = crypto.randomUUID();
   const now = new Date();
   const zeroTotal = quote.totalMnt === 0;
-  const paymentResult = zeroTotal
-    ? sql`NULL`
-    : sql`json_object('id', ${paymentId}, 'method', 'bank_transfer', 'state', 'awaiting_confirmation', 'expectedAmountMnt', ${quote.totalMnt})`;
   const demand = new Map<string, number>();
   for (const line of quote.lines) {
     for (const item of line.demand) {
@@ -349,6 +386,8 @@ export const commitPlacement = async (
     db
       .select({
         id: sql<string>`${orderId}`.as("id"),
+        placementKey: sql<string>`${input.idempotencyKey}`.as("placement_key"),
+        placementIntentDigest: sql<string>`${intentDigest}`.as("placement_intent_digest"),
         orderNumber:
           sql<number>`coalesce((SELECT max(${orders.orderNumber}) FROM ${orders}), 0) + 1`.as(
             "order_number",
@@ -406,7 +445,7 @@ export const commitPlacement = async (
           eq(commerceSettings.key, "commerce"),
           sql`${commerceSettings.updatedAt} = ${policy.commerceSettingsUpdatedAt}`,
           zeroTotal ? undefined : eq(commerceSettings.bankTransferEnabled, true),
-          sql`NOT EXISTS (SELECT 1 FROM ${placementIdempotency} WHERE ${placementIdempotency.key} = ${input.idempotencyKey})`,
+          sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.placementKey} = ${input.idempotencyKey})`,
           ...stockAvailable,
         ),
       ),
@@ -572,28 +611,7 @@ export const commitPlacement = async (
         .from(orders)
         .where(eq(orders.id, orderId)),
     ),
-    db.insert(placementIdempotency).select(
-      db
-        .select({
-          key: sql<string>`${input.idempotencyKey}`.as("key"),
-          intentDigest: sql<string>`${intentDigest}`.as("intent_digest"),
-          resultJson: sql<string>`json_object(
-            'orderId', ${orders.id},
-            'orderNumber', ${orders.orderNumber},
-            'orderState', 'placed',
-            'statusPath', ${statusAccess.statusPath},
-            'totalMnt', ${orders.grandTotalMnt},
-            'payment', ${paymentResult},
-            'fulfillment', json_object('id', ${fulfillmentId}, 'mode', ${destination.kind}, 'state', 'unfulfilled')
-          )`.as("result_json"),
-          orderId: orders.id,
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
   );
   await db.batch([orderStatement, ...statements]);
-  const placement = await readPlacement(input.idempotencyKey);
-  return placement?.intentDigest === intentDigest ? placement.result : undefined;
+  return readPlacement(input.idempotencyKey, statusAccess.statusPath);
 };

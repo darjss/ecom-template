@@ -337,14 +337,25 @@ export const placeOrder = async (
   input: PlaceOrderInput,
   customer: { readonly id: CustomerId; readonly phone: MongolianPhone } | null,
 ): Promise<Result<PlaceOrderResult, CheckoutFailure>> => {
-  const intentDigest = await digest(input);
-  const customerId = customer?.phone === input.contact.recipientPhone ? customer.id : null;
   try {
-    const existing = await readPlacement(input.idempotencyKey);
+    const intentDigest = await digest({
+      acceptedCommercialFingerprint: input.acceptedCommercialFingerprint,
+      quoteInput: input.quoteInput,
+      contact: input.contact,
+      paymentMethod: input.paymentMethod,
+    });
+    const statusAccess = await createOrderStatusAccess(input.idempotencyKey);
+    const replay = async () => {
+      const placement = await readPlacement(input.idempotencyKey, statusAccess.statusPath);
+      return placement
+        ? placement.intentDigest === intentDigest
+          ? Result.ok(placement.result)
+          : failure("idempotency_conflict")
+        : undefined;
+    };
+    const existing = await replay();
     if (existing) {
-      return existing.intentDigest === intentDigest
-        ? Result.ok(existing.result)
-        : failure("idempotency_conflict");
+      return existing;
     }
     const current = await calculateCheckout(input.quoteInput);
     if (current.isErr()) {
@@ -382,22 +393,23 @@ export const placeOrder = async (
           : "pickup_unavailable",
       );
     }
-    const committed = await commitPlacement(
-      input,
-      current.value.quote,
-      current.value.policy,
-      intentDigest,
-      destination,
-      customerId,
-      await createOrderStatusAccess(),
-    );
-    if (committed) {
-      return Result.ok(committed);
+    let committed;
+    try {
+      committed = await commitPlacement(
+        input,
+        current.value.quote,
+        current.value.policy,
+        intentDigest,
+        destination,
+        customer?.phone === input.contact.recipientPhone ? customer.id : null,
+        statusAccess,
+      );
+    } catch {
+      return (await replay()) ?? failure("infrastructure_unavailable");
     }
-    const racedPlacement = await readPlacement(input.idempotencyKey);
-    if (racedPlacement) {
-      return racedPlacement.intentDigest === intentDigest
-        ? Result.ok(racedPlacement.result)
+    if (committed) {
+      return committed.intentDigest === intentDigest
+        ? Result.ok(committed.result)
         : failure("idempotency_conflict");
     }
     const refreshed = await calculateCheckout(input.quoteInput);
