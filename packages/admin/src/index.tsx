@@ -23,6 +23,7 @@ import { DiscountManagement } from "./DiscountManagement";
 import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
+export { AdminOrderDetail, AdminOrderInbox } from "./OrderManagement";
 export { StaffLoginForm } from "./StaffLoginForm";
 
 const roleLabels: Record<StaffRole, string> = {

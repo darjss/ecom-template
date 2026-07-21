@@ -1,7 +1,11 @@
 import {
+  AdminOrderApiErrorSchema,
+  AdminOrderResponseSchema,
+  AdminOrdersResponseSchema,
   CustomerOrdersResponseSchema,
   OrderAccessApiErrorSchema,
   OrderStatusResponseSchema,
+  type OrderId,
   type OrderStatusToken,
 } from "@ecom/contracts";
 import { createApiClient } from "../eden";
@@ -21,4 +25,20 @@ export const requestCustomerOrders = () =>
     CustomerOrdersResponseSchema,
     OrderAccessApiErrorSchema,
     "Invalid Customer Order history response",
+  );
+
+export const requestAdminOrders = () =>
+  requestResult(
+    () => createApiClient().api.admin.orders.get(),
+    AdminOrdersResponseSchema,
+    AdminOrderApiErrorSchema,
+    "Invalid Admin Order list response",
+  );
+
+export const requestAdminOrder = (id: OrderId) =>
+  requestResult(
+    () => createApiClient().api.admin.orders({ id }).get(),
+    AdminOrderResponseSchema,
+    AdminOrderApiErrorSchema,
+    "Invalid Admin Order response",
   );
