@@ -86,7 +86,14 @@ export {
   readCheckoutOptions,
   type CheckoutFailure,
 } from "./checkout/operations";
-export { listCustomerOrders, readOrderByStatusToken, type OrderAccessFailure } from "./order";
+export {
+  listAdminOrders,
+  listCustomerOrders,
+  readAdminOrder,
+  readOrderByStatusToken,
+  type AdminOrderFailure,
+  type OrderAccessFailure,
+} from "./order";
 export {
   changeDiscountRule,
   createDiscountRule,

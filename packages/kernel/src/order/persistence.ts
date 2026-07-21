@@ -1,4 +1,4 @@
-import type { CustomerId } from "@ecom/contracts";
+import type { CustomerId, OrderId } from "@ecom/contracts";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { database } from "../db/database";
 import { fulfillments, orderLines, orders, payments } from "../db/schema";
@@ -13,6 +13,12 @@ type OrderRow = Pick<
   | "discountTotalMnt"
   | "deliveryFeeMnt"
   | "grandTotalMnt"
+  | "recipientName"
+  | "recipientPhone"
+  | "fulfillmentMode"
+  | "deliveryAddress"
+  | "pickupName"
+  | "pickupAddress"
 >;
 const orderSelection = {
   id: orders.id,
@@ -23,6 +29,12 @@ const orderSelection = {
   discountTotalMnt: orders.discountTotalMnt,
   deliveryFeeMnt: orders.deliveryFeeMnt,
   grandTotalMnt: orders.grandTotalMnt,
+  recipientName: orders.recipientName,
+  recipientPhone: orders.recipientPhone,
+  fulfillmentMode: orders.fulfillmentMode,
+  deliveryAddress: orders.deliveryAddress,
+  pickupName: orders.pickupName,
+  pickupAddress: orders.pickupAddress,
 };
 
 const readOrderDetails = async (orderRows: readonly OrderRow[]) => {
@@ -87,4 +99,22 @@ const listByCustomer = async (customerId: CustomerId) => {
   return readOrderDetails(orderRows);
 };
 
-export const orderQueries = { readByStatusTokenHash, listByCustomer };
+const listRecent = async () => {
+  const orderRows = await database()
+    .select(orderSelection)
+    .from(orders)
+    .orderBy(desc(orders.placedAt), desc(orders.orderNumber))
+    .limit(100);
+  return readOrderDetails(orderRows);
+};
+
+const readById = async (id: OrderId) => {
+  const orderRows = await database()
+    .select(orderSelection)
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  return readOrderDetails(orderRows);
+};
+
+export const orderQueries = { readByStatusTokenHash, listByCustomer, listRecent, readById };

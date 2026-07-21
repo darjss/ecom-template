@@ -1,0 +1,16 @@
+---
+import { AdminOrderDetail } from "@ecom/admin";
+import AdminShell from "../../../components/AdminShell.astro";
+
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "private, no-store");
+const id = Astro.params.id ?? "";
+---
+
+<AdminShell
+  title="Захиалгын дэлгэрэнгүй"
+  description="Хүлээн авагч, хүргэлт, бараа болон төлбөрийн одоогийн мэдээлэл."
+  active="orders"
+>
+  <AdminOrderDetail id={id} client:only="solid-js" />
+</AdminShell>

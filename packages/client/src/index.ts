@@ -68,6 +68,9 @@ export {
 } from "./query/cms";
 export { customerAuthMutationOptions, customerSessionQueryOptions } from "./query/customer";
 export {
+  adminOrderQueryOptions,
+  adminOrdersQueryKey,
+  adminOrdersQueryOptions,
   customerOrdersQueryKey,
   customerOrdersQueryOptions,
   orderStatusQueryOptions,
@@ -89,7 +92,12 @@ export {
   type CustomerAuthMutation,
   type CustomerAuthMutationResult,
 } from "./customer/request";
-export { requestCustomerOrders, requestOrderStatus } from "./order/request";
+export {
+  requestAdminOrder,
+  requestAdminOrders,
+  requestCustomerOrders,
+  requestOrderStatus,
+} from "./order/request";
 export { requestHealth } from "./request";
 export {
   requestCatalogSearch,
