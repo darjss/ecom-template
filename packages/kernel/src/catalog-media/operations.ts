@@ -13,9 +13,9 @@ import {
 import { Result } from "better-result";
 import * as v from "valibot";
 import { env } from "cloudflare:workers";
-import { resolvePendingBundleCachePurge } from "../bundles/operations";
+import { resolveBundleCachePurge } from "../bundles/operations";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { resolvePendingCatalogCachePurge } from "../catalog/cache";
+import { resolveCatalogCachePurge } from "../catalog/cache";
 import { catalogQueries } from "../catalog/persistence";
 import { catalogMediaQueries } from "./persistence";
 
@@ -167,15 +167,12 @@ export const attachCatalogImage = async (
       if (!bundleId.success) {
         return completedAttachment(attachment, "committed_but_not_purged", null);
       }
-      const bundle = await resolvePendingBundleCachePurge(bundleId.output);
+      const bundle = await resolveBundleCachePurge(bundleId.output);
       return bundle.isOk()
         ? completedAttachment(attachment, bundle.value.cache, bundle.value.cachePurgeRequestId)
         : completedAttachment(attachment, "committed_but_not_purged", null);
     }
-    if (!product.cachePurgeDebt) {
-      return completedAttachment(attachment, "not_required", null);
-    }
-    const cache = await resolvePendingCatalogCachePurge(product);
+    const cache = await resolveCatalogCachePurge(product);
     return completedAttachment(attachment, cache.cache, cache.cachePurgeRequestId);
   } catch {
     return completedAttachment(attachment, "committed_but_not_purged", null);

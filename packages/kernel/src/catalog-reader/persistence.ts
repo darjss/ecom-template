@@ -12,7 +12,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { catalogCachePurgeDebts, catalogItems, skus, stockItems, variants } from "../db/schema";
+import { catalogItems, skus, stockItems, variants } from "../db/schema";
 import { catalogMediaQueries } from "../catalog-media/persistence";
 import {
   readProductOptionConfiguration,
@@ -31,9 +31,6 @@ const ReturnedProductSchema = v.strictObject({
   sku: v.string(),
   onHandQuantity: v.number(),
   reservedQuantity: v.number(),
-  cachePurgeAttemptCount: v.nullable(v.number()),
-  cachePurgeRequestId: v.nullable(v.string()),
-  cachePurgeLastAttemptedAt: v.nullable(v.date()),
   createdAt: v.date(),
   updatedAt: v.date(),
 });
@@ -50,9 +47,6 @@ const productSelection = {
   sku: skus.sku,
   onHandQuantity: stockItems.onHandQuantity,
   reservedQuantity: stockItems.reservedQuantity,
-  cachePurgeAttemptCount: catalogCachePurgeDebts.attemptCount,
-  cachePurgeRequestId: catalogCachePurgeDebts.requestId,
-  cachePurgeLastAttemptedAt: catalogCachePurgeDebts.lastAttemptedAt,
   createdAt: catalogItems.createdAt,
   updatedAt: catalogItems.updatedAt,
 };
@@ -63,27 +57,16 @@ const productQuery = () =>
     .from(catalogItems)
     .innerJoin(variants, and(eq(variants.productId, catalogItems.id), eq(variants.isDefault, true)))
     .innerJoin(skus, eq(skus.variantId, variants.id))
-    .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
-    .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id));
+    .innerJoin(stockItems, eq(stockItems.variantId, variants.id));
 
 const projectProduct = (
   source: unknown,
   images: Product["images"],
   optionConfiguration: Product["optionConfiguration"],
 ): Product => {
-  const row = v.parse(ReturnedProductSchema, source);
-  const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...product } =
-    row;
+  const product = v.parse(ReturnedProductSchema, source);
   return v.parse(ProductSchema, {
     ...product,
-    cachePurgeDebt:
-      cachePurgeAttemptCount === null
-        ? null
-        : {
-            attemptCount: cachePurgeAttemptCount,
-            requestId: cachePurgeRequestId,
-            lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
-          },
     images,
     optionConfiguration,
     createdAt: product.createdAt.toISOString(),

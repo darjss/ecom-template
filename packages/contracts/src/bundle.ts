@@ -3,7 +3,6 @@ import * as v from "valibot";
 import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   BundleIdSchema,
-  CachePurgeDebtSchema,
   CachePurgeRequestIdSchema,
   CatalogDescriptionSchema,
   CatalogImageSchema,
@@ -158,7 +157,6 @@ export const BundleSchema = v.strictObject({
   description: CatalogDescriptionSchema,
   priceMnt: PriceMntSchema,
   sku: SkuSchema,
-  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   components: v.pipe(v.array(BundleComponentSchema), v.maxLength(24)),
   personalizations: PersonalizationDefinitionsSchema,
   images: v.array(CatalogImageSchema),

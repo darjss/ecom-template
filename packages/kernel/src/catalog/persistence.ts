@@ -13,7 +13,6 @@ import { alias } from "drizzle-orm/sqlite-core";
 import {
   auditEvents,
   bundleComponents,
-  catalogCachePurgeDebts,
   catalogItems,
   cmsDocuments,
   inventoryEntries,
@@ -96,15 +95,6 @@ const acceptedAuditSelection = (
   commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
   metadataJson: sql<null>`NULL`.as("metadata_json"),
   createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
-});
-
-const cacheDebtSelection = (id: ProductId, revision: string, now: Date) => ({
-  productId: sql<string>`${id}`.as("product_id"),
-  revision: sql<string>`${revision}`.as("revision"),
-  attemptCount: sql<number>`0`.as("attempt_count"),
-  requestId: sql<null>`NULL`.as("request_id"),
-  commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
-  lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
 });
 
 export const catalogQueries = {
@@ -200,11 +190,9 @@ export const catalogQueries = {
 
   async update(actor: StaffActor, id: ProductId, input: UpdateProductInput) {
     const correlationId = crypto.randomUUID();
-    const debtRevision = crypto.randomUUID();
     const now = new Date();
     const db = database();
     const productPredicate = eq(catalogItems.id, id);
-    const publicPredicate = and(productPredicate, ne(catalogItems.state, "draft"));
 
     try {
       const results = await db.batch([
@@ -225,24 +213,6 @@ export const catalogQueries = {
             .from(catalogItems)
             .where(productPredicate),
         ),
-        db
-          .insert(catalogCachePurgeDebts)
-          .select(
-            db
-              .select(cacheDebtSelection(id, debtRevision, now))
-              .from(catalogItems)
-              .where(publicPredicate),
-          )
-          .onConflictDoUpdate({
-            target: catalogCachePurgeDebts.productId,
-            set: {
-              revision: debtRevision,
-              attemptCount: 0,
-              requestId: null,
-              commandCommittedAt: now,
-              lastAttemptedAt: null,
-            },
-          }),
       ] as const);
       const changed = results[0].at(0);
       if (changed) {
@@ -471,7 +441,6 @@ export const catalogQueries = {
         : and(eq(catalogItems.id, id), eq(catalogItems.state, expected), publicationIsValid);
     const now = new Date();
     const correlationId = crypto.randomUUID();
-    const debtRevision = crypto.randomUUID();
     const action = `catalog.product.${transition}`;
     const auditStatement = db.insert(auditEvents).select(
       db
@@ -479,24 +448,6 @@ export const catalogQueries = {
         .from(catalogItems)
         .where(transitionPredicate),
     );
-    const debtStatement = db
-      .insert(catalogCachePurgeDebts)
-      .select(
-        db
-          .select(cacheDebtSelection(id, debtRevision, now))
-          .from(catalogItems)
-          .where(transitionPredicate),
-      )
-      .onConflictDoUpdate({
-        target: catalogCachePurgeDebts.productId,
-        set: {
-          revision: debtRevision,
-          attemptCount: 0,
-          requestId: null,
-          commandCommittedAt: now,
-          lastAttemptedAt: null,
-        },
-      });
     const transitionStatement = db
       .update(catalogItems)
       .set({
@@ -543,11 +494,10 @@ export const catalogQueries = {
                 )
                 .returning({ sku: skus.sku }),
               auditStatement,
-              debtStatement,
               transitionStatement,
             ] as const)
-          )[3]
-        : (await db.batch([auditStatement, debtStatement, transitionStatement] as const))[2];
+          )[2]
+        : (await db.batch([auditStatement, transitionStatement] as const))[1];
     if (transitioned.length === 1) {
       const product = await findCatalogProductById(id);
       return product ? { kind: "changed" as const, product } : { kind: "infrastructure" as const };
@@ -597,51 +547,5 @@ export const catalogQueries = {
             : "invalid_publication";
     await recordRejectedAttempt(actor, action, "product", id, kind);
     return { kind } as const;
-  },
-
-  async findCachePurgeDebt(id: ProductId) {
-    const rows = await database()
-      .select({ revision: catalogCachePurgeDebts.revision })
-      .from(catalogCachePurgeDebts)
-      .where(eq(catalogCachePurgeDebts.productId, id))
-      .limit(1);
-    return rows.at(0);
-  },
-
-  async recordCachePurgeOutcome(
-    id: ProductId,
-    revision: string,
-    outcome: "purged" | "failed",
-    requestId: string | null,
-  ) {
-    if (outcome === "purged") {
-      const rows = await database()
-        .delete(catalogCachePurgeDebts)
-        .where(
-          and(
-            eq(catalogCachePurgeDebts.productId, id),
-            eq(catalogCachePurgeDebts.revision, revision),
-          ),
-        )
-        .returning({ productId: catalogCachePurgeDebts.productId });
-      return rows.length === 1;
-    }
-
-    const rows = await database()
-      .update(catalogCachePurgeDebts)
-      .set({
-        attemptCount: sql`${catalogCachePurgeDebts.attemptCount} + 1`,
-        requestId,
-        lastAttemptedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(catalogCachePurgeDebts.productId, id),
-          eq(catalogCachePurgeDebts.revision, revision),
-          sql`${catalogCachePurgeDebts.attemptCount} < 1000000`,
-        ),
-      )
-      .returning({ productId: catalogCachePurgeDebts.productId });
-    return rows.length === 1;
   },
 };

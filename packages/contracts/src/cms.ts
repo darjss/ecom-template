@@ -282,12 +282,6 @@ export const CmsDocumentResponseSchema = v.strictObject({
     cachePurgeRequestId: v.nullable(v.string()),
   }),
 });
-export const CmsCachePurgeResponseSchema = v.strictObject({
-  data: v.strictObject({
-    cache: CmsCacheOutcomeSchema,
-    cachePurgeRequestId: v.nullable(v.string()),
-  }),
-});
 export const CmsApiErrorSchema = v.strictObject({
   error: v.strictObject({
     code: v.picklist([

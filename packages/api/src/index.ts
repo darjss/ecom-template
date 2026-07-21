@@ -48,7 +48,6 @@ import {
   readDatabaseHealth,
   readStaffAuthSession,
   removeStaff,
-  retryProductCachePurge,
   revokeStaff,
   saveProductOptions,
   searchCatalog,
@@ -597,20 +596,6 @@ const createApi = (definition: StoreDefinition, smsGateway: CustomerSmsDelivery)
         return authorization.response;
       }
       const result = await transitionProduct(authorization.actor, id.output, "reactivate");
-      return result.isErr()
-        ? catalogError(result.error, status)
-        : v.parse(CatalogProductResponseSchema, { data: result.value });
-    })
-    .post("/catalog/products/:id/cache-purge/retry", async ({ params, request, status }) => {
-      const id = v.safeParse(ProductIdSchema, params.id);
-      if (!id.success) {
-        return status(422, apiError("validation", "A valid Product ID is required"));
-      }
-      const authorization = await authorizeRoute(request, definition, status);
-      if (!authorization.authorized) {
-        return authorization.response;
-      }
-      const result = await retryProductCachePurge(authorization.actor, id.output);
       return result.isErr()
         ? catalogError(result.error, status)
         : v.parse(CatalogProductResponseSchema, { data: result.value });

@@ -10,7 +10,6 @@ import type {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { uniq } from "es-toolkit";
-import { createLogger } from "evlog";
 import { purgeCatalogListingCache } from "../catalog/cache";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { groupingQueries } from "./persistence";
@@ -55,32 +54,11 @@ export const listGroupings = async (actor: StaffActor) => {
 };
 
 const purgeCommittedCatalogChange = async () => {
-  try {
-    const debt = await groupingQueries.findCatalogCachePurgeDebt();
-    if (!debt) {
-      return { cache: "not_required" as const, cachePurgeRequestId: null };
-    }
-    const purge = await purgeCatalogListingCache();
-    const outcomeRecorded = await groupingQueries.recordCatalogCachePurgeOutcome(
-      debt.revision,
-      purge.kind,
-      purge.requestId,
-    );
-    const log = createLogger({ action: "grouping.cache_purge" });
-    log.set({
-      cachePurge: { outcome: purge.kind, outcomeRecorded, requestId: purge.requestId },
-    });
-    log.emit();
-    return {
-      cache:
-        purge.kind === "purged" && outcomeRecorded
-          ? ("purged" as const)
-          : ("committed_but_not_purged" as const),
-      cachePurgeRequestId: purge.requestId,
-    };
-  } catch {
-    return { cache: "committed_but_not_purged" as const, cachePurgeRequestId: null };
-  }
+  const purge = await purgeCatalogListingCache();
+  return {
+    cache: purge.kind === "purged" ? ("purged" as const) : ("committed_but_not_purged" as const),
+    cachePurgeRequestId: purge.requestId,
+  };
 };
 
 type PersistenceMutationResult =
@@ -236,15 +214,4 @@ export const replaceTagMembership = (
   return duplicateMembership(input)
     ? failure("duplicate_membership")
     : runAuthorizedMutation(actor, () => groupingQueries.replaceTagMembership(id, input));
-};
-
-export const retryGroupingCachePurge = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return failure("forbidden");
-  }
-  try {
-    return Result.ok(await purgeCommittedCatalogChange());
-  } catch {
-    return failure("infrastructure_unavailable");
-  }
 };
