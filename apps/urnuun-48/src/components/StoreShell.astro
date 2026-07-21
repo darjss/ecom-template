@@ -29,6 +29,7 @@ const linkAttributes = (openInNewTab: boolean) =>
         <button type="submit" class="h-11 rounded-lg border-0 bg-[var(--accent)] px-4 font-bold text-[var(--accent-ink)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-600">Хайх</button>
       </form>
     </details>
+    <a class="cart-link" aria-current={currentPath === "/cart" ? "page" : undefined} href="/cart">Сагс</a>
     <a class="admin-link" aria-current={currentPath === "/orders" ? "page" : undefined} href="/orders">Захиалга</a>
     <a class="admin-link" href="/admin">Удирдлага</a>
   </span>
