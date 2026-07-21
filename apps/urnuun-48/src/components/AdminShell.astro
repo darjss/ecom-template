@@ -1,0 +1,67 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { storeDefinition } from "../profile/definition";
+
+interface Props {
+  title: string;
+  description: string;
+  active: "orders" | "management";
+}
+
+const { title, description, active } = Astro.props;
+const navigation = [
+  { id: "orders", href: "/admin/orders", label: "Захиалга" },
+  { id: "management", href: "/admin/management", label: "Дэлгүүр" },
+] as const;
+---
+<AdminLayout title={`${title} · ${storeDefinition.profile.name}`}>
+  <div class="min-h-screen bg-stone-50 md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
+    <aside
+      class="sticky top-0 z-20 border-b border-black/10 bg-white md:h-screen md:border-r md:border-b-0"
+      aria-label="Удирдлагын үндсэн цэс"
+    >
+      <div class="grid grid-cols-[1fr_auto] items-center gap-x-4 px-5 py-4 md:h-full md:grid-cols-1 md:grid-rows-[auto_auto_1fr_auto] md:items-start md:px-5 md:py-7">
+        <a class="font-extrabold tracking-tight text-(--accent) no-underline" href="/admin/orders">
+          {storeDefinition.profile.name}
+        </a>
+        <nav class="col-span-full mt-3 flex gap-1 overflow-x-auto md:mt-9 md:grid">
+          {navigation.map((item) => (
+            <a
+              class:list={[
+                "border-b-2 px-3 py-2.5 text-sm font-semibold whitespace-nowrap no-underline transition-colors duration-150",
+                active === item.id
+                  ? "border-(--accent) text-(--ink)"
+                  : "border-transparent text-(--muted) hover:border-black/20 hover:text-(--ink)",
+              ]}
+              aria-current={active === item.id ? "page" : undefined}
+              href={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div class="hidden md:block" />
+        <a
+          class="col-start-2 row-start-1 text-sm font-semibold text-(--muted) no-underline hover:text-(--ink) md:col-auto md:row-auto"
+          href="/"
+        >
+          Дэлгүүр харах ↗
+        </a>
+      </div>
+    </aside>
+
+    <main
+      id="admin-content"
+      class="min-w-0 px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12 xl:px-16"
+      tabindex="-1"
+    >
+      <header class="mb-9 border-b border-black/15 pb-7 lg:mb-12">
+        <h1 class="m-0 text-3xl font-extrabold tracking-tight sm:text-4xl">{title}</h1>
+        <p class="mt-2 mb-0 max-w-2xl text-sm leading-relaxed text-(--muted) sm:text-base">
+          {description}
+        </p>
+      </header>
+      <slot />
+    </main>
+  </div>
+</AdminLayout>

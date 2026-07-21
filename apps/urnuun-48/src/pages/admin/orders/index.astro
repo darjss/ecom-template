@@ -1,0 +1,11 @@
+---
+import AdminShell from "../../../components/AdminShell.astro";
+
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+<AdminShell
+  title="Захиалга"
+  description="Шинэ захиалга, банкны шилжүүлэг, бэлтгэл хүргэлтийн ажлын үндсэн нүүр."
+  active="orders"
+/>
