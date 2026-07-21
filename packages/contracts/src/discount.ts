@@ -15,18 +15,6 @@ const discountId = (value: string) => {
 };
 
 export const DiscountRuleIdSchema = v.pipe(v.string(), v.check(discountId, "Invalid Discount ID"));
-const redemptionId = (value: string) => {
-  try {
-    fromString(value, "discount_redemption");
-    return true;
-  } catch {
-    return false;
-  }
-};
-export const DiscountRedemptionIdSchema = v.pipe(
-  v.string(),
-  v.check(redemptionId, "Invalid Discount Redemption ID"),
-);
 export const DiscountNameSchema = v.pipe(
   NormalizedTextSchema,
   v.trim(),
@@ -138,4 +126,3 @@ export type DiscountRuleInput = v.InferOutput<typeof DiscountRuleInputSchema>;
 export type DiscountRule = v.InferOutput<typeof DiscountRuleSchema>;
 export type DiscountClientError = v.InferOutput<typeof DiscountClientErrorSchema>;
 export const createDiscountRuleId = () => typeidUnboxed("discount");
-export const createDiscountRedemptionId = () => typeidUnboxed("discount_redemption");

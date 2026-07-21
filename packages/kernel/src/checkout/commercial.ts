@@ -27,6 +27,7 @@ export type CommercialDiscountContext = {
     endsAt: number | null;
     minimumSubtotalMnt: number;
     globalLimit: number | null;
+    redemptionCount: number;
     targetsJson: string;
     updatedAt: number;
   }>;
