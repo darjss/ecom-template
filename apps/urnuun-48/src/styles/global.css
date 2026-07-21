@@ -104,6 +104,22 @@ html {
 .admin-link:hover {
   text-decoration-color: currentColor;
 }
+.cart-link {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.cart-link:active {
+  transform: scale(0.97);
+}
 .admin-link {
   justify-self: end;
   font-size: 0.86rem;
@@ -474,6 +490,12 @@ footer {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .site-header > span {
+    gap: 0.75rem;
+  }
+  .site-header a[href="/admin"] {
+    display: none;
+  }
   .site-header nav {
     grid-row: 2;
     grid-column: 1 / -1;
@@ -536,6 +558,17 @@ footer {
   }
   footer {
     flex-direction: column;
+  }
+}
+@media (max-width: 32rem) {
+  .site-header .wordmark span {
+    display: none;
+  }
+  .site-header .admin-link {
+    font-size: 0.78rem;
+  }
+  .cart-link {
+    padding-inline: 0.8rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
