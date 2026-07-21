@@ -1,4 +1,5 @@
 export { applyPublicHtmlCache } from "./cache";
+export { CheckoutIsland } from "./CheckoutIsland";
 export { CustomerAuthIsland } from "./CustomerAuthIsland";
 export { CustomerOrdersIsland } from "./CustomerOrdersIsland";
 export { OrderStatusIsland } from "./OrderStatusIsland";
