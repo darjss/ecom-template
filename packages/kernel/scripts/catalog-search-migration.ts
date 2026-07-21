@@ -6,7 +6,7 @@ import {
   krilleerCyrillicToLatin,
 } from "../src/catalog-search/document";
 
-const migrationPath = resolve("packages/kernel/migrations/0021_catalog_search.sql");
+const migrationPath = resolve("packages/kernel/migrations/0001_catalog_search.sql");
 const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const transliterationFields = ["slug", "title", "description", "facets"] as const;
 const transliterationStages = Array.from(

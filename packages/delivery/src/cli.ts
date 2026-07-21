@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import * as v from "valibot";
 
 const StoreSlugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
-const StoreNameSchema = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80));
 const StoreOriginSchema = v.pipe(v.string(), v.url());
 
 const write = (value: string) => process.stdout.write(`${value}\n`);
@@ -14,7 +13,7 @@ const fail = (value: string) => {
 const help = `store-delivery
 
 Commands:
-  create --slug <slug> --name <name>
+  create [--local | --remote] [--persist-to <path>]
   seed [--local | --remote] [--persist-to <path>]
   deploy --store <slug>
   proof --url <origin>`;
@@ -47,11 +46,19 @@ const run = (executable: string, commandArguments: readonly string[]) =>
     });
   });
 
-const createStore = () => {
-  v.parse(StoreSlugSchema, requireOption("--slug"));
-  v.parse(StoreNameSchema, requireOption("--name"));
-  throw new Error("Store creation is unavailable while this repository owns one Store");
-};
+const createStore = () =>
+  run("pnpm", [
+    "exec",
+    "wrangler",
+    "d1",
+    "migrations",
+    "apply",
+    "urnuun-48-db",
+    "--config",
+    "apps/urnuun-48/wrangler.jsonc",
+    commandArgs.includes("--remote") ? "--remote" : "--local",
+    ...(option("--persist-to") ? ["--persist-to", requireOption("--persist-to")] : []),
+  ]);
 
 const seedStore = () =>
   run("pnpm", ["exec", "tsx", "scripts/reference-store/seed.ts", ...commandArgs]);
