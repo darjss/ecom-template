@@ -2,12 +2,14 @@ import {
   DiscountTargetSchema,
   LocationsDocumentSchema,
   PlaceOrderResultSchema,
+  createAuditEventId,
   createDiscountRedemptionId,
   createFulfillmentId,
   createInventoryEntryId,
   createOrderDiscountId,
   createOrderId,
   createOrderLineId,
+  createPaymentEntryId,
   createPaymentId,
   createReservationId,
   type CatalogItemId,
@@ -24,6 +26,7 @@ import { database } from "../db/database";
 import type { OrderStatusAccess } from "../order";
 import type { CommercialFacts } from "./commercial";
 import {
+  auditEvents,
   bundleComponents,
   catalogItemCategories,
   catalogItemCollections,
@@ -43,11 +46,13 @@ import {
   orderDiscountAllocations,
   orderLines,
   orders,
+  paymentEntries,
   payments,
   optionValues,
   personalizationDefinitions,
   personalizationValues,
   placementIdempotency,
+  skus,
   stockItems,
   variantOptionValues,
   variants,
@@ -97,7 +102,7 @@ export const checkoutQueries = {
         name: sql<string>`${catalogItems.name}`.as("checkout_variant_product_name"),
         unitPriceMnt: sql<number | null>`${variants.priceOverrideMnt}`.as("checkout_variant_price"),
         productPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_variant_product_price"),
-        sku: sql<string>`${variants.sku}`.as("checkout_variant_sku"),
+        sku: sql<string>`${skus.sku}`.as("checkout_variant_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_variant_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_variant_reserved",
@@ -105,6 +110,7 @@ export const checkoutQueries = {
       })
       .from(variants)
       .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(variants.id, variantIds));
     const bundleRowsQuery = db
@@ -119,9 +125,10 @@ export const checkoutQueries = {
         ),
         name: sql<string>`${catalogItems.name}`.as("checkout_bundle_name"),
         unitPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_bundle_price"),
-        sku: sql<string>`${catalogItems.sku}`.as("checkout_bundle_sku"),
+        sku: sql<string>`${skus.sku}`.as("checkout_bundle_sku"),
       })
       .from(catalogItems)
+      .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
       .where(inArray(catalogItems.id, bundleIds));
     const componentRowsQuery = db
       .select({
@@ -138,7 +145,7 @@ export const checkoutQueries = {
           "checkout_component_product_kind",
         ),
         name: sql<string>`${componentProducts.name}`.as("checkout_component_name"),
-        sku: sql<string>`${variants.sku}`.as("checkout_component_sku"),
+        sku: sql<string>`${skus.sku}`.as("checkout_component_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_component_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_component_reserved",
@@ -147,6 +154,7 @@ export const checkoutQueries = {
       .from(bundleComponents)
       .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
       .innerJoin(componentProducts, eq(componentProducts.id, variants.productId))
+      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(bundleComponents.bundleId, bundleIds));
     const productIds = db
@@ -345,21 +353,23 @@ export const commitPlacement = async (
         ? sql`EXISTS (
             SELECT 1 FROM ${variants}
             JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
+            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
             WHERE ${variants.id} = ${line.source.id}
               AND ${catalogItems.id} = ${line.source.catalogItemId}
               AND ${variants.state} = 'active'
               AND ${catalogItems.state} = 'published'
               AND ${catalogItems.kind} = 'product'
               AND coalesce(${variants.priceOverrideMnt}, ${catalogItems.priceMnt}) = ${line.unitPriceMnt}
-              AND ${variants.sku} = ${line.sku}
+              AND ${skus.sku} = ${line.sku}
           )`
         : sql`EXISTS (
             SELECT 1 FROM ${catalogItems}
+            JOIN ${skus} ON ${skus.bundleId} = ${catalogItems.id}
             WHERE ${catalogItems.id} = ${line.source.id}
               AND ${catalogItems.state} = 'published'
               AND ${catalogItems.kind} = 'bundle'
               AND ${catalogItems.priceMnt} = ${line.unitPriceMnt}
-              AND ${catalogItems.sku} = ${line.sku}
+              AND ${skus.sku} = ${line.sku}
           )`;
     const optionsCurrent =
       line.source.kind === "variant"
@@ -390,12 +400,13 @@ export const commitPlacement = async (
             SELECT 1 FROM ${bundleComponents}
             JOIN ${variants} ON ${variants.id} = ${bundleComponents.variantId}
             JOIN ${catalogItems} ON ${catalogItems.id} = ${variants.productId}
+            JOIN ${skus} ON ${skus.variantId} = ${variants.id}
             WHERE ${bundleComponents.bundleId} = ${line.source.id}
               AND ${bundleComponents.variantId} = ${component.variantId}
               AND ${bundleComponents.quantity} = ${component.perBundleQuantity}
               AND ${variants.state} = 'active'
               AND ${catalogItems.state} = 'published'
-              AND ${variants.sku} = ${component.sku}
+              AND ${skus.sku} = ${component.sku}
           )`,
             ),
           ]
@@ -796,7 +807,7 @@ export const commitPlacement = async (
             attemptNumber: sql<number>`1`.as("attempt_number"),
             method: sql<"bank_transfer">`'bank_transfer'`.as("method"),
             automatedProvider: sql<"byl" | "direct_qpay" | null>`NULL`.as("automated_provider"),
-            status: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("status"),
+            state: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("state"),
             expectedAmountMnt: orders.grandTotalMnt,
             confirmedAmountMnt: sql<number>`0`.as("confirmed_amount_mnt"),
             refundedAmountMnt: sql<number>`0`.as("refunded_amount_mnt"),
@@ -807,12 +818,37 @@ export const commitPlacement = async (
             workflowInstanceId: sql<string | null>`NULL`.as("workflow_instance_id"),
             refundObligationAmountMnt: sql<number>`0`.as("refund_obligation_amount_mnt"),
             refundObligationState: sql<"none">`'none'`.as("refund_obligation_state"),
-            confirmedBy: sql<string | null>`NULL`.as("confirmed_by"),
             confirmedAt: sql<Date | null>`NULL`.as("confirmed_at"),
             rejectedAt: sql<Date | null>`NULL`.as("rejected_at"),
             expiredAt: sql<Date | null>`NULL`.as("expired_at"),
             createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
             updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+          })
+          .from(orders)
+          .where(eq(orders.id, orderId)),
+      ),
+      db.insert(paymentEntries).select(
+        db
+          .select({
+            id: sql<string>`${createPaymentEntryId()}`.as("id"),
+            paymentId: sql<string>`${paymentId}`.as("payment_id"),
+            sequence: sql<number>`1`.as("sequence"),
+            kind: sql<"expected">`'expected'`.as("kind"),
+            expectedDeltaMnt: orders.grandTotalMnt,
+            confirmedDeltaMnt: sql<number>`0`.as("confirmed_delta_mnt"),
+            refundedDeltaMnt: sql<number>`0`.as("refunded_delta_mnt"),
+            actorKind: sql<"system">`'system'`.as("actor_kind"),
+            staffId: sql<string | null>`NULL`.as("staff_id"),
+            staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
+            telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
+            telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
+            sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
+            reason: sql<string | null>`NULL`.as("reason"),
+            providerReference: sql<string | null>`NULL`.as("provider_reference"),
+            observedAt: sql<Date | null>`NULL`.as("observed_at"),
+            evidenceJson: sql<string | null>`NULL`.as("evidence_json"),
+            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
+            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
           })
           .from(orders)
           .where(eq(orders.id, orderId)),
@@ -829,6 +865,28 @@ export const commitPlacement = async (
           state: sql<"unfulfilled">`'unfulfilled'`.as("state"),
           createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
           updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId)),
+    ),
+    db.insert(auditEvents).select(
+      db
+        .select({
+          id: sql<string>`${createAuditEventId()}`.as("id"),
+          actorKind: sql<"system">`'system'`.as("actor_kind"),
+          actorId: sql<string | null>`NULL`.as("actor_id"),
+          staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
+          telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
+          telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
+          sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
+          action: sql<string>`'order.place'`.as("action"),
+          outcome: sql<"accepted">`'accepted'`.as("outcome"),
+          entityKind: sql<string>`'order'`.as("entity_kind"),
+          entityId: orders.id,
+          reason: sql<string | null>`NULL`.as("reason"),
+          commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
+          metadataJson: sql<string | null>`NULL`.as("metadata_json"),
+          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
         })
         .from(orders)
         .where(eq(orders.id, orderId)),

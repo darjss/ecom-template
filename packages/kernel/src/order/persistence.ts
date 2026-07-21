@@ -49,7 +49,7 @@ const readOrderDetails = async (orderRows: readonly OrderRow[]) => {
       .select({
         orderId: payments.orderId,
         method: payments.method,
-        state: payments.status,
+        state: payments.state,
         expectedAmountMnt: payments.expectedAmountMnt,
         confirmedAmountMnt: payments.confirmedAmountMnt,
         refundedAmountMnt: payments.refundedAmountMnt,

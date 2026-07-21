@@ -46,7 +46,7 @@ export const createDiscountRule = async (actor: StaffActor, input: DiscountRuleI
     return failure("forbidden");
   }
   try {
-    return mapPersistence(await discountQueries.create(input));
+    return mapPersistence(await discountQueries.create(actor, input));
   } catch {
     return failure("infrastructure_unavailable");
   }
@@ -62,7 +62,7 @@ export const changeDiscountRule = async (
     return failure("forbidden");
   }
   try {
-    const result = await discountQueries.update(id, expectedRevision, input);
+    const result = await discountQueries.update(actor, id, expectedRevision, input);
     if (result.kind === "changed") {
       return result.value ? Result.ok(result.value) : failure("infrastructure_unavailable");
     }
@@ -82,7 +82,7 @@ export const setDiscountRuleState = async (
     return failure("forbidden");
   }
   try {
-    const result = await discountQueries.transition(id, expectedRevision, state);
+    const result = await discountQueries.transition(actor, id, expectedRevision, state);
     if (result.kind === "changed") {
       return result.value ? Result.ok(result.value) : failure("infrastructure_unavailable");
     }

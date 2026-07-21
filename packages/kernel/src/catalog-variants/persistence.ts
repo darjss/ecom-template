@@ -24,6 +24,7 @@ import {
   catalogItems,
   optionGroups,
   optionValues,
+  skus,
   stockItems,
   variantOptionValues,
   variants,
@@ -62,7 +63,7 @@ export const readProductOptionConfigurations = async (productIds: readonly Produ
       .select({
         productId: variants.productId,
         id: variants.id,
-        sku: variants.sku,
+        sku: skus.sku,
         isDefault: variants.isDefault,
         state: variants.state,
         priceOverrideMnt: variants.priceOverrideMnt,
@@ -72,6 +73,7 @@ export const readProductOptionConfigurations = async (productIds: readonly Produ
         reservedQuantity: stockItems.reservedQuantity,
       })
       .from(variants)
+      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(variants.productId, productIds))
       .orderBy(asc(variants.createdAt)),
@@ -530,17 +532,14 @@ export const catalogVariantQueries = {
           })
           .where(and(eq(variants.id, variant.id), eq(variants.productId, productId), draftExists)),
       );
-      const insertVariants = newVariants.map((variant) => {
-        const sku = catalogSku(product.slug, "variant", variant.id);
-        return db.insert(variants).select(
+      const insertVariants = newVariants.map((variant) =>
+        db.insert(variants).select(
           db
             .select({
               id: sql<string>`${variant.id}`.as("id"),
               productId: sql<string>`${productId}`.as("product_id"),
               isDefault: sql<boolean>`0`.as("is_default"),
               combinationKey: sql<string>`${variant.combinationKey}`.as("combination_key"),
-              sku: sql<string>`${sku}`.as("sku"),
-              skuCompact: sql<string>`${compactSku(sku)}`.as("sku_compact"),
               priceOverrideMnt: sql<number | null>`${variant.priceOverrideMnt}`.as(
                 "price_override_mnt",
               ),
@@ -548,6 +547,24 @@ export const catalogVariantQueries = {
                 "image_media_asset_id",
               ),
               state: sql<typeof variant.state>`${variant.state}`.as("state"),
+              createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+              updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
+            })
+            .from(catalogItems)
+            .where(draftPredicate),
+        ),
+      );
+      const insertSkus = newVariants.map((variant) => {
+        const sku = catalogSku(product.slug, "variant", variant.id);
+        return db.insert(skus).select(
+          db
+            .select({
+              sku: sql<string>`${sku}`.as("sku"),
+              skuCompact: sql<string>`${compactSku(sku)}`.as("sku_compact"),
+              ownerKind: sql<"variant">`'variant'`.as("owner_kind"),
+              variantId: sql<string>`${variant.id}`.as("variant_id"),
+              bundleId: sql<null>`NULL`.as("bundle_id"),
+              lockedAt: sql<null>`NULL`.as("locked_at"),
               createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
               updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
             })
@@ -589,6 +606,7 @@ export const catalogVariantQueries = {
         ...prepareVariants,
         ...insertVariants,
         ...applyVariants,
+        ...insertSkus,
         ...insertStocks,
         ...insertMembership,
       ] as const);
@@ -679,6 +697,7 @@ export const catalogVariantQueries = {
     const revision = crypto.randomUUID();
     const otherVariant = alias(variants, "other_active_variant");
     const activationVariant = alias(variants, "activation_variant");
+    const activationSku = alias(skus, "activation_sku");
     const activationGroup = alias(optionGroups, "activation_group");
     const activationValue = alias(optionValues, "activation_value");
     const activationMembership = alias(variantOptionValues, "activation_membership");
@@ -749,13 +768,14 @@ export const catalogVariantQueries = {
     const validTargetVariant = db
       .select({ id: activationVariant.id })
       .from(activationVariant)
+      .innerJoin(activationSku, eq(activationSku.variantId, activationVariant.id))
       .where(
         and(
           eq(activationVariant.id, variantId),
           eq(activationVariant.productId, productId),
           eq(activationVariant.isDefault, false),
           sql`coalesce(${activationVariant.priceOverrideMnt}, ${catalogItems.priceMnt}) > 0`,
-          sql`length(trim(${activationVariant.sku})) > 0`,
+          sql`length(trim(${activationSku.sku})) > 0`,
         ),
       );
     const validPublishedActivation = db

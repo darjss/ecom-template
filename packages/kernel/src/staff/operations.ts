@@ -52,6 +52,7 @@ const requireOwner = (actor: StaffActor) =>
 
 const commandContext = (actor: StaffActor) => ({
   actor: { staffId: actor.staffId, role: actor.role },
+  correlationId: crypto.randomUUID(),
 });
 
 const deleteSessions = async (origin: string, member: StaffRecord) => {

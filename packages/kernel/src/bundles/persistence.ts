@@ -3,6 +3,7 @@ import {
   BundleSchema,
   PersonalizationDefinitionsSchema,
   VariantIdSchema,
+  createAuditEventId,
   createBundleId,
   createPersonalizationId,
   createPersonalizationValueId,
@@ -13,21 +14,69 @@ import {
   type SavePersonalizationsInput,
   type UpdateBundleInput,
 } from "@ecom/contracts";
-import { and, asc, desc, eq, exists, inArray, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
+import type { StaffActor } from "../staff/operations";
 import { catalogSku, compactSku } from "../catalog/sku";
 import { database } from "../db/database";
 import {
+  auditEvents,
   bundleComponents,
   catalogCachePurgeDebts,
   catalogItems,
   cmsDocuments,
   personalizationDefinitions,
   personalizationValues,
+  skus,
   variants,
 } from "../db/schema";
+
+const acceptedBundleAuditSelection = (
+  actor: StaffActor,
+  action: string,
+  id: BundleId,
+  correlationId: string,
+  now: Date,
+) => ({
+  id: sql<string>`${createAuditEventId()}`.as("id"),
+  actorKind: sql<"staff">`'staff'`.as("actor_kind"),
+  actorId: sql<string>`${actor.staffId}`.as("actor_id"),
+  staffRole: sql<typeof actor.role>`${actor.role}`.as("staff_role"),
+  telegramOperatorLabel: sql<null>`NULL`.as("telegram_operator_label"),
+  telegramUserId: sql<null>`NULL`.as("telegram_user_id"),
+  sourceChannel: sql<"admin">`'admin'`.as("source_channel"),
+  action: sql<string>`${action}`.as("action"),
+  outcome: sql<"accepted">`'accepted'`.as("outcome"),
+  entityKind: sql<string>`'bundle'`.as("entity_kind"),
+  entityId: sql<string>`${id}`.as("entity_id"),
+  reason: sql<null>`NULL`.as("reason"),
+  commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
+  metadataJson: sql<null>`NULL`.as("metadata_json"),
+  createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
+});
+
+const recordBundleRejectedAttempt = async (
+  actor: StaffActor,
+  action: string,
+  id: BundleId,
+  reason: string,
+) =>
+  database().insert(auditEvents).values({
+    id: createAuditEventId(),
+    actorKind: "staff",
+    actorId: actor.staffId,
+    staffRole: actor.role,
+    sourceChannel: "admin",
+    action,
+    outcome: "rejected",
+    entityKind: "bundle",
+    entityId: id,
+    reason,
+    commandCorrelationId: crypto.randomUUID(),
+    createdAt: new Date(),
+  });
 
 export const readPersonalizations = async (catalogItemIds: readonly CatalogItemId[]) => {
   if (catalogItemIds.length === 0) {
@@ -110,7 +159,7 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
       name: catalogItems.name,
       description: catalogItems.description,
       priceMnt: catalogItems.priceMnt,
-      sku: catalogItems.sku,
+      sku: skus.sku,
       cachePurgeAttemptCount: catalogCachePurgeDebts.attemptCount,
       cachePurgeRequestId: catalogCachePurgeDebts.requestId,
       cachePurgeLastAttemptedAt: catalogCachePurgeDebts.lastAttemptedAt,
@@ -118,6 +167,7 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
       updatedAt: catalogItems.updatedAt,
     })
     .from(catalogItems)
+    .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
     .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id))
     .where(and(...conditions))
     .orderBy(desc(catalogItems.createdAt));
@@ -132,11 +182,12 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
         variantId: bundleComponents.variantId,
         quantity: bundleComponents.quantity,
         productName: catalogItems.name,
-        variantLabel: variants.sku,
+        variantLabel: skus.sku,
       })
       .from(bundleComponents)
       .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
       .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
+      .innerJoin(skus, eq(skus.variantId, variants.id))
       .where(inArray(bundleComponents.bundleId, ids))
       .orderBy(asc(bundleComponents.variantId)),
     readPersonalizations(ids),
@@ -217,12 +268,20 @@ export const bundleQueries = {
           id,
           kind: "bundle",
           slug: input.slug,
-          sku,
-          skuCompact: compactSku(sku),
           state: "draft",
           name: input.name,
           description: input.description,
           priceMnt: input.priceMnt,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(skus).values({
+          sku,
+          skuCompact: compactSku(sku),
+          ownerKind: "bundle",
+          variantId: null,
+          bundleId: id,
+          lockedAt: null,
           createdAt: now,
           updatedAt: now,
         }),
@@ -475,7 +534,7 @@ export const bundleQueries = {
       return { kind: "invalid_personalization" as const };
     }
   },
-  async transition(id: BundleId, action: "publish" | "archive" | "reactivate") {
+  async transition(actor: StaffActor, id: BundleId, action: "publish" | "archive" | "reactivate") {
     const db = database();
     const target = action === "archive" ? "archived" : "published";
     const currentState = await db
@@ -488,6 +547,8 @@ export const bundleQueries = {
     }
     const now = new Date();
     const revision = crypto.randomUUID();
+    const auditAction = `catalog.bundle.${action}`;
+    const correlationId = crypto.randomUUID();
     if (action === "publish" || action === "reactivate") {
       const invalidComponent = db
         .select({ id: bundleComponents.variantId })
@@ -512,7 +573,25 @@ export const bundleQueries = {
         ),
         notExists(invalidComponent),
       );
+      const publishedNow = exists(
+        db
+          .select({ id: catalogItems.id })
+          .from(catalogItems)
+          .where(
+            and(
+              eq(catalogItems.id, id),
+              eq(catalogItems.state, "published"),
+              eq(catalogItems.updatedAt, now),
+            ),
+          ),
+      );
       const results = await db.batch([
+        db.insert(auditEvents).select(
+          db
+            .select(acceptedBundleAuditSelection(actor, auditAction, id, correlationId, now))
+            .from(catalogItems)
+            .where(valid),
+        ),
         db
           .update(catalogItems)
           .set({
@@ -523,6 +602,10 @@ export const bundleQueries = {
           })
           .where(valid)
           .returning({ id: catalogItems.id }),
+        db
+          .update(skus)
+          .set({ lockedAt: now, updatedAt: now })
+          .where(and(eq(skus.bundleId, id), publishedNow, isNull(skus.lockedAt))),
         db
           .insert(catalogCachePurgeDebts)
           .select(
@@ -555,7 +638,7 @@ export const bundleQueries = {
             },
           }),
       ] as const);
-      if (results[0].length) {
+      if (results[1].length) {
         return { kind: "changed" as const };
       }
       const rows = await db
@@ -571,6 +654,7 @@ export const bundleQueries = {
         current.state !== (action === "publish" ? "draft" : "archived")
           ? ("invalid_lifecycle" as const)
           : ("invalid_publication" as const);
+      await recordBundleRejectedAttempt(actor, auditAction, id, kind);
       return { kind };
     }
     const from = "published";
@@ -598,6 +682,12 @@ export const bundleQueries = {
       notExists(publishedHomepageDependency),
     );
     const results = await db.batch([
+      db.insert(auditEvents).select(
+        db
+          .select(acceptedBundleAuditSelection(actor, auditAction, id, correlationId, now))
+          .from(catalogItems)
+          .where(archivePredicate),
+      ),
       db
         .update(catalogItems)
         .set({ state: to, archivedAt: now, updatedAt: now })
@@ -629,7 +719,7 @@ export const bundleQueries = {
           },
         }),
     ] as const);
-    if (results[0].length) {
+    if (results[1].length) {
       return { kind: "changed" as const };
     }
     const rows = await db
@@ -651,9 +741,12 @@ export const bundleQueries = {
         ),
       )
       .limit(1);
-    return homepageDependency.length > 0
-      ? { kind: "published_cms_dependency" as const }
-      : { kind: "invalid_lifecycle" as const };
+    if (homepageDependency.length > 0) {
+      await recordBundleRejectedAttempt(actor, auditAction, id, "published_cms_dependency");
+      return { kind: "published_cms_dependency" as const };
+    }
+    await recordBundleRejectedAttempt(actor, auditAction, id, "invalid_lifecycle");
+    return { kind: "invalid_lifecycle" as const };
   },
   async findCachePurgeDebt(id: CatalogItemId) {
     const rows = await database()
