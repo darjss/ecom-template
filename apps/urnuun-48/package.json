@@ -4,11 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm dev:direct",
-    "dev:direct": "astro dev --host 127.0.0.1 --port ${PORT:-4321}",
+    "dev": "astro dev --host 127.0.0.1 --port ${PORT:-4321}",
     "build": "astro build",
-    "preview": "pnpm --dir ../.. store:delivery preview --store urnuun-48",
-    "preview:direct": "wrangler dev --config dist/server/wrangler.json --ip 127.0.0.1 --port ${PORT} --upstream-protocol https --persist-to .wrangler/state",
+    "preview": "wrangler dev --config dist/server/wrangler.json --ip 127.0.0.1 --port ${PORT:-4321} --upstream-protocol https --persist-to .wrangler/state",
     "bindings:generate": "wrangler types worker-configuration.d.ts --config wrangler.jsonc --env-file=.bindings.vars",
     "db:migrate:local": "wrangler d1 migrations apply urnuun-48-db --local --config wrangler.jsonc"
   },
