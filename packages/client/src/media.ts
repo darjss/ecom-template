@@ -4,9 +4,12 @@ import {
   type CatalogItemId,
   type MediaUploadFields,
 } from "@ecom/contracts";
+import { mutationOptions, type QueryClient } from "@tanstack/solid-query";
+import type { InferErr, InferOk } from "better-result";
 import * as v from "valibot";
-import { createApiClient } from "../eden";
-import { requestResult } from "../request";
+import { refreshCatalogItemOwner } from "./admin";
+import { createApiClient } from "./eden";
+import { requestResult, unwrapRequestResult } from "./request";
 
 const MediaApiErrorSchema = v.union([
   CatalogApiErrorSchema,
@@ -23,12 +26,12 @@ const MediaApiErrorSchema = v.union([
   ),
 ]);
 
-export type CatalogImageUpload = MediaUploadFields & {
+type CatalogImageUpload = MediaUploadFields & {
   readonly catalogItemId: CatalogItemId;
   readonly file: File;
 };
 
-export const requestCatalogImageUpload = (upload: CatalogImageUpload) =>
+const requestCatalogImageUpload = (upload: CatalogImageUpload) =>
   requestResult(
     () =>
       createApiClient().api.catalog.items({ id: upload.catalogItemId }).images.post({
@@ -40,3 +43,13 @@ export const requestCatalogImageUpload = (upload: CatalogImageUpload) =>
     MediaApiErrorSchema,
     "Invalid Catalog image response",
   );
+
+type CatalogImageResult = Awaited<ReturnType<typeof requestCatalogImageUpload>>;
+
+export const catalogImageMutationOptions = (queryClient: QueryClient) =>
+  mutationOptions<InferOk<CatalogImageResult>, InferErr<CatalogImageResult>, CatalogImageUpload>({
+    mutationFn: async (upload) => unwrapRequestResult(await requestCatalogImageUpload(upload)),
+    onSuccess: async (_data, upload) => {
+      await refreshCatalogItemOwner(queryClient, upload.catalogItemId);
+    },
+  });
