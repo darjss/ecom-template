@@ -26,6 +26,7 @@ export type BundleMutation =
   | ({ readonly kind: "create" } & CreateBundleInput)
   | ({ readonly kind: "update"; readonly id: BundleId } & UpdateBundleInput)
   | ({ readonly kind: "save-components"; readonly id: BundleId } & SaveBundleComponentsInput)
+  | { readonly kind: "retry-cache-purge"; readonly id: BundleId }
   | { readonly kind: "publish" | "archive" | "reactivate"; readonly id: BundleId };
 
 export const requestBundleMutation = (mutation: BundleMutation) => {
@@ -49,7 +50,9 @@ export const requestBundleMutation = (mutation: BundleMutation) => {
           ? client.api.catalog.bundles({ id: mutation.id }).components.put({
               components: mutation.components,
             })
-          : client.api.catalog.bundles({ id: mutation.id })({ action: mutation.kind }).post();
+          : mutation.kind === "retry-cache-purge"
+            ? client.api.catalog.bundles({ id: mutation.id })["cache-purge"].retry.post()
+            : client.api.catalog.bundles({ id: mutation.id })({ action: mutation.kind }).post();
   return requestResult(
     request,
     BundleMutationResponseSchema,

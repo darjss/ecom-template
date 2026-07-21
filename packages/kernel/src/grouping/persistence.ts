@@ -30,6 +30,7 @@ import {
   catalogItemCollections,
   catalogItems,
   catalogItemTags,
+  catalogListingCachePurgeDebt,
   categories,
   collections,
   discountRules,
@@ -39,6 +40,29 @@ import { database } from "../db/database";
 import { groupingQuerySet } from "./query-set";
 
 const timestamp = (value: Date | null) => value?.toISOString() ?? null;
+const catalogDebtStatement = (now: Date) => {
+  const revision = crypto.randomUUID();
+  return database()
+    .insert(catalogListingCachePurgeDebt)
+    .values({
+      key: "catalog",
+      revision,
+      attemptCount: 0,
+      requestId: null,
+      commandCommittedAt: now,
+      lastAttemptedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: catalogListingCachePurgeDebt.key,
+      set: {
+        revision,
+        attemptCount: 0,
+        requestId: null,
+        commandCommittedAt: now,
+        lastAttemptedAt: null,
+      },
+    });
+};
 type GroupingRow = {
   id: string;
   state: GroupingState;
@@ -89,8 +113,10 @@ const validateCatalogItemIds = async (catalogItemIds: readonly CatalogItemId[]) 
 };
 
 type BatchStatement = Parameters<ReturnType<typeof database>["batch"]>[0][number];
-const replaceRows = (remove: BatchStatement, insert?: BatchStatement) =>
-  insert ? database().batch([remove, insert]) : database().batch([remove]);
+const replaceRows = (remove: BatchStatement, insert?: BatchStatement) => {
+  const debt = catalogDebtStatement(new Date());
+  return insert ? database().batch([remove, insert, debt]) : database().batch([remove, debt]);
+};
 
 const categoryQuerySet = groupingQuerySet<CategoryId, CategoryInput>(validateCatalogItemIds)({
   rows: (id: CategoryId) =>
@@ -119,6 +145,7 @@ const categoryQuerySet = groupingQuerySet<CategoryId, CategoryInput>(validateCat
       database()
         .insert(categories)
         .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
     ]),
   dto: categoryDto,
   replace: (id, input) =>
@@ -161,6 +188,7 @@ const collectionQuerySet = groupingQuerySet<CollectionId, CollectionInput>(valid
       database()
         .insert(collections)
         .values({ id, ...input, state: "draft", createdAt: now, updatedAt: now }),
+      catalogDebtStatement(now),
     ]),
   dto: collectionDto,
   replace: (id, input) =>
@@ -214,6 +242,7 @@ const tagQuerySet = groupingQuerySet<TagId, TagInput>(validateCatalogItemIds)({
           createdAt: now,
           updatedAt: now,
         }),
+      catalogDebtStatement(now),
     ]),
   dto: tagDto,
   replace: (id, input) =>
@@ -313,6 +342,7 @@ export const groupingQueries = {
       collectionRows,
       tagRows,
       catalogItemRows,
+      cacheDebtRows,
       categoryMemberships,
       collectionMemberships,
       tagMemberships,
@@ -332,6 +362,7 @@ export const groupingQueries = {
         })
         .from(catalogItems)
         .orderBy(asc(catalogItems.name), asc(catalogItems.id)),
+      database().select().from(catalogListingCachePurgeDebt).limit(1),
       database()
         .select({
           groupingId: catalogItemCategories.categoryId,
@@ -360,6 +391,13 @@ export const groupingQueries = {
       ),
       tags: tagRows.map((row) => tagDto(row, membershipIds(row.id, tagMemberships))),
       catalogItems: catalogItemRows,
+      cachePurgeDebt: cacheDebtRows[0]
+        ? {
+            attemptCount: cacheDebtRows[0].attemptCount,
+            requestId: cacheDebtRows[0].requestId,
+            lastAttemptedAt: timestamp(cacheDebtRows[0].lastAttemptedAt),
+          }
+        : null,
     };
   },
 
@@ -439,6 +477,7 @@ export const groupingQueries = {
               and(eq(categories.id, id), eq(categories.state, current.state), ...lineagePredicates),
             )
             .returning({ id: categories.id }),
+          catalogDebtStatement(now),
         ])
       )[0];
       return changed.length === 1
@@ -480,6 +519,7 @@ export const groupingQueries = {
               ),
             )
             .returning({ id: collections.id }),
+          catalogDebtStatement(now),
         ])
       )[0];
       if (changed.length === 1) {
@@ -521,6 +561,7 @@ export const groupingQueries = {
           .update(tags)
           .set({ label: input.label, normalizedLabel, updatedAt: now })
           .where(eq(tags.id, id)),
+        catalogDebtStatement(now),
       ]);
       return { kind: "changed" as const, value: await findTag(id) };
     } catch {
@@ -614,6 +655,7 @@ export const groupingQueries = {
           })
           .where(transitionPredicate)
           .returning({ id: categories.id }),
+        catalogDebtStatement(now),
       ])
     )[0];
     if (changed.length === 1) {
@@ -693,6 +735,7 @@ export const groupingQueries = {
           ),
         )
         .returning({ id: collections.id }),
+      catalogDebtStatement(now),
     ]);
     if (changed.length === 1) {
       return { kind: "changed" as const, value: await findCollection(id) };
@@ -713,6 +756,7 @@ export const groupingQueries = {
             .set(transitionDates(current, target, now))
             .where(and(eq(tags.id, id), eq(tags.state, current.state)))
             .returning({ id: tags.id }),
+          catalogDebtStatement(now),
         ]);
         return changed.length;
       },
@@ -722,6 +766,50 @@ export const groupingQueries = {
   replaceCategoryMembership: categoryQuerySet.replaceMembership,
   replaceCollectionMembership: collectionQuerySet.replaceMembership,
   replaceTagMembership: tagQuerySet.replaceMembership,
+
+  async findCatalogCachePurgeDebt() {
+    const [row] = await database()
+      .select({ revision: catalogListingCachePurgeDebt.revision })
+      .from(catalogListingCachePurgeDebt)
+      .where(eq(catalogListingCachePurgeDebt.key, "catalog"))
+      .limit(1);
+    return row;
+  },
+
+  async recordCatalogCachePurgeOutcome(
+    revision: string,
+    outcome: "purged" | "failed",
+    requestId: string | null,
+  ) {
+    if (outcome === "purged") {
+      const rows = await database()
+        .delete(catalogListingCachePurgeDebt)
+        .where(
+          and(
+            eq(catalogListingCachePurgeDebt.key, "catalog"),
+            eq(catalogListingCachePurgeDebt.revision, revision),
+          ),
+        )
+        .returning({ key: catalogListingCachePurgeDebt.key });
+      return rows.length === 1;
+    }
+    const rows = await database()
+      .update(catalogListingCachePurgeDebt)
+      .set({
+        attemptCount: sql`${catalogListingCachePurgeDebt.attemptCount} + 1`,
+        requestId,
+        lastAttemptedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(catalogListingCachePurgeDebt.key, "catalog"),
+          eq(catalogListingCachePurgeDebt.revision, revision),
+          sql`${catalogListingCachePurgeDebt.attemptCount} < 1000000`,
+        ),
+      )
+      .returning({ key: catalogListingCachePurgeDebt.key });
+    return rows.length === 1;
+  },
 
   async listPublicGroupings() {
     const [categoryRows, collectionRows, categoryMemberships, collectionMemberships] =

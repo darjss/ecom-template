@@ -4,6 +4,7 @@ import {
   CollectionIdSchema,
   CollectionInputSchema,
   GroupingApiErrorSchema,
+  GroupingCachePurgeResponseSchema,
   GroupingListResponseSchema,
   GroupingMembershipInputSchema,
   GroupingMutationResponseSchema,
@@ -19,6 +20,7 @@ import {
   replaceCategoryMembership,
   replaceCollectionMembership,
   replaceTagMembership,
+  retryGroupingCachePurge,
   setCategoryState,
   setCollectionState,
   setTagState,
@@ -103,6 +105,16 @@ export const createGroupingRoutes = (authorize: AuthorizeGroupingRoute) =>
       return result.isErr()
         ? groupingError(result.error, status)
         : v.parse(GroupingListResponseSchema, { data: result.value });
+    })
+    .post("/catalog/groupings/cache-purge/retry", async ({ request, status }) => {
+      const authorization = await authorize(request, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await retryGroupingCachePurge(authorization.actor);
+      return result.isErr()
+        ? groupingError(result.error, status)
+        : v.parse(GroupingCachePurgeResponseSchema, { data: result.value });
     })
     .post("/catalog/categories", async ({ body, request, status }) => {
       const input = v.safeParse(CategoryInputSchema, body);

@@ -1,5 +1,6 @@
 import {
   CmsApiErrorSchema,
+  CmsCachePurgeResponseSchema,
   CmsDocumentListResponseSchema,
   CmsDocumentResponseSchema,
   CommerceSettingsMutationResponseSchema,
@@ -43,6 +44,14 @@ export const requestCmsMutation = (mutation: CmsMutation) => {
     "Invalid CMS mutation response",
   );
 };
+
+export const requestCmsCachePurge = () =>
+  requestResult(
+    () => createApiClient().api.cms["cache-purge"].retry.post(),
+    CmsCachePurgeResponseSchema,
+    CmsApiErrorSchema,
+    "Invalid CMS cache-purge response",
+  );
 
 export const requestCommerceSettingsMutation = (settings: CommerceSettings) =>
   requestResult(

@@ -195,9 +195,21 @@ export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => 
 };
 
 const resolvePurge = async () => {
+  const debt = await cmsQueries.readDebt();
+  if (!debt) {
+    return { cache: "not_required" as const, cachePurgeRequestId: null };
+  }
   const purge = await purgeCmsCache();
+  const recorded = await cmsQueries.recordPurge(
+    debt.revision,
+    purge.requestId,
+    purge.kind === "purged",
+  );
   return {
-    cache: purge.kind === "purged" ? ("purged" as const) : ("committed_but_not_purged" as const),
+    cache:
+      purge.kind === "purged" && recorded
+        ? ("purged" as const)
+        : ("committed_but_not_purged" as const),
     cachePurgeRequestId: purge.requestId,
   };
 };
@@ -219,6 +231,17 @@ export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKin
     return published
       ? Result.ok<CmsMutationResult>({ document: published, ...(await resolvePurge()) })
       : Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
+  } catch {
+    return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
+  }
+};
+
+export const retryCmsCachePurge = async (actor: StaffActor) => {
+  if (!authorize(actor)) {
+    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
+  }
+  try {
+    return Result.ok(await resolvePurge());
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }
@@ -259,7 +282,24 @@ export const saveCommerceSettings = async (
     if (!saved) {
       return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
     }
-    return Result.ok({ settings: saved, ...(await resolvePurge()) });
+    const debt = await cmsQueries.readDebt();
+    if (!debt) {
+      return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
+    }
+    const purge = await purgeCmsCache();
+    const recorded = await cmsQueries.recordPurge(
+      debt.revision,
+      purge.requestId,
+      purge.kind === "purged",
+    );
+    return Result.ok({
+      settings: saved,
+      cache:
+        purge.kind === "purged" && recorded
+          ? ("purged" as const)
+          : ("committed_but_not_purged" as const),
+      cachePurgeRequestId: purge.requestId,
+    });
   } catch {
     return Result.err<never, CmsOperationFailure>({ code: "infrastructure_unavailable" });
   }

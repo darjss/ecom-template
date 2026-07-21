@@ -94,6 +94,12 @@ export const MediaUploadResponseSchema = v.strictObject({
 export const MediaUploadMaxBytes = 8 * 1024 * 1024;
 export const MediaUploadMultipartMaxBytes = MediaUploadMaxBytes + 64 * 1024;
 
+export const CachePurgeDebtSchema = v.strictObject({
+  attemptCount: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  requestId: CachePurgeRequestIdSchema,
+  lastAttemptedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+});
+
 export const OptionKeySchema = v.pipe(
   v.string(),
   v.trim(),
@@ -151,6 +157,7 @@ export const ProductSchema = v.strictObject({
   sku: SkuSchema,
   onHandQuantity: InventoryQuantitySchema,
   reservedQuantity: InventoryQuantitySchema,
+  cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   images: v.array(CatalogImageSchema),
   optionConfiguration: ProductOptionConfigurationSchema,
   createdAt: v.pipe(v.string(), v.isoTimestamp()),

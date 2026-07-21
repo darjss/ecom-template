@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { ContractClientErrorSchema, NetworkClientErrorSchema } from "./client-error";
 import {
   CatalogItemIdSchema,
+  CachePurgeDebtSchema,
   CatalogItemKindSchema,
   CatalogNameSchema,
   CatalogSlugSchema,
@@ -94,6 +95,7 @@ export const GroupingListResponseSchema = v.strictObject({
     collections: v.array(CollectionSchema),
     tags: v.array(TagSchema),
     catalogItems: v.array(GroupingCatalogItemSchema),
+    cachePurgeDebt: v.nullable(CachePurgeDebtSchema),
   }),
 });
 const GroupingCachePurgeResultSchema = v.strictObject({
@@ -106,6 +108,10 @@ export const GroupingMutationResponseSchema = v.strictObject({
     ...GroupingCachePurgeResultSchema.entries,
   }),
 });
+export const GroupingCachePurgeResponseSchema = v.strictObject({
+  data: GroupingCachePurgeResultSchema,
+});
+
 export const CategoryInputSchema = v.strictObject({
   name: CatalogNameSchema,
   slug: CatalogSlugSchema,

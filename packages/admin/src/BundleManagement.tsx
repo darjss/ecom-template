@@ -341,6 +341,26 @@ const BundleRow = (props: { bundle: Bundle }) => {
       </ul>
       <CatalogImageForm item={props.bundle} />
       <PersonalizationEditor catalogItemId={props.bundle.id} />
+      <Show when={props.bundle.cachePurgeDebt} keyed>
+        {(debt) => (
+          <div role="alert" tabindex="-1">
+            <p>
+              Өөрчлөлт хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Оролдлого: {debt.attemptCount}
+            </p>
+            <Show when={debt.requestId} keyed>
+              {(requestId) => <p>Cloudflare хүсэлтийн ID: {requestId}</p>}
+            </Show>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate({ kind: "retry-cache-purge", id: props.bundle.id })}
+            >
+              Cache цэвэрлэгээг дахин оролдох
+            </Button>
+          </div>
+        )}
+      </Show>
       <Show when={mutation.error} keyed>
         {(error) => <p role="alert">{errorMessage(error)}</p>}
       </Show>

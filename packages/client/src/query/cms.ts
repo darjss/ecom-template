@@ -1,6 +1,7 @@
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/solid-query";
 import type { InferErr, InferOk } from "better-result";
 import {
+  requestCmsCachePurge,
   requestCmsDocuments,
   requestCmsMutation,
   requestCommerceSettings,
@@ -14,6 +15,7 @@ const cmsQueryKey = ["cms", "documents"] as const;
 const commerceSettingsQueryKey = ["commerce-settings"] as const;
 type CmsResult = Awaited<ReturnType<typeof requestCmsDocuments>>;
 type CmsMutationResult = Awaited<ReturnType<typeof requestCmsMutation>>;
+type CmsCachePurgeResult = Awaited<ReturnType<typeof requestCmsCachePurge>>;
 type SettingsResult = Awaited<ReturnType<typeof requestCommerceSettings>>;
 type SettingsMutationResult = Awaited<ReturnType<typeof requestCommerceSettingsMutation>>;
 
@@ -36,6 +38,11 @@ export const cmsMutationOptions = (queryClient: QueryClient) =>
       await queryClient.refetchQueries({ queryKey: cmsQueryKey, type: "active" });
     },
   });
+export const cmsCachePurgeMutationOptions = () =>
+  mutationOptions<InferOk<CmsCachePurgeResult>, InferErr<CmsCachePurgeResult>, void>({
+    mutationFn: async () => unwrapRequestResult(await requestCmsCachePurge()),
+  });
+
 export const commerceSettingsMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<
     InferOk<SettingsMutationResult>,

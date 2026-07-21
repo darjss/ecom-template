@@ -19,6 +19,7 @@ import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import {
   bundleComponents,
+  catalogCachePurgeDebts,
   catalogItemImages,
   catalogItems,
   optionGroups,
@@ -320,6 +321,7 @@ export const catalogVariantQueries = {
         return { kind: "immutable_configuration" as const };
       }
       const now = new Date();
+      const revision = crypto.randomUUID();
       const groupTemporaryPositions = temporaryPositions(
         currentGroups.map(({ position }) => position),
         groups.map(({ position }) => position),
@@ -375,8 +377,28 @@ export const catalogVariantQueries = {
           })
           .where(and(eq(variants.id, variant.id), eq(variants.productId, productId))),
       );
+      const cacheDebt = db
+        .insert(catalogCachePurgeDebts)
+        .values({
+          productId,
+          revision,
+          attemptCount: 0,
+          requestId: null,
+          commandCommittedAt: now,
+          lastAttemptedAt: null,
+        })
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        });
       await db.batch([
-        db.update(catalogItems).set({ updatedAt: now }).where(eq(catalogItems.id, productId)),
+        cacheDebt,
         ...prepareGroups,
         ...prepareValues,
         ...groupUpdates,
@@ -618,6 +640,7 @@ export const catalogVariantQueries = {
       }
     }
     const now = new Date();
+    const revision = crypto.randomUUID();
     const variantPredicate = and(
       eq(variants.id, variantId),
       eq(variants.productId, productId),
@@ -633,6 +656,37 @@ export const catalogVariantQueries = {
         })
         .where(variantPredicate)
         .returning({ id: variants.id }),
+      db
+        .insert(catalogCachePurgeDebts)
+        .select(
+          db
+            .select({
+              productId: sql<string>`${productId}`.as("product_id"),
+              revision: sql<string>`${revision}`.as("revision"),
+              attemptCount: sql<number>`0`.as("attempt_count"),
+              requestId: sql<null>`NULL`.as("request_id"),
+              commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+            })
+            .from(catalogItems)
+            .where(
+              and(
+                eq(catalogItems.id, productId),
+                ne(catalogItems.state, "draft"),
+                exists(db.select({ id: variants.id }).from(variants).where(variantPredicate)),
+              ),
+            ),
+        )
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        }),
     ] as const);
     return results[0].length ? { kind: "changed" as const } : { kind: "not_found" as const };
   },
@@ -640,6 +694,7 @@ export const catalogVariantQueries = {
   async transition(productId: ProductId, variantId: VariantId, state: "active" | "archived") {
     const db = database();
     const now = new Date();
+    const revision = crypto.randomUUID();
     const otherVariant = alias(variants, "other_active_variant");
     const activationVariant = alias(variants, "activation_variant");
     const activationSku = alias(skus, "activation_sku");
@@ -784,6 +839,37 @@ export const catalogVariantQueries = {
         .set({ state, updatedAt: now })
         .where(variantPredicate)
         .returning({ id: variants.id }),
+      db
+        .insert(catalogCachePurgeDebts)
+        .select(
+          db
+            .select({
+              productId: sql<string>`${productId}`.as("product_id"),
+              revision: sql<string>`${revision}`.as("revision"),
+              attemptCount: sql<number>`0`.as("attempt_count"),
+              requestId: sql<null>`NULL`.as("request_id"),
+              commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+            })
+            .from(catalogItems)
+            .where(
+              and(
+                eq(catalogItems.id, productId),
+                ne(catalogItems.state, "draft"),
+                exists(db.select({ id: variants.id }).from(variants).where(variantPredicate)),
+              ),
+            ),
+        )
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        }),
     ] as const);
     if (results[0].length) {
       return { kind: "changed" as const };

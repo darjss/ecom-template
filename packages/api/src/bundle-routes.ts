@@ -15,6 +15,7 @@ import {
   createBundle,
   listBundles,
   readCatalogItemPersonalizations,
+  retryBundleCachePurge,
   saveBundleComponents,
   saveCatalogItemPersonalizations,
   transitionBundle,
@@ -145,6 +146,20 @@ export const createBundleRoutes = (authorize: AuthorizeBundleRoute) =>
         return authorization.response;
       }
       const result = await saveBundleComponents(authorization.actor, id.output, input.output);
+      return result.isErr()
+        ? bundleError(result.error, status)
+        : v.parse(BundleMutationResponseSchema, { data: result.value });
+    })
+    .post("/catalog/bundles/:id/cache-purge/retry", async ({ params, request, status }) => {
+      const id = v.safeParse(BundleIdSchema, params.id);
+      if (!id.success) {
+        return validationError(status, "A valid Bundle ID is required");
+      }
+      const authorization = await authorize(request, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await retryBundleCachePurge(authorization.actor, id.output);
       return result.isErr()
         ? bundleError(result.error, status)
         : v.parse(BundleMutationResponseSchema, { data: result.value });

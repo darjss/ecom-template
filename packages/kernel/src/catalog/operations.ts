@@ -7,7 +7,7 @@ import type {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
-import { resolveCatalogCachePurge } from "./cache";
+import { resolvePendingCatalogCachePurge } from "./cache";
 import { inventoryQueries } from "../inventory/persistence";
 import { catalogQueries } from "./persistence";
 
@@ -80,7 +80,7 @@ export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdatePro
   execute(actor, async () => {
     const result = await catalogQueries.update(actor, id, input);
     return result.kind === "changed"
-      ? Result.ok(await resolveCatalogCachePurge(result.product))
+      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
       : Result.err<never, CatalogOperationFailure>({
           code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
         });
@@ -94,10 +94,18 @@ export const transitionProduct = (
   execute(actor, async () => {
     const result = await catalogQueries.transition(actor, id, transition);
     return result.kind === "changed"
-      ? Result.ok(await resolveCatalogCachePurge(result.product))
+      ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
       : Result.err<never, CatalogOperationFailure>({
           code: result.kind === "infrastructure" ? "infrastructure_unavailable" : result.kind,
         });
+  });
+
+export const retryProductCachePurge = (actor: StaffActor, id: ProductId) =>
+  execute(actor, async () => {
+    const product = await catalogQueries.findById(id);
+    return product
+      ? Result.ok(await resolvePendingCatalogCachePurge(product))
+      : Result.err<never, CatalogOperationFailure>({ code: "not_found" });
   });
 
 export const adjustProductInventory = (

@@ -7,7 +7,7 @@ import type {
 import { Result } from "better-result";
 import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { findCatalogProductById } from "../catalog-reader/persistence";
-import { resolveCatalogCachePurge } from "../catalog/cache";
+import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogVariantQueries } from "./persistence";
 
 type CatalogVariantFailureCode =
@@ -33,7 +33,7 @@ const changedProduct = async (productId: ProductId, purge: boolean) => {
   return product
     ? Result.ok(
         purge
-          ? await resolveCatalogCachePurge(product)
+          ? await resolvePendingCatalogCachePurge(product)
           : { product, cache: "not_required" as const, cachePurgeRequestId: null },
       )
     : Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });

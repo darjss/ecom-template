@@ -5,12 +5,13 @@ import {
   type CmsDocumentKind,
   type CommerceSettings,
 } from "@ecom/contracts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import {
   catalogItems,
   categories,
+  cmsCachePurgeDebt,
   cmsDocuments,
   collections,
   commerceSettings,
@@ -60,6 +61,7 @@ const saveDraft = async (document: CmsDocument) => {
 const publish = async (document: CmsDocument) => {
   const now = new Date();
   const contentJson = encodeCmsDocument(document);
+  const revision = crypto.randomUUID();
   const db = database();
   await db.batch([
     db
@@ -80,6 +82,26 @@ const publish = async (document: CmsDocument) => {
     db
       .delete(cmsDocuments)
       .where(and(eq(cmsDocuments.kind, document.kind), eq(cmsDocuments.status, "draft"))),
+    db
+      .insert(cmsCachePurgeDebt)
+      .values({
+        key: "storefront",
+        revision,
+        attemptCount: 0,
+        requestId: null,
+        commandCommittedAt: now,
+        lastAttemptedAt: null,
+      })
+      .onConflictDoUpdate({
+        target: cmsCachePurgeDebt.key,
+        set: {
+          revision,
+          attemptCount: 0,
+          requestId: null,
+          commandCommittedAt: now,
+          lastAttemptedAt: null,
+        },
+      }),
   ]);
   return read(document.kind, "published");
 };
@@ -127,11 +149,65 @@ const readSettings = async () => {
 const saveSettings = async (settings: CommerceSettings) => {
   const parsed = v.parse(CommerceSettingsSchema, settings);
   const now = new Date();
-  await database()
-    .insert(commerceSettings)
-    .values({ key: "commerce", ...parsed, updatedAt: now })
-    .onConflictDoUpdate({ target: commerceSettings.key, set: { ...parsed, updatedAt: now } });
+  const revision = crypto.randomUUID();
+  const db = database();
+  await db.batch([
+    db
+      .insert(commerceSettings)
+      .values({ key: "commerce", ...parsed, updatedAt: now })
+      .onConflictDoUpdate({ target: commerceSettings.key, set: { ...parsed, updatedAt: now } }),
+    db
+      .insert(cmsCachePurgeDebt)
+      .values({
+        key: "storefront",
+        revision,
+        attemptCount: 0,
+        requestId: null,
+        commandCommittedAt: now,
+        lastAttemptedAt: null,
+      })
+      .onConflictDoUpdate({
+        target: cmsCachePurgeDebt.key,
+        set: {
+          revision,
+          attemptCount: 0,
+          requestId: null,
+          commandCommittedAt: now,
+          lastAttemptedAt: null,
+        },
+      }),
+  ]);
   return readSettings();
+};
+
+const readDebt = async () => {
+  const rows = await database()
+    .select()
+    .from(cmsCachePurgeDebt)
+    .where(eq(cmsCachePurgeDebt.key, "storefront"))
+    .limit(1);
+  return rows.at(0);
+};
+
+const recordPurge = async (revision: string, requestId: string | null, purged: boolean) => {
+  const now = new Date();
+  if (purged) {
+    const result = await database()
+      .delete(cmsCachePurgeDebt)
+      .where(and(eq(cmsCachePurgeDebt.key, "storefront"), eq(cmsCachePurgeDebt.revision, revision)))
+      .returning({ key: cmsCachePurgeDebt.key });
+    return result.length === 1;
+  }
+  const result = await database()
+    .update(cmsCachePurgeDebt)
+    .set({
+      attemptCount: sql`${cmsCachePurgeDebt.attemptCount} + 1`,
+      requestId,
+      lastAttemptedAt: now,
+    })
+    .where(and(eq(cmsCachePurgeDebt.key, "storefront"), eq(cmsCachePurgeDebt.revision, revision)))
+    .returning({ key: cmsCachePurgeDebt.key });
+  return result.length === 1;
 };
 
 export const cmsQueries = {
@@ -142,4 +218,6 @@ export const cmsQueries = {
   readReferenceState,
   readSettings,
   saveSettings,
+  readDebt,
+  recordPurge,
 };

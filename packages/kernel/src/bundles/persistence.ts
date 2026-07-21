@@ -14,7 +14,7 @@ import {
   type SavePersonalizationsInput,
   type UpdateBundleInput,
 } from "@ecom/contracts";
-import { and, asc, desc, eq, exists, inArray, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import * as v from "valibot";
 import { catalogMediaQueries } from "../catalog-media/persistence";
@@ -24,6 +24,7 @@ import { database } from "../db/database";
 import {
   auditEvents,
   bundleComponents,
+  catalogCachePurgeDebts,
   catalogItems,
   cmsDocuments,
   personalizationDefinitions,
@@ -159,11 +160,15 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
       description: catalogItems.description,
       priceMnt: catalogItems.priceMnt,
       sku: skus.sku,
+      cachePurgeAttemptCount: catalogCachePurgeDebts.attemptCount,
+      cachePurgeRequestId: catalogCachePurgeDebts.requestId,
+      cachePurgeLastAttemptedAt: catalogCachePurgeDebts.lastAttemptedAt,
       createdAt: catalogItems.createdAt,
       updatedAt: catalogItems.updatedAt,
     })
     .from(catalogItems)
     .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
+    .leftJoin(catalogCachePurgeDebts, eq(catalogCachePurgeDebts.productId, catalogItems.id))
     .where(and(...conditions))
     .orderBy(desc(catalogItems.createdAt));
   const ids = rows.map((row) => v.parse(BundleIdSchema, row.id));
@@ -188,11 +193,21 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
     readPersonalizations(ids),
     catalogMediaQueries.listForCatalogItems(ids),
   ]);
-  return rows.map((bundle) => {
-    const bundleId = v.parse(BundleIdSchema, bundle.id);
+  return rows.map((row) => {
+    const bundleId = v.parse(BundleIdSchema, row.id);
+    const { cachePurgeAttemptCount, cachePurgeRequestId, cachePurgeLastAttemptedAt, ...bundle } =
+      row;
     return v.parse(BundleSchema, {
       ...bundle,
       id: bundleId,
+      cachePurgeDebt:
+        cachePurgeAttemptCount === null
+          ? null
+          : {
+              attemptCount: cachePurgeAttemptCount,
+              requestId: cachePurgeRequestId,
+              lastAttemptedAt: cachePurgeLastAttemptedAt?.toISOString() ?? null,
+            },
       components: componentRows
         .filter((component) => component.bundleId === bundleId)
         .map(({ bundleId: _bundleId, ...component }) => ({
@@ -206,6 +221,30 @@ const readBundles = async (id?: BundleId, publishedSlug?: string) => {
       updatedAt: bundle.updatedAt.toISOString(),
     });
   });
+};
+
+const cacheDebt = (catalogItemId: CatalogItemId, now: Date) => {
+  const revision = crypto.randomUUID();
+  return database()
+    .insert(catalogCachePurgeDebts)
+    .values({
+      productId: catalogItemId,
+      revision,
+      attemptCount: 0,
+      requestId: null,
+      commandCommittedAt: now,
+      lastAttemptedAt: null,
+    })
+    .onConflictDoUpdate({
+      target: catalogCachePurgeDebts.productId,
+      set: {
+        revision,
+        attemptCount: 0,
+        requestId: null,
+        commandCommittedAt: now,
+        lastAttemptedAt: null,
+      },
+    });
 };
 
 export const bundleQueries = {
@@ -260,6 +299,13 @@ export const bundleQueries = {
   async update(id: BundleId, input: UpdateBundleInput) {
     const db = database();
     const now = new Date();
+    const revision = crypto.randomUUID();
+    const updatedNow = and(
+      eq(catalogItems.id, id),
+      eq(catalogItems.kind, "bundle"),
+      eq(catalogItems.updatedAt, now),
+      ne(catalogItems.state, "draft"),
+    );
     try {
       const results = await db.batch([
         db
@@ -273,6 +319,31 @@ export const bundleQueries = {
             ),
           )
           .returning({ id: catalogItems.id }),
+        db
+          .insert(catalogCachePurgeDebts)
+          .select(
+            db
+              .select({
+                productId: sql<string>`${id}`.as("product_id"),
+                revision: sql<string>`${revision}`.as("revision"),
+                attemptCount: sql<number>`0`.as("attempt_count"),
+                requestId: sql<null>`NULL`.as("request_id"),
+                commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+                lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+              })
+              .from(catalogItems)
+              .where(updatedNow),
+          )
+          .onConflictDoUpdate({
+            target: catalogCachePurgeDebts.productId,
+            set: {
+              revision,
+              attemptCount: 0,
+              requestId: null,
+              commandCommittedAt: now,
+              lastAttemptedAt: null,
+            },
+          }),
       ] as const);
       if (results[0].length) {
         return { kind: "changed" as const };
@@ -456,8 +527,9 @@ export const bundleQueries = {
         deleteDefinitions,
         ...insertDefinitions,
         ...insertValues,
+        ...(item.state === "draft" ? [] : [cacheDebt(id, now)]),
       ] as const);
-      return { kind: "changed" as const, purge: item.state !== "draft" };
+      return { kind: "changed" as const };
     } catch {
       return { kind: "invalid_personalization" as const };
     }
@@ -474,6 +546,7 @@ export const bundleQueries = {
       return { kind: "changed" as const };
     }
     const now = new Date();
+    const revision = crypto.randomUUID();
     const auditAction = `catalog.bundle.${action}`;
     const correlationId = crypto.randomUUID();
     if (action === "publish" || action === "reactivate") {
@@ -533,6 +606,37 @@ export const bundleQueries = {
           .update(skus)
           .set({ lockedAt: now, updatedAt: now })
           .where(and(eq(skus.bundleId, id), publishedNow, isNull(skus.lockedAt))),
+        db
+          .insert(catalogCachePurgeDebts)
+          .select(
+            db
+              .select({
+                productId: sql<string>`${id}`.as("product_id"),
+                revision: sql<string>`${revision}`.as("revision"),
+                attemptCount: sql<number>`0`.as("attempt_count"),
+                requestId: sql<null>`NULL`.as("request_id"),
+                commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+                lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+              })
+              .from(catalogItems)
+              .where(
+                and(
+                  eq(catalogItems.id, id),
+                  eq(catalogItems.state, "published"),
+                  eq(catalogItems.updatedAt, now),
+                ),
+              ),
+          )
+          .onConflictDoUpdate({
+            target: catalogCachePurgeDebts.productId,
+            set: {
+              revision,
+              attemptCount: 0,
+              requestId: null,
+              commandCommittedAt: now,
+              lastAttemptedAt: null,
+            },
+          }),
       ] as const);
       if (results[1].length) {
         return { kind: "changed" as const };
@@ -555,6 +659,12 @@ export const bundleQueries = {
     }
     const from = "published";
     const to = "archived";
+    const changedNow = and(
+      eq(catalogItems.id, id),
+      eq(catalogItems.kind, "bundle"),
+      eq(catalogItems.state, to),
+      eq(catalogItems.updatedAt, now),
+    );
     const publishedHomepageDependency = db
       .select({ kind: cmsDocuments.kind })
       .from(cmsDocuments)
@@ -583,6 +693,31 @@ export const bundleQueries = {
         .set({ state: to, archivedAt: now, updatedAt: now })
         .where(archivePredicate)
         .returning({ id: catalogItems.id }),
+      db
+        .insert(catalogCachePurgeDebts)
+        .select(
+          db
+            .select({
+              productId: sql<string>`${id}`.as("product_id"),
+              revision: sql<string>`${revision}`.as("revision"),
+              attemptCount: sql<number>`0`.as("attempt_count"),
+              requestId: sql<null>`NULL`.as("request_id"),
+              commandCommittedAt: sql<Date>`${now.getTime()}`.as("command_committed_at"),
+              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
+            })
+            .from(catalogItems)
+            .where(changedNow),
+        )
+        .onConflictDoUpdate({
+          target: catalogCachePurgeDebts.productId,
+          set: {
+            revision,
+            attemptCount: 0,
+            requestId: null,
+            commandCommittedAt: now,
+            lastAttemptedAt: null,
+          },
+        }),
     ] as const);
     if (results[1].length) {
       return { kind: "changed" as const };
@@ -612,6 +747,39 @@ export const bundleQueries = {
     }
     await recordBundleRejectedAttempt(actor, auditAction, id, "invalid_lifecycle");
     return { kind: "invalid_lifecycle" as const };
+  },
+  async findCachePurgeDebt(id: CatalogItemId) {
+    const rows = await database()
+      .select({ revision: catalogCachePurgeDebts.revision })
+      .from(catalogCachePurgeDebts)
+      .where(eq(catalogCachePurgeDebts.productId, id))
+      .limit(1);
+    return rows.at(0);
+  },
+  async recordCachePurgeOutcome(
+    id: CatalogItemId,
+    revision: string,
+    outcome: "purged" | "failed",
+    requestId: string | null,
+  ) {
+    const predicate = and(
+      eq(catalogCachePurgeDebts.productId, id),
+      eq(catalogCachePurgeDebts.revision, revision),
+    );
+    if (outcome === "purged") {
+      const result = await database().delete(catalogCachePurgeDebts).where(predicate).returning();
+      return result.length === 1;
+    }
+    const result = await database()
+      .update(catalogCachePurgeDebts)
+      .set({
+        attemptCount: sql`${catalogCachePurgeDebts.attemptCount} + 1`,
+        requestId,
+        lastAttemptedAt: new Date(),
+      })
+      .where(predicate)
+      .returning();
+    return result.length === 1;
   },
   async expandDemand(id: BundleId, quantity: number) {
     const rows = await database()

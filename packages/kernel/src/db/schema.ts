@@ -193,6 +193,23 @@ export const cmsDocuments = sqliteTable(
   ],
 );
 
+export const cmsCachePurgeDebt = sqliteTable(
+  "cms_cache_purge_debt",
+  {
+    key: text("key").primaryKey(),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("cms_cache_purge_debt_key_check", sql`${table.key} = 'storefront'`),
+    check("cms_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
+    check("cms_cache_purge_debt_attempt_check", sql`${table.attemptCount} BETWEEN 0 AND 1000000`),
+  ],
+);
+
 export const commerceSettings = sqliteTable(
   "commerce_settings",
   {
@@ -536,6 +553,55 @@ export const catalogItemImages = sqliteTable(
     check(
       "catalog_item_images_alt_text_check",
       sql`${table.altText} = trim(${table.altText}) AND length(${table.altText}) BETWEEN 1 AND 240`,
+    ),
+  ],
+);
+
+export const catalogCachePurgeDebts = sqliteTable(
+  "catalog_cache_purge_debts",
+  {
+    productId: text("product_id")
+      .primaryKey()
+      .references(() => catalogItems.id, { onDelete: "restrict" }),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("catalog_cache_purge_debts_revision_check", sql`length(${table.revision}) = 36`),
+    check(
+      "catalog_cache_purge_debts_attempt_check",
+      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      "catalog_cache_purge_debts_request_check",
+      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
+    ),
+  ],
+);
+
+export const catalogListingCachePurgeDebt = sqliteTable(
+  "catalog_listing_cache_purge_debt",
+  {
+    key: text("key").primaryKey(),
+    revision: text("revision").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    requestId: text("request_id"),
+    commandCommittedAt: integer("command_committed_at", { mode: "timestamp_ms" }).notNull(),
+    lastAttemptedAt: integer("last_attempted_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    check("catalog_listing_cache_purge_debt_key_check", sql`${table.key} = 'catalog'`),
+    check("catalog_listing_cache_purge_debt_revision_check", sql`length(${table.revision}) = 36`),
+    check(
+      "catalog_listing_cache_purge_debt_attempt_check",
+      sql`${table.attemptCount} BETWEEN 0 AND 1000000`,
+    ),
+    check(
+      "catalog_listing_cache_purge_debt_request_check",
+      sql`${table.requestId} IS NULL OR length(${table.requestId}) BETWEEN 1 AND 128`,
     ),
   ],
 );
