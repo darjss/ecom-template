@@ -6,10 +6,10 @@ import type {
   PublicBundleDetail,
   PublicProductDetail,
 } from "@ecom/contracts";
-import { Button, Input } from "@ecom/ui";
+import { Button } from "@ecom/ui";
+import { CartPresentation } from "./CartPresentation";
 import { PersonalizationControls } from "./PersonalizationControls";
 import { ProductVariantSelector } from "./ProductVariantSelector";
-import { createForm } from "@tanstack/solid-form";
 import { QueryClientProvider } from "@tanstack/solid-query";
 import { createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { createPurchaseAvailability } from "./purchase-availability";
@@ -58,13 +58,11 @@ const answersFromForm = (
 
 const PurchaseControls = (props: PurchaseIslandProps) => {
   const cart = useCart();
-  let purchaseForm: HTMLFormElement | undefined;
   const [quantity, setQuantity] = createSignal(1);
   const [selectedVariantId, setSelectedVariantId] = createSignal(
     untrack(() => (props.kind === "product" ? (props.product.variants[0]?.id ?? "") : "")),
   );
   const [announcement, setAnnouncement] = createSignal("");
-  const [added, setAdded] = createSignal(false);
   const identity = createMemo(() =>
     props.kind === "product"
       ? { kind: "variant" as const, id: selectedVariantId() }
@@ -97,29 +95,30 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
     }
     return "Авах боломжтой";
   };
-  const submit = (quantityValue: number) => {
-    if (
-      !purchaseForm ||
-      availability.state() !== "ready" ||
-      !demand().withinBounds ||
-      !Number.isInteger(quantityValue) ||
-      quantityValue < 1 ||
-      quantityValue > 999
-    ) {
+  const submit = (event: SubmitEvent) => {
+    event.preventDefault();
+    if (availability.state() !== "ready" || !demand().withinBounds) {
+      return;
+    }
+    const form = event.currentTarget;
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+    const quantityValue = Number(new FormData(form).get("quantity"));
+    if (!Number.isInteger(quantityValue) || quantityValue < 1 || quantityValue > 999) {
       return;
     }
     const submittedDemand = resolvePurchaseDemand(cart.lines(), identity(), quantityValue);
     if (!submittedDemand.withinBounds || submittedDemand.quantity !== target().quantity) {
       return;
     }
-    const personalizations = answersFromForm(purchaseForm, definitions());
+    const personalizations = answersFromForm(form, definitions());
     const current = identity();
     const line: CartLine =
       current.kind === "variant"
         ? { kind: "variant", variantId: current.id, quantity: quantityValue, personalizations }
         : { kind: "bundle", bundleId: current.id, quantity: quantityValue, personalizations };
     const result = cart.addLine(line);
-    setAdded(result === "added" || result === "merged");
     setAnnouncement(
       result === "added"
         ? "Сагсанд нэмлээ"
@@ -132,22 +131,10 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
               : "Сагс 100 мөрийн хязгаарт хүрсэн",
     );
   };
-  const form = createForm(() => ({
-    defaultValues: { quantity: 1 },
-    onSubmit: ({ value }) => submit(value.quantity),
-  }));
 
   return (
     <>
-      <form
-        ref={(element) => (purchaseForm = element)}
-        class="grid gap-5"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          await form.handleSubmit();
-        }}
-        aria-label="Худалдан авах сонголт"
-      >
+      <form class="grid gap-5" onSubmit={submit} aria-label="Худалдан авах сонголт">
         <Show when={props.kind === "product" && props.product}>
           {(product) => (
             <ProductVariantSelector
@@ -158,29 +145,24 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
           )}
         </Show>
         <PersonalizationControls definitions={definitions()} />
-        <form.Field name="quantity">
-          {(field) => (
-            <label class="grid max-w-28 gap-1 text-sm font-bold">
-              Тоо ширхэг
-              <Input
-                class="h-12 rounded-lg border border-black/30 bg-white px-3 tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
-                type="number"
-                name={field().name}
-                required
-                min="1"
-                max="999"
-                value={field().state.value}
-                onInput={(event) => {
-                  const value = event.currentTarget.valueAsNumber;
-                  if (Number.isInteger(value) && value >= 1 && value <= 999) {
-                    field().handleChange(value);
-                    setQuantity(value);
-                  }
-                }}
-              />
-            </label>
-          )}
-        </form.Field>
+        <label class="grid max-w-28 gap-1 text-sm font-bold">
+          Тоо ширхэг
+          <input
+            class="h-12 rounded-lg border border-black/30 bg-white px-3 tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-(--focus)"
+            type="number"
+            name="quantity"
+            required
+            min="1"
+            max="999"
+            value={quantity()}
+            onInput={(event) => {
+              const value = event.currentTarget.valueAsNumber;
+              if (Number.isInteger(value) && value >= 1 && value <= 999) {
+                setQuantity(value);
+              }
+            }}
+          />
+        </label>
         <div role="status" aria-live="polite" aria-atomic="true">
           <strong class="block text-2xl tabular-nums">
             {money.format(price().unitPriceMnt)} ₮
@@ -200,21 +182,11 @@ const PurchaseControls = (props: PurchaseIslandProps) => {
         >
           {availability.state() === "checking" ? "Шалгаж байна…" : "Сагсанд нэмэх"}
         </Button>
-        <p
-          class="m-0 min-h-6 text-sm font-bold text-(--paper)"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        <p class="sr-only" aria-live="polite" aria-atomic="true">
           {announcement()}
-          <Show when={added()}>
-            {" · "}
-            <a class="underline underline-offset-4" href="/cart">
-              Сагсаа нээх
-            </a>
-          </Show>
         </p>
       </form>
+      <CartPresentation />
     </>
   );
 };
