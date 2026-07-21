@@ -14,7 +14,6 @@ export const CreateProductForm = () => {
       description: "",
       priceMnt: 1,
       openingQuantity: 0,
-      inventoryReason: "Анхны үлдэгдэл",
     },
     onSubmit: async ({ value }) => {
       await mutation.mutateAsync({
@@ -24,7 +23,6 @@ export const CreateProductForm = () => {
         description: value.description,
         priceMnt: value.priceMnt,
         openingQuantity: value.openingQuantity,
-        inventoryReason: value.inventoryReason.trim(),
       });
       form.reset();
     },
@@ -91,20 +89,6 @@ export const CreateProductForm = () => {
               required
               value={field().state.value}
               onInput={(event) => field().handleChange(event.currentTarget.valueAsNumber)}
-            />
-          </label>
-        )}
-      </form.Field>
-      <form.Field name="inventoryReason">
-        {(field) => (
-          <label class="grid gap-1.5 text-xs font-bold text-(--muted)">
-            <span>Үлдэгдлийн шалтгаан</span>
-            <input
-              class="min-h-11 rounded-lg border border-black/25 bg-(--paper) px-3 py-2 font-normal text-(--ink)"
-              required
-              maxlength={240}
-              value={field().state.value}
-              onInput={(event) => field().handleChange(event.currentTarget.value)}
             />
           </label>
         )}
