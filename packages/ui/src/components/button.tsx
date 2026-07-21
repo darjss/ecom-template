@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { splitProps } from "solid-js";
 import { cn } from "../lib/utils";
 
-export const buttonVariants = cva("ui-button", {
+const buttonVariants = cva("ui-button", {
   variants: {
     variant: {
       default: "ui-button--primary",
@@ -14,7 +14,7 @@ export const buttonVariants = cva("ui-button", {
   defaultVariants: { variant: "default" },
 });
 
-export type ButtonProps = PolymorphicProps<"button", ButtonRootProps<"button">> &
+type ButtonProps = PolymorphicProps<"button", ButtonRootProps<"button">> &
   VariantProps<typeof buttonVariants>;
 
 export const Button = (props: ButtonProps) => {
