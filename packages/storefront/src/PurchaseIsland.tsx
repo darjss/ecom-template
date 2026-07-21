@@ -31,7 +31,7 @@ type BundlePurchaseProps = {
   readonly storageKey: string;
 };
 
-export type PurchaseIslandProps = ProductPurchaseProps | BundlePurchaseProps;
+type PurchaseIslandProps = ProductPurchaseProps | BundlePurchaseProps;
 
 const answersFromForm = (
   form: HTMLFormElement,
