@@ -5,9 +5,9 @@ import type {
   VariantId,
 } from "@ecom/contracts";
 import { Result } from "better-result";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { findCatalogProductById } from "../catalog-reader/persistence";
-import { resolvePendingCatalogCachePurge } from "../catalog/cache";
+import { purgeCatalogItemCache } from "../catalog/cache";
+import { hasStaffCapability, type StaffActor } from "../staff/operations";
 import { catalogVariantQueries } from "./persistence";
 
 type CatalogVariantFailureCode =
@@ -30,13 +30,13 @@ const authorized = (actor: StaffActor) =>
 
 const changedProduct = async (productId: ProductId, purge: boolean) => {
   const product = await findCatalogProductById(productId);
-  return product
-    ? Result.ok(
-        purge
-          ? await resolvePendingCatalogCachePurge(product)
-          : { product, cache: "not_required" as const, cachePurgeRequestId: null },
-      )
-    : Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
+  if (!product) {
+    return Result.err<never, CatalogVariantFailure>({ code: "infrastructure_unavailable" });
+  }
+  if (purge && product.state !== "draft") {
+    await purgeCatalogItemCache(productId);
+  }
+  return Result.ok({ product });
 };
 
 export const saveProductOptions = async (

@@ -122,12 +122,6 @@ export const CatalogImageForm = (props: { item: Bundle | Product }) => {
             </p>
           )}
         </Show>
-        <Show when={mutation.data?.data.cache === "committed_but_not_purged"}>
-          <p class="md:col-span-full" role="alert">
-            Зураг хадгалагдсан ч public cache цэвэрлэгдсэнгүй. Cache цэвэрлэх үйлдлийг дахин
-            оролдоно уу.
-          </p>
-        </Show>
       </form>
     </section>
   );

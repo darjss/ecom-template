@@ -10,10 +10,10 @@ import {
   type MediaContentType,
   type PublicCatalogImage,
 } from "@ecom/contracts";
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
-import { catalogCachePurgeDebts, catalogItemImages, catalogItems, mediaAssets } from "../db/schema";
+import { catalogItemImages, catalogItems, mediaAssets } from "../db/schema";
 
 const MediaRowSchema = v.strictObject({
   mediaAssetId: v.string(),
@@ -60,13 +60,13 @@ const imageSelection = {
 };
 
 export const catalogMediaQueries = {
-  async catalogItemExists(id: CatalogItemId) {
+  async findCatalogItemState(id: CatalogItemId) {
     const rows = await database()
-      .select({ id: catalogItems.id })
+      .select({ state: catalogItems.state })
       .from(catalogItems)
       .where(eq(catalogItems.id, id))
       .limit(1);
-    return rows.length === 1;
+    return rows.at(0)?.state;
   },
 
   async attach(
@@ -79,7 +79,6 @@ export const catalogMediaQueries = {
     createdAt: Date,
   ) {
     const db = database();
-    const cacheRevision = crypto.randomUUID();
     await db.batch([
       db.insert(mediaAssets).values({
         id: mediaAssetId,
@@ -93,31 +92,6 @@ export const catalogMediaQueries = {
         .onConflictDoUpdate({
           target: [catalogItemImages.catalogItemId, catalogItemImages.position],
           set: { mediaAssetId, altText },
-        }),
-      db
-        .insert(catalogCachePurgeDebts)
-        .select(
-          db
-            .select({
-              productId: sql<string>`${catalogItemId}`.as("product_id"),
-              revision: sql<string>`${cacheRevision}`.as("revision"),
-              attemptCount: sql<number>`0`.as("attempt_count"),
-              requestId: sql<null>`NULL`.as("request_id"),
-              commandCommittedAt: sql<Date>`${createdAt.getTime()}`.as("command_committed_at"),
-              lastAttemptedAt: sql<null>`NULL`.as("last_attempted_at"),
-            })
-            .from(catalogItems)
-            .where(and(eq(catalogItems.id, catalogItemId), ne(catalogItems.state, "draft"))),
-        )
-        .onConflictDoUpdate({
-          target: catalogCachePurgeDebts.productId,
-          set: {
-            revision: cacheRevision,
-            attemptCount: 0,
-            requestId: null,
-            commandCommittedAt: createdAt,
-            lastAttemptedAt: null,
-          },
         }),
     ]);
     return projectCatalogImage({

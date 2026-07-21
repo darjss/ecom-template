@@ -15,7 +15,6 @@ export {
 export { requestCatalogImageUpload, type CatalogImageUpload } from "./catalog/media-request";
 export { requestCatalog, requestCatalogMutation, type CatalogMutation } from "./catalog/request";
 export {
-  requestCmsCachePurge,
   requestCmsDocuments,
   requestCmsMutation,
   requestCommerceSettings,
@@ -32,7 +31,6 @@ export {
   requestCreateCategory,
   requestCreateCollection,
   requestCreateTag,
-  requestGroupingCachePurgeRetry,
   requestGroupings,
   requestReplaceCategoryMembership,
   requestReplaceCollectionMembership,
@@ -60,7 +58,6 @@ export {
 } from "./query/checkout";
 export { catalogMutationOptions, catalogQueryOptions } from "./query/catalog";
 export {
-  cmsCachePurgeMutationOptions,
   cmsMutationOptions,
   cmsQueryOptions,
   commerceSettingsMutationOptions,
