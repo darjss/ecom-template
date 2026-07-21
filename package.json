@@ -29,7 +29,6 @@
     "store:delivery": "tsx packages/delivery/src/cli.ts",
     "staff:id:create": "tsx packages/contracts/scripts/create-staff-id.ts",
     "api:request": "NODE_EXTRA_CA_CERTS=$HOME/.portless/ca.pem tsx packages/delivery/src/api-request.ts",
-    "audit:id:create": "tsx packages/contracts/scripts/create-audit-event-id.ts",
     "store:create": "tsx packages/delivery/src/cli.ts create",
     "store:seed": "tsx packages/delivery/src/cli.ts seed",
     "store:deploy": "tsx packages/delivery/src/cli.ts deploy",

@@ -34,7 +34,6 @@ const typeIdSchema = (prefix: string) =>
 
 export const OrderLineIdSchema = typeIdSchema("order_line");
 export const PaymentIdSchema = typeIdSchema("payment");
-export const PaymentEntryIdSchema = typeIdSchema("payment_entry");
 export const FulfillmentIdSchema = typeIdSchema("fulfillment");
 export const CheckoutFulfillmentSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("delivery") }),
@@ -242,5 +241,4 @@ export type PlaceOrderInput = v.InferOutput<typeof PlaceOrderInputSchema>;
 export type PlaceOrderResult = v.InferOutput<typeof PlaceOrderResultSchema>;
 export const createOrderLineId = () => typeidUnboxed("order_line");
 export const createPaymentId = () => typeidUnboxed("payment");
-export const createPaymentEntryId = () => typeidUnboxed("payment_entry");
 export const createFulfillmentId = () => typeidUnboxed("fulfillment");

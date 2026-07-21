@@ -1,7 +1,6 @@
 import {
   DiscountRuleSchema,
   DiscountTargetSchema,
-  createAuditEventId,
   createDiscountRuleId,
   type DiscountRule,
   type DiscountRuleId,
@@ -12,14 +11,12 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 import { database } from "../db/database";
 import {
-  auditEvents,
   catalogItems,
   categories,
   collections,
   discountRules,
   variants,
 } from "../db/schema";
-import type { StaffActor } from "../staff/operations";
 
 const TargetListSchema = v.pipe(v.array(DiscountTargetSchema), v.minLength(1), v.maxLength(100));
 const encodeTargets = (targets: readonly DiscountTarget[]) =>
@@ -50,20 +47,6 @@ const readRules = async (onlyActive = false) => {
     .orderBy(asc(discountRules.createdAt), asc(discountRules.id));
   return rows.map(dto);
 };
-
-const auditValues = (actor: StaffActor, action: string, id: DiscountRuleId, now: Date) => ({
-  id: createAuditEventId(),
-  actorKind: "staff" as const,
-  actorId: actor.staffId,
-  staffRole: actor.role,
-  sourceChannel: "admin" as const,
-  action,
-  outcome: "accepted" as const,
-  entityKind: "discount_rule",
-  entityId: id,
-  commandCorrelationId: crypto.randomUUID(),
-  createdAt: now,
-});
 
 const inputValues = (input: DiscountRuleInput) => ({
   name: input.name,
@@ -113,7 +96,7 @@ export const discountQueries = {
   list: () => readRules(),
   listActive: () => readRules(true),
   validTargets,
-  async create(actor: StaffActor, input: DiscountRuleInput): Promise<DiscountPersistenceResult> {
+  async create(input: DiscountRuleInput): Promise<DiscountPersistenceResult> {
     if (!(await validTargets(input.targets))) {
       return { kind: "invalid_target" };
     }
@@ -121,17 +104,14 @@ export const discountQueries = {
     const id = createDiscountRuleId();
     const now = new Date();
     try {
-      await db.batch([
-        db.insert(discountRules).values({
-          id,
-          ...inputValues(input),
-          state: "draft",
-          revision: 1,
-          createdAt: now,
-          updatedAt: now,
-        }),
-        db.insert(auditEvents).values(auditValues(actor, "discount.create", id, now)),
-      ] as const);
+      await db.insert(discountRules).values({
+        id,
+        ...inputValues(input),
+        state: "draft",
+        revision: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
       return { kind: "changed", value: (await readRules()).find((rule) => rule.id === id) };
     } catch (error) {
       return {
@@ -142,12 +122,7 @@ export const discountQueries = {
       };
     }
   },
-  async update(
-    actor: StaffActor,
-    id: DiscountRuleId,
-    expectedRevision: number,
-    input: DiscountRuleInput,
-  ) {
+  async update(id: DiscountRuleId, expectedRevision: number, input: DiscountRuleInput) {
     if (!(await validTargets(input.targets))) {
       return { kind: "invalid_target" as const };
     }
@@ -171,7 +146,6 @@ export const discountQueries = {
           .limit(1);
         return { kind: existing.length ? ("revision_conflict" as const) : ("not_found" as const) };
       }
-      await db.insert(auditEvents).values(auditValues(actor, "discount.change", id, now));
       return {
         kind: "changed" as const,
         value: (await readRules()).find((rule) => rule.id === id),
@@ -185,12 +159,7 @@ export const discountQueries = {
       };
     }
   },
-  async transition(
-    actor: StaffActor,
-    id: DiscountRuleId,
-    expectedRevision: number,
-    state: "active" | "inactive",
-  ) {
+  async transition(id: DiscountRuleId, expectedRevision: number, state: "active" | "inactive") {
     const db = database();
     const current = await db
       .select({ state: discountRules.state, revision: discountRules.revision })
@@ -216,16 +185,6 @@ export const discountQueries = {
     if (changed.length === 0) {
       return { kind: "revision_conflict" as const };
     }
-    await db
-      .insert(auditEvents)
-      .values(
-        auditValues(
-          actor,
-          state === "active" ? "discount.activate" : "discount.deactivate",
-          id,
-          now,
-        ),
-      );
     return { kind: "changed" as const, value: (await readRules()).find((item) => item.id === id) };
   },
 };

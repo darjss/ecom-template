@@ -21,7 +21,6 @@ import {
   catalogItems,
   personalizationDefinitions,
   personalizationValues,
-  skus,
   stockItems,
   variants,
 } from "../db/schema";
@@ -56,7 +55,7 @@ const productSelection = {
   name: catalogItems.name,
   description: catalogItems.description,
   priceMnt: catalogItems.priceMnt,
-  sku: skus.sku,
+  sku: variants.sku,
   onHandQuantity: stockItems.onHandQuantity,
   reservedQuantity: stockItems.reservedQuantity,
   createdAt: catalogItems.createdAt,
@@ -68,7 +67,6 @@ const productQuery = () =>
     .select(productSelection)
     .from(catalogItems)
     .innerJoin(variants, and(eq(variants.productId, catalogItems.id), eq(variants.isDefault, true)))
-    .innerJoin(skus, eq(skus.variantId, variants.id))
     .innerJoin(stockItems, eq(stockItems.variantId, variants.id));
 
 const projectProduct = (
@@ -319,10 +317,9 @@ export const catalogReaderQueries = {
         name: catalogItems.name,
         description: catalogItems.description,
         priceMnt: catalogItems.priceMnt,
-        sku: skus.sku,
+        sku: catalogItems.sku,
       })
       .from(catalogItems)
-      .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
       .where(
         and(
           eq(catalogItems.state, "published"),
@@ -342,12 +339,11 @@ export const catalogReaderQueries = {
           variantId: bundleComponents.variantId,
           quantity: bundleComponents.quantity,
           productName: catalogItems.name,
-          variantLabel: skus.sku,
+          variantLabel: variants.sku,
         })
         .from(bundleComponents)
         .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
         .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
-        .innerJoin(skus, eq(skus.variantId, variants.id))
         .where(eq(bundleComponents.bundleId, id))
         .orderBy(asc(bundleComponents.variantId)),
       catalogMediaQueries.listPublicForCatalogItems([id]),

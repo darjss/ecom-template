@@ -57,7 +57,7 @@ export const listCatalogItems = (actor: StaffActor) =>
 
 export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
   execute(actor, async () => {
-    const result = await catalogQueries.create(actor, input);
+    const result = await catalogQueries.create(input);
     return result.kind === "changed"
       ? Result.ok(changedProduct(result.product))
       : Result.err<never, CatalogOperationFailure>({
@@ -67,7 +67,7 @@ export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
 
 export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
   execute(actor, async () => {
-    const result = await catalogQueries.update(actor, id, input);
+    const result = await catalogQueries.update(id, input);
     if (result.kind === "changed") {
       if (result.product.state !== "draft") {
         await purgeCatalogItemCache(result.product.id);
@@ -85,7 +85,7 @@ export const transitionProduct = (
   transition: "publish" | "archive" | "reactivate",
 ) =>
   execute(actor, async () => {
-    const result = await catalogQueries.transition(actor, id, transition);
+    const result = await catalogQueries.transition(id, transition);
     if (result.kind === "changed") {
       await purgeCatalogItemCache(result.product.id);
       return Result.ok(changedProduct(result.product));

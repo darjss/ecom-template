@@ -2,11 +2,9 @@ import {
   DiscountTargetSchema,
   LocationsDocumentSchema,
   PlaceOrderResultSchema,
-  createAuditEventId,
   createFulfillmentId,
   createOrderId,
   createOrderLineId,
-  createPaymentEntryId,
   createPaymentId,
   type CatalogItemId,
   type CustomerId,
@@ -21,7 +19,6 @@ import * as v from "valibot";
 import { database } from "../db/database";
 import type { OrderStatusAccess } from "../order";
 import {
-  auditEvents,
   bundleComponents,
   catalogItemCategories,
   catalogItemCollections,
@@ -35,12 +32,10 @@ import {
   optionGroups,
   orderLines,
   orders,
-  paymentEntries,
   payments,
   optionValues,
   personalizationDefinitions,
   personalizationValues,
-  skus,
   stockItems,
   variantOptionValues,
   variants,
@@ -110,7 +105,7 @@ export const checkoutQueries = {
         name: sql<string>`${catalogItems.name}`.as("checkout_variant_product_name"),
         unitPriceMnt: sql<number | null>`${variants.priceOverrideMnt}`.as("checkout_variant_price"),
         productPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_variant_product_price"),
-        sku: sql<string>`${skus.sku}`.as("checkout_variant_sku"),
+        sku: sql<string>`${variants.sku}`.as("checkout_variant_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_variant_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_variant_reserved",
@@ -118,7 +113,6 @@ export const checkoutQueries = {
       })
       .from(variants)
       .innerJoin(catalogItems, eq(catalogItems.id, variants.productId))
-      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(variants.id, variantIds));
     const bundleRowsQuery = db
@@ -133,10 +127,9 @@ export const checkoutQueries = {
         ),
         name: sql<string>`${catalogItems.name}`.as("checkout_bundle_name"),
         unitPriceMnt: sql<number>`${catalogItems.priceMnt}`.as("checkout_bundle_price"),
-        sku: sql<string>`${skus.sku}`.as("checkout_bundle_sku"),
+        sku: sql<string>`${catalogItems.sku}`.as("checkout_bundle_sku"),
       })
       .from(catalogItems)
-      .innerJoin(skus, eq(skus.bundleId, catalogItems.id))
       .where(inArray(catalogItems.id, bundleIds));
     const componentRowsQuery = db
       .select({
@@ -153,7 +146,7 @@ export const checkoutQueries = {
           "checkout_component_product_kind",
         ),
         name: sql<string>`${componentProducts.name}`.as("checkout_component_name"),
-        sku: sql<string>`${skus.sku}`.as("checkout_component_sku"),
+        sku: sql<string>`${variants.sku}`.as("checkout_component_sku"),
         onHandQuantity: sql<number>`${stockItems.onHandQuantity}`.as("checkout_component_on_hand"),
         reservedQuantity: sql<number>`${stockItems.reservedQuantity}`.as(
           "checkout_component_reserved",
@@ -162,7 +155,6 @@ export const checkoutQueries = {
       .from(bundleComponents)
       .innerJoin(variants, eq(variants.id, bundleComponents.variantId))
       .innerJoin(componentProducts, eq(componentProducts.id, variants.productId))
-      .innerJoin(skus, eq(skus.variantId, variants.id))
       .innerJoin(stockItems, eq(stockItems.variantId, variants.id))
       .where(inArray(bundleComponents.bundleId, bundleIds));
     const productIds = db
@@ -302,12 +294,10 @@ export const readPlacement = async (
       paymentId: payments.id,
       fulfillmentId: fulfillments.id,
       fulfillmentMode: fulfillments.mode,
-      reservationId: inventoryReservations.id,
     })
     .from(orders)
     .leftJoin(payments, and(eq(payments.orderId, orders.id), eq(payments.attemptNumber, 1)))
     .innerJoin(fulfillments, eq(fulfillments.orderId, orders.id))
-    .innerJoin(inventoryReservations, eq(inventoryReservations.orderId, orders.id))
     .where(eq(orders.placementKey, key))
     .limit(1);
   const row = rows.at(0);
@@ -334,10 +324,6 @@ export const readPlacement = async (
             mode: row.fulfillmentMode,
             state: "unfulfilled",
           },
-          reservation: {
-            id: row.reservationId,
-            state: row.totalMnt === 0 ? "consumed" : "active",
-          },
         }),
       }
     : undefined;
@@ -357,7 +343,6 @@ export const commitPlacement = async (
   const lineIds = new Map(quote.lines.map((line) => [line.position, createOrderLineId()]));
   const paymentId = createPaymentId();
   const fulfillmentId = createFulfillmentId();
-  const correlationId = crypto.randomUUID();
   const now = new Date();
   const zeroTotal = quote.totalMnt === 0;
   const demand = new Map<string, number>();
@@ -527,7 +512,7 @@ export const commitPlacement = async (
             attemptNumber: sql<number>`1`.as("attempt_number"),
             method: sql<"bank_transfer">`'bank_transfer'`.as("method"),
             automatedProvider: sql<"byl" | "direct_qpay" | null>`NULL`.as("automated_provider"),
-            state: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("state"),
+            status: sql<"awaiting_confirmation">`'awaiting_confirmation'`.as("status"),
             expectedAmountMnt: orders.grandTotalMnt,
             confirmedAmountMnt: sql<number>`0`.as("confirmed_amount_mnt"),
             refundedAmountMnt: sql<number>`0`.as("refunded_amount_mnt"),
@@ -538,37 +523,12 @@ export const commitPlacement = async (
             workflowInstanceId: sql<string | null>`NULL`.as("workflow_instance_id"),
             refundObligationAmountMnt: sql<number>`0`.as("refund_obligation_amount_mnt"),
             refundObligationState: sql<"none">`'none'`.as("refund_obligation_state"),
+            confirmedBy: sql<string | null>`NULL`.as("confirmed_by"),
             confirmedAt: sql<Date | null>`NULL`.as("confirmed_at"),
             rejectedAt: sql<Date | null>`NULL`.as("rejected_at"),
             expiredAt: sql<Date | null>`NULL`.as("expired_at"),
             createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
             updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
-          })
-          .from(orders)
-          .where(eq(orders.id, orderId)),
-      ),
-      db.insert(paymentEntries).select(
-        db
-          .select({
-            id: sql<string>`${createPaymentEntryId()}`.as("id"),
-            paymentId: sql<string>`${paymentId}`.as("payment_id"),
-            sequence: sql<number>`1`.as("sequence"),
-            kind: sql<"expected">`'expected'`.as("kind"),
-            expectedDeltaMnt: orders.grandTotalMnt,
-            confirmedDeltaMnt: sql<number>`0`.as("confirmed_delta_mnt"),
-            refundedDeltaMnt: sql<number>`0`.as("refunded_delta_mnt"),
-            actorKind: sql<"system">`'system'`.as("actor_kind"),
-            staffId: sql<string | null>`NULL`.as("staff_id"),
-            staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-            telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
-            telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
-            sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
-            reason: sql<string | null>`NULL`.as("reason"),
-            providerReference: sql<string | null>`NULL`.as("provider_reference"),
-            observedAt: sql<Date | null>`NULL`.as("observed_at"),
-            evidenceJson: sql<string | null>`NULL`.as("evidence_json"),
-            commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-            createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
           })
           .from(orders)
           .where(eq(orders.id, orderId)),
@@ -585,28 +545,6 @@ export const commitPlacement = async (
           state: sql<"unfulfilled">`'unfulfilled'`.as("state"),
           createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
           updatedAt: sql<Date>`${now.getTime()}`.as("updated_at"),
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId)),
-    ),
-    db.insert(auditEvents).select(
-      db
-        .select({
-          id: sql<string>`${createAuditEventId()}`.as("id"),
-          actorKind: sql<"system">`'system'`.as("actor_kind"),
-          actorId: sql<string | null>`NULL`.as("actor_id"),
-          staffRole: sql<"owner" | "manager" | "staff" | null>`NULL`.as("staff_role"),
-          telegramOperatorLabel: sql<string | null>`NULL`.as("telegram_operator_label"),
-          telegramUserId: sql<number | null>`NULL`.as("telegram_user_id"),
-          sourceChannel: sql<"storefront">`'storefront'`.as("source_channel"),
-          action: sql<string>`'order.place'`.as("action"),
-          outcome: sql<"accepted">`'accepted'`.as("outcome"),
-          entityKind: sql<string>`'order'`.as("entity_kind"),
-          entityId: orders.id,
-          reason: sql<string | null>`NULL`.as("reason"),
-          commandCorrelationId: sql<string>`${correlationId}`.as("command_correlation_id"),
-          metadataJson: sql<string | null>`NULL`.as("metadata_json"),
-          createdAt: sql<Date>`${now.getTime()}`.as("created_at"),
         })
         .from(orders)
         .where(eq(orders.id, orderId)),
