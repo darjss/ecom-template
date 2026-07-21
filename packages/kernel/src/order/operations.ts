@@ -157,6 +157,8 @@ const fulfillmentNextState = (
 };
 
 const readProjectedOrders = async (id: OrderId) => projectOrders(await orderQueries.readById(id));
+const readProjectedAdminOrders = async (id: OrderId) =>
+  projectAdminOrders(await orderQueries.readById(id));
 
 export const readStaffOrder = async (
   actor: StaffActor,
@@ -180,12 +182,12 @@ export const readStaffOrder = async (
 export const confirmOrderPayment = async (
   actor: StaffActor,
   id: OrderId,
-): Promise<Result<OrderSummary, OrderOperationFailure>> => {
+): Promise<Result<AdminOrder, OrderOperationFailure>> => {
   if (!hasStaffCapability(actor.role, "financial")) {
     return Result.err({ code: "forbidden" });
   }
   try {
-    const orders = await readProjectedOrders(id);
+    const orders = await readProjectedAdminOrders(id);
     if (!orders) {
       return Result.err({ code: "infrastructure_unavailable" });
     }
@@ -203,7 +205,7 @@ export const confirmOrderPayment = async (
       return Result.err({ code: "payment_not_confirmable" });
     }
     await orderQueries.confirmBankTransfer(id, actor.staffId, new Date());
-    const confirmedOrders = await readProjectedOrders(id);
+    const confirmedOrders = await readProjectedAdminOrders(id);
     if (!confirmedOrders) {
       return Result.err({ code: "infrastructure_unavailable" });
     }
@@ -219,12 +221,12 @@ export const confirmOrderPayment = async (
 export const advanceOrderFulfillment = async (
   actor: StaffActor,
   id: OrderId,
-): Promise<Result<OrderSummary, OrderOperationFailure>> => {
+): Promise<Result<AdminOrder, OrderOperationFailure>> => {
   if (!hasStaffCapability(actor.role, "orders_fulfillment")) {
     return Result.err({ code: "forbidden" });
   }
   try {
-    const orders = await readProjectedOrders(id);
+    const orders = await readProjectedAdminOrders(id);
     if (!orders) {
       return Result.err({ code: "infrastructure_unavailable" });
     }
@@ -249,7 +251,7 @@ export const advanceOrderFulfillment = async (
       next.completesOrder,
       new Date(),
     );
-    const advancedOrders = await readProjectedOrders(id);
+    const advancedOrders = await readProjectedAdminOrders(id);
     if (!advancedOrders) {
       return Result.err({ code: "infrastructure_unavailable" });
     }

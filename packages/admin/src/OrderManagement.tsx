@@ -2,15 +2,19 @@ import {
   adminOrderQueryOptions,
   adminOrdersQueryOptions,
   createStoreQueryClient,
+  orderMutationOptions,
 } from "@ecom/client";
 import {
   OrderIdSchema,
   type AdminOrder,
+  type OrderFulfillmentMode,
   type OrderFulfillmentState,
   type OrderId,
+  type OrderOperationClientError,
   type OrderPaymentState,
 } from "@ecom/contracts";
-import { QueryClientProvider, useQuery } from "@tanstack/solid-query";
+import { Button } from "@ecom/ui";
+import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createMemo, For, Show } from "solid-js";
 import * as v from "valibot";
 
@@ -53,6 +57,46 @@ const fulfillmentLabels: Record<OrderFulfillmentState, string> = {
   delivery_failed: "Хүргэлт амжилтгүй",
   returned: "Буцаагдсан",
   cancelled: "Цуцлагдсан",
+};
+
+const nextFulfillmentLabel = (
+  mode: OrderFulfillmentMode,
+  state: OrderFulfillmentState,
+): string | undefined => {
+  if (state === "unfulfilled") {
+    return "Бэлтгэж эхлэх";
+  }
+  if (state === "processing") {
+    return "Бэлэн болгох";
+  }
+  if (mode === "delivery" && state === "ready") {
+    return "Хүргэлтэд өгөх";
+  }
+  if (mode === "delivery" && state === "handed_off") {
+    return "Хүргэгдсэн болгох";
+  }
+  return mode === "pickup" && state === "ready" ? "Хүлээн авсан болгох" : undefined;
+};
+
+const operationErrorMessage = (error: OrderOperationClientError) => {
+  if (error.kind === "network") {
+    return "Сүлжээний холболтыг шалгаад дахин оролдоно уу.";
+  }
+  if (error.kind === "api") {
+    if (error.error.reason === "payment_required") {
+      return "Биелэлтийг ахиулахаас өмнө төлбөрийг баталгаажуулна уу.";
+    }
+    if (error.error.reason === "payment_not_confirmable") {
+      return "Энэ төлбөрийг одоогийн төлөвөөс баталгаажуулах боломжгүй.";
+    }
+    if (error.error.reason === "fulfillment_not_advanceable") {
+      return "Биелэлтийг одоогийн төлөвөөс ахиулах боломжгүй.";
+    }
+    if (error.error.code === "forbidden") {
+      return "Энэ үйлдлийг хийх эрх хүрэхгүй байна.";
+    }
+  }
+  return "Захиалгыг шинэчилж чадсангүй. Дахин оролдоно уу.";
 };
 
 const Status = (props: {
@@ -210,7 +254,9 @@ const OrderInbox = () => {
 };
 
 const OrderDetail = (props: { id: OrderId }) => {
+  const queryClient = useQueryClient();
   const query = useQuery(() => adminOrderQueryOptions(props.id));
+  const mutation = useMutation(() => orderMutationOptions(queryClient));
   return (
     <Show
       when={query.data}
@@ -298,6 +344,52 @@ const OrderDetail = (props: { id: OrderId }) => {
               <div class="grid content-start gap-2">
                 <h3 class="m-0 text-sm font-bold text-(--muted)">Хүлээлгэн өгөх хэлбэр</h3>
                 <span>{order.fulfillment.mode === "delivery" ? "Хүргэлт" : "Өөрөө авах"}</span>
+              </div>
+              <div class="flex flex-col items-start gap-3 border-t border-black/10 pt-5 sm:col-span-3 sm:flex-row sm:items-center">
+                <Show
+                  when={
+                    order.payment?.method === "bank_transfer" &&
+                    order.payment.state === "awaiting_confirmation"
+                  }
+                >
+                  <Button
+                    type="button"
+                    disabled={mutation.isPending}
+                    onClick={() => mutation.mutate({ kind: "confirm_payment", id: props.id })}
+                  >
+                    {mutation.isPending ? "Шинэчилж байна…" : "Төлбөр баталгаажуулах"}
+                  </Button>
+                </Show>
+                <Show
+                  when={
+                    order.state === "placed" && order.payment?.state === "confirmed"
+                      ? nextFulfillmentLabel(order.fulfillment.mode, order.fulfillment.state)
+                      : undefined
+                  }
+                  keyed
+                >
+                  {(label) => (
+                    <Button
+                      type="button"
+                      disabled={mutation.isPending}
+                      onClick={() =>
+                        mutation.mutate({ kind: "advance_fulfillment", id: props.id })
+                      }
+                    >
+                      {mutation.isPending ? "Шинэчилж байна…" : label}
+                    </Button>
+                  )}
+                </Show>
+                <Show when={mutation.error} keyed>
+                  {(error) => (
+                    <p class="m-0 text-sm text-red-800" role="alert">
+                      {operationErrorMessage(error)}
+                    </p>
+                  )}
+                </Show>
+                <p class="m-0 text-xs leading-relaxed text-(--muted)" aria-live="polite">
+                  Энд хийсэн өөрчлөлт захиалгын нууц холбоос дээр шууд харагдана.
+                </p>
               </div>
             </section>
 

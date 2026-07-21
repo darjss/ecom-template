@@ -121,7 +121,7 @@ const confirmBankTransfer = async (orderId: OrderId, staffId: StaffId, now: Date
   const changed = await database()
     .update(payments)
     .set({
-      state: "confirmed",
+      status: "confirmed",
       confirmedAmountMnt: sql`${payments.expectedAmountMnt}`,
       confirmedBy: staffId,
       confirmedAt: now,
@@ -131,7 +131,7 @@ const confirmBankTransfer = async (orderId: OrderId, staffId: StaffId, now: Date
       and(
         eq(payments.orderId, orderId),
         eq(payments.method, "bank_transfer"),
-        eq(payments.state, "awaiting_confirmation"),
+        eq(payments.status, "awaiting_confirmation"),
       ),
     )
     .returning({ id: payments.id });

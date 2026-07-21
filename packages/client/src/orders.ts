@@ -66,7 +66,8 @@ const requestOrderMutation = (mutation: OrderMutation) => {
 
 export const customerOrdersQueryKey = ["customer", "orders"] as const;
 export const adminOrdersQueryKey = ["admin", "orders"] as const;
-const orderStatusKey = (token: OrderStatusToken) => ["order", "status", token] as const;
+export const orderStatusQueryKey = ["order", "status"] as const;
+const orderStatusKey = (token: OrderStatusToken) => [...orderStatusQueryKey, token] as const;
 const adminOrderKey = (id: OrderId) => [...adminOrdersQueryKey, id] as const;
 type OrderStatusResult = Awaited<ReturnType<typeof requestOrderStatus>>;
 type CustomerOrdersResult = Awaited<ReturnType<typeof requestCustomerOrders>>;
@@ -102,8 +103,11 @@ export const adminOrderQueryOptions = (id: OrderId) =>
 export const orderMutationOptions = (queryClient: QueryClient) =>
   mutationOptions<InferOk<OrderMutationResult>, InferErr<OrderMutationResult>, OrderMutation>({
     mutationFn: async (mutation) => unwrapRequestResult(await requestOrderMutation(mutation)),
-    onSuccess: async (_, mutation) => {
-      await queryClient.invalidateQueries({ queryKey: adminOrderKey(mutation.id) });
-      await queryClient.invalidateQueries({ queryKey: adminOrdersQueryKey });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminOrdersQueryKey }),
+        queryClient.invalidateQueries({ queryKey: customerOrdersQueryKey }),
+        queryClient.invalidateQueries({ queryKey: orderStatusQueryKey }),
+      ]);
     },
   });

@@ -1,14 +1,28 @@
-import { createStoreQueryClient, healthQueryOptions } from "@ecom/client";
-import { QueryClientProvider, useQuery } from "@tanstack/solid-query";
-import { Show } from "solid-js";
+import {
+  createStoreQueryClient,
+  healthQueryOptions,
+  staffMutationOptions,
+  staffQueryOptions,
+} from "@ecom/client";
+import {
+  StaffRoleSchema,
+  type StaffClientError,
+  type StaffMember,
+  type StaffRole,
+} from "@ecom/contracts";
+import { Button } from "@ecom/ui";
+import { createForm } from "@tanstack/solid-form";
+import { QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
+import { createSignal, For, Show } from "solid-js";
+import * as v from "valibot";
+import { resolveAdminSurface } from "./access";
 import { CatalogManagement } from "./CatalogManagement";
 import { CmsManagement } from "./CmsManagement";
 import { DiscountManagement } from "./DiscountManagement";
 import { GroupingManagement } from "./GroupingManagement";
 
 export { resolveAdminSurface, type AdminSurface } from "./access";
-export { AdminOrderInbox } from "./OrderManagement";
-export { OrderDetail as AdminOrderDetail } from "./OrderDetail";
+export { AdminOrderDetail, AdminOrderInbox } from "./OrderManagement";
 export { StaffLoginForm } from "./StaffLoginForm";
 
 const HealthStatus = () => {
@@ -314,7 +328,6 @@ const Management = (props: AdminManagementProps) => (
   <>
     <CmsManagement store={props.store} />
     <CatalogManagement />
-    <BundleManagement />
     <GroupingManagement />
     <DiscountManagement />
     <Show when={resolveAdminSurface(props.role) === "staff_management"}>
