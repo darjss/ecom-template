@@ -76,13 +76,6 @@ export { discountMutationOptions, discountQueryOptions } from "./query/discount"
 export { healthQueryOptions } from "./query/health";
 export { groupingMutationOptions, groupingQueryOptions } from "./query/grouping";
 export { catalogSearchQueryOptions } from "./query/search";
-export { staffMutationOptions, staffQueryOptions } from "./query/staff";
-export {
-  requestStaffList,
-  requestStaffMutation,
-  type StaffMutation,
-  type StaffMutationResult,
-} from "./staff/request";
 export {
   requestCustomerAuthMutation,
   requestCustomerSession,

@@ -6,7 +6,7 @@ import type {
   UpdateProductInput,
 } from "@ecom/contracts";
 import { Result } from "better-result";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { resolvePendingCatalogCachePurge } from "./cache";
 import { inventoryQueries } from "../inventory/persistence";
 import { catalogQueries } from "./persistence";
@@ -41,21 +41,10 @@ export type CatalogMutationResult = {
   readonly cachePurgeRequestId: string | null;
 };
 
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
-
-const execute = async <Value>(
-  actor: StaffActor,
-  operation: () => Promise<Result<Value, CatalogOperationFailure>>,
-) => {
-  if (!authorized(actor)) {
-    return Result.err<never, CatalogOperationFailure>({ code: "forbidden" });
-  }
-  return (await Result.tryPromise(operation))
+const execute = async <Value>(operation: () => Promise<Result<Value, CatalogOperationFailure>>) =>
+  (await Result.tryPromise(operation))
     .mapError((): CatalogOperationFailure => ({ code: "infrastructure_unavailable" }))
     .andThen((result) => result);
-};
 
 const unchangedCache = (product: Product): CatalogMutationResult => ({
   product,
@@ -63,11 +52,11 @@ const unchangedCache = (product: Product): CatalogMutationResult => ({
   cachePurgeRequestId: null,
 });
 
-export const listCatalog = (actor: StaffActor) =>
-  execute(actor, async () => Result.ok(await catalogQueries.listAll()));
+export const listCatalog = (_actor: StaffActor) =>
+  execute(async () => Result.ok(await catalogQueries.listAll()));
 
 export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
-  execute(actor, async () => {
+  execute(async () => {
     const result = await catalogQueries.create(actor, input);
     return result.kind === "changed"
       ? Result.ok(unchangedCache(result.product))
@@ -77,7 +66,7 @@ export const createProduct = (actor: StaffActor, input: CreateProductInput) =>
   });
 
 export const updateProduct = (actor: StaffActor, id: ProductId, input: UpdateProductInput) =>
-  execute(actor, async () => {
+  execute(async () => {
     const result = await catalogQueries.update(actor, id, input);
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
@@ -91,7 +80,7 @@ export const transitionProduct = (
   id: ProductId,
   transition: "publish" | "archive" | "reactivate",
 ) =>
-  execute(actor, async () => {
+  execute(async () => {
     const result = await catalogQueries.transition(actor, id, transition);
     return result.kind === "changed"
       ? Result.ok(await resolvePendingCatalogCachePurge(result.product))
@@ -100,8 +89,8 @@ export const transitionProduct = (
         });
   });
 
-export const retryProductCachePurge = (actor: StaffActor, id: ProductId) =>
-  execute(actor, async () => {
+export const retryProductCachePurge = (_actor: StaffActor, id: ProductId) =>
+  execute(async () => {
     const product = await catalogQueries.findById(id);
     return product
       ? Result.ok(await resolvePendingCatalogCachePurge(product))
@@ -113,7 +102,7 @@ export const adjustProductInventory = (
   id: ProductId,
   input: InventoryAdjustmentInput,
 ) =>
-  execute(actor, async () => {
+  execute(async () => {
     const result = await inventoryQueries.adjust(actor, id, input);
     if (result.kind === "changed") {
       return Result.ok(unchangedCache(result.product));

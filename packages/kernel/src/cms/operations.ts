@@ -6,7 +6,7 @@ import {
 } from "@ecom/contracts";
 import { Result } from "better-result";
 import { uniq } from "es-toolkit";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { purgeCmsCache } from "../catalog/cache";
 import { cmsQueries } from "./persistence";
 
@@ -27,8 +27,6 @@ export type CmsMutationResult = {
   readonly cache: "not_required" | "purged" | "committed_but_not_purged";
   readonly cachePurgeRequestId: string | null;
 };
-
-const authorize = (actor: StaffActor) => hasStaffCapability(actor.role, "catalog_cms");
 
 const validateDocument = async (
   document: CmsDocument,
@@ -156,10 +154,7 @@ const validateNavigation = (
   return valid ? undefined : { code: "invalid_reference" };
 };
 
-export const listCmsDocuments = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const listCmsDocuments = async (_actor: StaffActor) => {
   try {
     const [drafts, published] = await Promise.all([
       cmsQueries.list("draft"),
@@ -172,10 +167,7 @@ export const listCmsDocuments = async (actor: StaffActor) => {
   }
 };
 
-export const saveCmsDraft = async (actor: StaffActor, document: CmsDocument) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const saveCmsDraft = async (_actor: StaffActor, document: CmsDocument) => {
   try {
     const failure = await validateDocument(document);
     if (failure) {
@@ -214,10 +206,7 @@ const resolvePurge = async () => {
   };
 };
 
-export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKind) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const publishCmsDocument = async (_actor: StaffActor, kind: CmsDocumentKind) => {
   try {
     const draft = await cmsQueries.read(kind, "draft");
     if (!draft) {
@@ -236,10 +225,7 @@ export const publishCmsDocument = async (actor: StaffActor, kind: CmsDocumentKin
   }
 };
 
-export const retryCmsCachePurge = async (actor: StaffActor) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const retryCmsCachePurge = async (_actor: StaffActor) => {
   try {
     return Result.ok(await resolvePurge());
   } catch {
@@ -247,10 +233,7 @@ export const retryCmsCachePurge = async (actor: StaffActor) => {
   }
 };
 
-export const readCommerceSettings = async (actor?: StaffActor) => {
-  if (actor && !authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
+export const readCommerceSettings = async (_actor?: StaffActor) => {
   try {
     return Result.ok(await cmsQueries.readSettings());
   } catch {
@@ -259,13 +242,10 @@ export const readCommerceSettings = async (actor?: StaffActor) => {
 };
 
 export const saveCommerceSettings = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   capabilities: StoreDefinition["profile"]["capabilities"],
   settings: CommerceSettings,
 ) => {
-  if (!authorize(actor)) {
-    return Result.err<never, CmsOperationFailure>({ code: "forbidden" });
-  }
   const requested = [
     [settings.bankTransferEnabled, capabilities.bankTransfer],
     [settings.cashOnDeliveryEnabled, capabilities.cashOnDelivery],

@@ -1,4 +1,4 @@
-import { StaffIdSchema, StaffRoleSchema } from "@ecom/contracts";
+import { StaffIdSchema } from "@ecom/contracts";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { env } from "cloudflare:workers";
@@ -80,18 +80,11 @@ export const createStaffAuth = (origin: string) => {
       session: {
         create: {
           before: async (session) => {
-            const applicant = await staffQueries.resolveAuthUserApplicant(session.userId);
-            if (applicant.kind === "infrastructure_unavailable") {
-              throw new Error("Staff applicant persistence is unavailable");
+            const staffId = await staffQueries.resolveAuthUser(session.userId);
+            if (!staffId) {
+              throw new Error("Staff access is not provisioned");
             }
-            const member = applicant.kind === "resolved" ? applicant.member : undefined;
-            return {
-              data: {
-                ...session,
-                role: member?.status === "active" ? member.role : null,
-                staffId: member?.id ?? null,
-              },
-            };
+            return { data: { ...session, role: "owner", staffId } };
           },
         },
       },
@@ -142,15 +135,31 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
     }
   };
 
-  const role = v.safeParse(StaffRoleSchema, session.session.role);
+  const role = v.safeParse(v.literal("owner"), session.session.role);
   const staffId = v.safeParse(StaffIdSchema, session.session.staffId);
   if (!role.success || !staffId.success) {
-    if (!(await deleteSession())) {
-      return { kind: "unavailable" as const };
+    return (await deleteSession())
+      ? { kind: "unauthorized" as const }
+      : { kind: "unavailable" as const };
+  }
+
+  const accessAttempt = await (async () => {
+    try {
+      return {
+        success: true as const,
+        allowed: await staffQueries.hasAccess(session.user.id, staffId.output),
+      };
+    } catch {
+      return { success: false as const };
     }
-    return staffId.success
-      ? { kind: "awaiting_approval" as const }
-      : { kind: "identity_conflict" as const };
+  })();
+  if (!accessAttempt.success) {
+    return { kind: "unavailable" as const };
+  }
+  if (!accessAttempt.allowed) {
+    return (await deleteSession())
+      ? { kind: "unauthorized" as const }
+      : { kind: "unavailable" as const };
   }
 
   return {
@@ -161,17 +170,4 @@ export const readStaffAuthSession = async (request: Request, origin: string) => 
       role: role.output,
     },
   };
-};
-
-export const deleteStaffUserSessions = async (origin: string, authUserId: string) => {
-  const auth = createStaffAuth(origin);
-  if (!auth) {
-    return false;
-  }
-  const adapter = (await auth.$context).internalAdapter;
-  const sessions = await adapter.listSessions(authUserId, { onlyActiveSessions: true });
-  for (const session of sessions) {
-    await adapter.deleteSession(session.token);
-  }
-  return (await adapter.listSessions(authUserId, { onlyActiveSessions: true })).length === 0;
 };

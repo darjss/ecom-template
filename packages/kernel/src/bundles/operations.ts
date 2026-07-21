@@ -16,7 +16,7 @@ import {
 import { Result } from "better-result";
 import { uniq } from "es-toolkit";
 import * as v from "valibot";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { purgeCatalogItemCache } from "../catalog/cache";
 import { bundleQueries, readPersonalizations } from "./persistence";
 
@@ -42,10 +42,6 @@ export type BundleMutationResult = {
   readonly cache: "not_required" | "purged" | "committed_but_not_purged";
   readonly cachePurgeRequestId: string | null;
 };
-
-const authorized = (actor: StaffActor) =>
-  hasStaffCapability(actor.role, "catalog_cms") &&
-  hasStaffCapability(actor.role, "inventory_discounts");
 
 const resolveBundle = async (id: BundleId, purge: boolean) => {
   const bundle = await bundleQueries.findById(id);
@@ -90,10 +86,7 @@ const resolveBundle = async (id: BundleId, purge: boolean) => {
 
 export const resolvePendingBundleCachePurge = async (id: BundleId) => resolveBundle(id, true);
 
-export const listBundles = async (actor: StaffActor) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
+export const listBundles = async (_actor: StaffActor) => {
   try {
     return Result.ok(await bundleQueries.listAll());
   } catch {
@@ -101,10 +94,7 @@ export const listBundles = async (actor: StaffActor) => {
   }
 };
 
-export const createBundle = async (actor: StaffActor, input: CreateBundleInput) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
+export const createBundle = async (_actor: StaffActor, input: CreateBundleInput) => {
   try {
     const result = await bundleQueries.create(input);
     if (result.kind !== "changed" || !result.bundle) {
@@ -122,10 +112,7 @@ export const createBundle = async (actor: StaffActor, input: CreateBundleInput) 
   }
 };
 
-export const retryBundleCachePurge = async (actor: StaffActor, id: BundleId) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
+export const retryBundleCachePurge = async (_actor: StaffActor, id: BundleId) => {
   try {
     return await resolveBundle(id, true);
   } catch {
@@ -133,10 +120,7 @@ export const retryBundleCachePurge = async (actor: StaffActor, id: BundleId) => 
   }
 };
 
-export const updateBundle = async (actor: StaffActor, id: BundleId, input: UpdateBundleInput) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
+export const updateBundle = async (_actor: StaffActor, id: BundleId, input: UpdateBundleInput) => {
   try {
     const result = await bundleQueries.update(id, input);
     if (result.kind === "changed") {
@@ -156,13 +140,10 @@ export const updateBundle = async (actor: StaffActor, id: BundleId, input: Updat
 };
 
 export const saveBundleComponents = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   id: BundleId,
   input: SaveBundleComponentsInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
   try {
     const result = await bundleQueries.saveComponents(id, input);
     return result.kind === "changed"
@@ -178,9 +159,6 @@ export const transitionBundle = async (
   id: BundleId,
   action: "publish" | "archive" | "reactivate",
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
   try {
     const result = await bundleQueries.transition(actor, id, action);
     return result.kind === "changed"
@@ -192,12 +170,9 @@ export const transitionBundle = async (
 };
 
 export const readCatalogItemPersonalizations = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   catalogItemId: CatalogItemId,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
   try {
     const rows = await readPersonalizations([catalogItemId]);
     const definitions = rows.at(0)?.definitions;
@@ -210,13 +185,10 @@ export const readCatalogItemPersonalizations = async (
 };
 
 export const saveCatalogItemPersonalizations = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   catalogItemId: CatalogItemId,
   input: SavePersonalizationsInput,
 ) => {
-  if (!authorized(actor)) {
-    return Result.err<never, BundleOperationFailure>({ code: "forbidden" });
-  }
   try {
     const result = await bundleQueries.savePersonalizations(catalogItemId, input);
     if (result.kind !== "changed") {

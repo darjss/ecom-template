@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 import { env } from "cloudflare:workers";
 import { resolvePendingBundleCachePurge } from "../bundles/operations";
-import { hasStaffCapability, type StaffActor } from "../staff/operations";
+import type { StaffActor } from "../staff/operations";
 import { resolvePendingCatalogCachePurge } from "../catalog/cache";
 import { catalogQueries } from "../catalog/persistence";
 import { catalogMediaQueries } from "./persistence";
@@ -92,13 +92,10 @@ const completedAttachment = (
 ) => Result.ok<CatalogMediaMutationResult, never>({ image, cache, cachePurgeRequestId });
 
 export const attachCatalogImage = async (
-  actor: StaffActor,
+  _actor: StaffActor,
   catalogItemId: CatalogItemId,
   input: AttachCatalogImageInput,
 ) => {
-  if (!hasStaffCapability(actor.role, "catalog_cms")) {
-    return Result.err<never, CatalogMediaFailure>({ code: "forbidden" });
-  }
   if (input.bytes.byteLength > MediaUploadMaxBytes) {
     return Result.err<never, CatalogMediaFailure>({ code: "media_too_large" });
   }
