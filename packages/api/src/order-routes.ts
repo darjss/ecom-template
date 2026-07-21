@@ -1,15 +1,23 @@
 import {
+  AdminOrderResponseSchema,
   CustomerOrdersResponseSchema,
   OrderAccessApiErrorSchema,
+  OrderIdSchema,
+  OrderOperationApiErrorSchema,
   OrderStatusResponseSchema,
   OrderStatusTokenSchema,
   type StoreDefinition,
 } from "@ecom/contracts";
 import {
+  advanceOrderFulfillment,
+  confirmOrderPayment,
   listCustomerOrders,
   readCustomerSession,
   readOrderByStatusToken,
+  readStaffOrder,
   type OrderAccessFailure,
+  type OrderOperationFailure,
+  type StaffActor,
 } from "@ecom/kernel";
 import { createPipeHandlers } from "dismatch";
 import { Elysia } from "elysia";
@@ -37,7 +45,65 @@ const orderAccessFailure = createPipeHandlers<OrderAccessFailure>("code").match<
   }),
 });
 
-export const createOrderRoutes = (definition: StoreDefinition) =>
+type Status = (code: number, body: unknown) => unknown;
+type Authorize = (
+  request: Request,
+  status: Status,
+) => Promise<
+  | { readonly authorized: true; readonly actor: StaffActor }
+  | { readonly authorized: false; readonly response: unknown }
+>;
+
+const orderOperationError = (
+  code: "forbidden" | "not_found" | "conflict" | "unavailable",
+  message: string,
+  reason?: "payment_not_confirmable" | "payment_required" | "fulfillment_not_advanceable",
+) =>
+  v.parse(OrderOperationApiErrorSchema, {
+    error: { code, message, ...(reason ? { reason } : {}) },
+  });
+
+const operationError = (failure: OrderOperationFailure, status: Status) => {
+  if (failure.code === "forbidden") {
+    return status(403, orderOperationError("forbidden", "Order authority is required"));
+  }
+  if (failure.code === "not_found") {
+    return status(404, orderOperationError("not_found", "Order was not found"));
+  }
+  if (failure.code === "payment_not_confirmable") {
+    return status(
+      409,
+      orderOperationError(
+        "conflict",
+        "This payment cannot be confirmed",
+        "payment_not_confirmable",
+      ),
+    );
+  }
+  if (failure.code === "payment_required") {
+    return status(
+      409,
+      orderOperationError(
+        "conflict",
+        "Payment must be confirmed before fulfillment advances",
+        "payment_required",
+      ),
+    );
+  }
+  if (failure.code === "fulfillment_not_advanceable") {
+    return status(
+      409,
+      orderOperationError(
+        "conflict",
+        "Fulfillment cannot advance from its current state",
+        "fulfillment_not_advanceable",
+      ),
+    );
+  }
+  return status(503, orderOperationError("unavailable", "Order operations are unavailable"));
+};
+
+export const createOrderRoutes = (definition: StoreDefinition, authorize: Authorize) =>
   new Elysia({ aot: false })
     .get("/orders/status/:token", async ({ params, set, status }) => {
       set.headers["referrer-policy"] = "no-referrer";
@@ -52,6 +118,63 @@ export const createOrderRoutes = (definition: StoreDefinition) =>
         return status(failure.status, orderError(failure.code, failure.message));
       }
       return v.parse(OrderStatusResponseSchema, { data: result.value });
+    })
+    .get("/admin/orders/:id", async ({ params, request, status }) => {
+      const id = v.safeParse(OrderIdSchema, params.id);
+      if (!id.success) {
+        return status(
+          404,
+          v.parse(OrderOperationApiErrorSchema, {
+            error: { code: "not_found", message: "Order was not found" },
+          }),
+        );
+      }
+      const authorization = await authorize(request, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await readStaffOrder(authorization.actor, id.output);
+      return result.isErr()
+        ? operationError(result.error, status)
+        : v.parse(AdminOrderResponseSchema, { data: result.value });
+    })
+    .post("/admin/orders/:id/payment/confirm", async ({ params, request, status }) => {
+      const id = v.safeParse(OrderIdSchema, params.id);
+      if (!id.success) {
+        return status(
+          404,
+          v.parse(OrderOperationApiErrorSchema, {
+            error: { code: "not_found", message: "Order was not found" },
+          }),
+        );
+      }
+      const authorization = await authorize(request, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await confirmOrderPayment(authorization.actor, id.output);
+      return result.isErr()
+        ? operationError(result.error, status)
+        : v.parse(AdminOrderResponseSchema, { data: result.value });
+    })
+    .post("/admin/orders/:id/fulfillment/advance", async ({ params, request, status }) => {
+      const id = v.safeParse(OrderIdSchema, params.id);
+      if (!id.success) {
+        return status(
+          404,
+          v.parse(OrderOperationApiErrorSchema, {
+            error: { code: "not_found", message: "Order was not found" },
+          }),
+        );
+      }
+      const authorization = await authorize(request, status);
+      if (!authorization.authorized) {
+        return authorization.response;
+      }
+      const result = await advanceOrderFulfillment(authorization.actor, id.output);
+      return result.isErr()
+        ? operationError(result.error, status)
+        : v.parse(AdminOrderResponseSchema, { data: result.value });
     })
     .get("/customer/orders", async ({ request, set, status }) => {
       const origin = resolveStoreRequestOrigin(request, definition.profile.slug);
