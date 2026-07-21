@@ -1,0 +1,48 @@
+---
+import { CheckoutIsland } from "@ecom/storefront";
+import OrderingNotices from "../../components/OrderingNotices.astro";
+import StoreShell from "../../components/StoreShell.astro";
+import StoreLayout from "../../layouts/StoreLayout.astro";
+import { storefront } from "../../api";
+
+export const prerender = false;
+
+const [shell, orderingNotices] = await Promise.all([
+  storefront.readShell(),
+  storefront.readOrderingNotices(),
+]);
+const storeName = shell.identity?.displayName ?? "Өрнүүн 48";
+---
+
+<StoreLayout
+  title={`Захиалга баталгаажуулах · ${storeName}`}
+  description={`${storeName}-ийн банкны шилжүүлэгтэй захиалгаа баталгаажуулна.`}
+  noindex
+>
+  <p class="demo-notice">Энэ бол зохиомол жишиг дэлгүүр. Бодит захиалга хүлээн авахгүй.</p>
+  <StoreShell shell={shell} currentPath={Astro.url.pathname} fallbackName={storeName}>
+    <main id="content" class="bg-[var(--paper)]">
+      <header class="mx-auto max-w-6xl px-5 pt-10 pb-8 sm:px-8 sm:pt-14 lg:px-10 lg:pt-18">
+        <a
+          class="text-sm font-bold underline decoration-[var(--line)] underline-offset-4 hover:decoration-current"
+          href="/"
+        >
+          Дэлгүүр рүү буцах
+        </a>
+        <p class="mt-8 mb-0 text-sm font-bold text-[var(--accent)]">Аюулгүй захиалга</p>
+        <h1 class="mt-2 mb-0 max-w-4xl text-[clamp(2.5rem,6vw,5.5rem)] leading-[0.94] font-extrabold tracking-[-0.035em] text-balance">
+          Хаягаа оруулаад, банкны шилжүүлгээр захиална.
+        </h1>
+        <p class="mt-5 mb-0 max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
+          Сагсны үнэ, хүргэлт, үлдэгдлийг сервер дахин шалгана. Илгээх бүрт нэг захиалга л үүснэ.
+        </p>
+      </header>
+
+      <div class="mx-auto max-w-6xl px-0 pb-16 sm:px-8 lg:px-10 lg:pb-24">
+        <CheckoutIsland storageKey="cart:urnuun-48:v1" client:only="solid-js" />
+      </div>
+
+      <OrderingNotices document={orderingNotices} placement="checkout" />
+    </main>
+  </StoreShell>
+</StoreLayout>

@@ -1,5 +1,6 @@
 export { applyPublicHtmlCache } from "./cache";
 export { CartIsland, type CartCatalogEntry, type CartIslandProps } from "./CartIsland";
+export { CheckoutIsland } from "./CheckoutIsland";
 export { CustomerAuthIsland } from "./CustomerAuthIsland";
 export { CustomerOrdersIsland } from "./CustomerOrdersIsland";
 export { OrderStatusIsland } from "./OrderStatusIsland";
